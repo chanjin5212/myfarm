@@ -58,15 +58,8 @@ export async function POST(request: Request) {
     // 소셜 ID와 제공자 정보 확인
     const provider = userData.provider || 'google';
     
-    // 이미 등록된 이메일인지 확인
-    const { data: existingUserByEmail } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', userData.email)
-      .maybeSingle();
-      
-    // 소셜 ID로 기존 사용자 확인
-    let existingUserBySocialId = null;
+    // 소셜 ID로만 기존 사용자 확인 (이메일 체크 제거)
+    let existingUser = null;
     
     // 소셜 로그인 제공자별 ID 확인
     if (provider === 'google' && userData.google_id) {
@@ -75,68 +68,48 @@ export async function POST(request: Request) {
         .select('*')
         .eq('google_id', userData.google_id)
         .maybeSingle();
-      existingUserBySocialId = data;
+      existingUser = data as ExistingUser;
     } else if (provider === 'kakao' && userData.kakao_id) {
       const { data } = await supabase
         .from('users')
         .select('*')
         .eq('kakao_id', userData.kakao_id)
         .maybeSingle();
-      existingUserBySocialId = data;  
+      existingUser = data as ExistingUser;  
     } else if (provider === 'naver' && userData.naver_id) {
       const { data } = await supabase
         .from('users')
         .select('*')
         .eq('naver_id', userData.naver_id)
         .maybeSingle();
-      existingUserBySocialId = data;
+      existingUser = data as ExistingUser;
     }
     
     // 기존 사용자가 있는 경우
-    if (existingUserByEmail || existingUserBySocialId) {
-      const existingUser = existingUserByEmail || existingUserBySocialId as ExistingUser;
-      
-      // 소셜 ID 업데이트가 필요한 경우
-      let needsUpdate = false;
-      const updateData: Record<string, string | null | boolean> = {
-        updated_at: new Date().toISOString()
+    if (existingUser) {
+      const now = new Date().toISOString();
+      // 사용자가 있으면 nickname과 last_login, updated_at만 업데이트
+      const updateData = {
+        nickname: userData.nickname || existingUser.nickname,
+        updated_at: now,
+        last_login: now
       };
       
-      // 해당 소셜 ID가 없는 경우 업데이트
-      if (provider === 'google' && userData.google_id && !existingUser.google_id) {
-        updateData.google_id = userData.google_id;
-        needsUpdate = true;
-      } else if (provider === 'kakao' && userData.kakao_id && !existingUser.kakao_id) {
-        updateData.kakao_id = userData.kakao_id;
-        needsUpdate = true;
-      } else if (provider === 'naver' && userData.naver_id && !existingUser.naver_id) {
-        updateData.naver_id = userData.naver_id;
-        needsUpdate = true;
-      }
-      
-      if (needsUpdate) {
-        const { data: updatedUser, error: updateError } = await supabase
-          .from('users')
-          .update(updateData)
-          .eq('id', existingUser.id)
-          .select()
-          .single();
-          
-        if (updateError) {
-          console.error('소셜 ID 업데이트 오류:', updateError);
-        }
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', existingUser.id)
+        .select()
+        .single();
         
-        return NextResponse.json({ 
-          success: true, 
-          data: updatedUser || existingUser,
-          message: '기존 사용자 정보가 업데이트되었습니다.'
-        });
+      if (updateError) {
+        console.error('사용자 정보 업데이트 오류:', updateError);
       }
       
       return NextResponse.json({ 
         success: true, 
-        data: existingUser,
-        message: '이미 등록된 사용자입니다.'
+        data: updatedUser || existingUser,
+        message: '기존 사용자 정보가 업데이트되었습니다.'
       });
     }
     

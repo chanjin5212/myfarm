@@ -9,6 +9,7 @@ interface GoogleUserInfo {
   email: string;
   name: string;
   picture: string;
+  nickname?: string;
   provider?: string; // 소셜 로그인 제공자 정보
 }
 
@@ -28,9 +29,12 @@ export default function TermsPage() {
 
   useEffect(() => {
     // localStorage에서 사용자 정보 가져오기
-    const savedUserInfo = localStorage.getItem('google_user_info');
-    if (savedUserInfo) {
-      const parsedInfo = JSON.parse(savedUserInfo);
+    const savedGoogleInfo = localStorage.getItem('google_user_info');
+    const savedNaverInfo = localStorage.getItem('naver_user_info');
+    const savedKakaoInfo = localStorage.getItem('kakao_user_info');
+    
+    if (savedGoogleInfo) {
+      const parsedInfo = JSON.parse(savedGoogleInfo);
       if (!parsedInfo.email) {
         alert('사용자 이메일 정보가 없습니다.');
         router.push('/auth');
@@ -46,6 +50,50 @@ export default function TermsPage() {
       
       // 사용자 이름을 닉네임 기본값으로 설정
       if (parsedInfo.name) {
+        setNickname(parsedInfo.name);
+      } else if (parsedInfo.nickname) {
+        setNickname(parsedInfo.nickname);
+      }
+    } else if (savedNaverInfo) {
+      const parsedInfo = JSON.parse(savedNaverInfo);
+      if (!parsedInfo.email) {
+        alert('사용자 이메일 정보가 없습니다.');
+        router.push('/auth');
+        return;
+      }
+      
+      // 제공자 정보가 없는 경우 기본값으로 'naver' 설정
+      if (!parsedInfo.provider) {
+        parsedInfo.provider = 'naver';
+      }
+      
+      setUserInfo(parsedInfo);
+      
+      // 네이버는 nickname 필드를 제공하므로 이를 먼저 사용
+      if (parsedInfo.nickname) {
+        setNickname(parsedInfo.nickname);
+      } else if (parsedInfo.name) {
+        setNickname(parsedInfo.name);
+      }
+    } else if (savedKakaoInfo) {
+      const parsedInfo = JSON.parse(savedKakaoInfo);
+      if (!parsedInfo.email) {
+        alert('사용자 이메일 정보가 없습니다.');
+        router.push('/auth');
+        return;
+      }
+      
+      // 제공자 정보가 없는 경우 기본값으로 'kakao' 설정
+      if (!parsedInfo.provider) {
+        parsedInfo.provider = 'kakao';
+      }
+      
+      setUserInfo(parsedInfo);
+      
+      // 카카오는 nickname 필드를 제공하므로 이를 먼저 사용
+      if (parsedInfo.nickname) {
+        setNickname(parsedInfo.nickname);
+      } else if (parsedInfo.name) {
         setNickname(parsedInfo.name);
       }
     } else {
@@ -67,9 +115,18 @@ export default function TermsPage() {
     }
 
     // 닉네임이 비어있으면 이름을 사용
-    const userNickname = nickname.trim() || userInfo.name;
+    const userNickname = nickname.trim() || userInfo.name || userInfo.nickname || '사용자';
 
     try {
+      // 소셜 로그인 제공자에 따라 ID 필드 설정
+      const socialIdField = userInfo.provider === 'google' 
+        ? { google_id: userInfo.id } 
+        : userInfo.provider === 'naver' 
+          ? { naver_id: userInfo.id }
+          : userInfo.provider === 'kakao' 
+            ? { kakao_id: userInfo.id }
+            : {};
+
       // API 라우트를 통해 사용자 정보 저장
       const response = await fetch('/api/users', {
         method: 'POST',
@@ -77,7 +134,7 @@ export default function TermsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          google_id: userInfo.id, // Google ID 사용
+          ...socialIdField,
           provider: userInfo.provider || 'google', // 소셜 로그인 제공자
           email: userInfo.email,
           name: userInfo.name || '사용자',
@@ -98,7 +155,7 @@ export default function TermsPage() {
 
       // JWT 토큰 생성 및 저장
       const token = {
-        accessToken: localStorage.getItem('google_access_token'),
+        accessToken: localStorage.getItem(`${userInfo.provider}_access_token`) || '',
         user: result.data?.[0] || { 
           ...userInfo, 
           nickname: userNickname,
@@ -112,6 +169,10 @@ export default function TermsPage() {
       // localStorage에서 사용자 정보 삭제
       localStorage.removeItem('google_user_info');
       localStorage.removeItem('google_access_token');
+      localStorage.removeItem('naver_user_info');
+      localStorage.removeItem('naver_access_token');
+      localStorage.removeItem('kakao_user_info');
+      localStorage.removeItem('kakao_access_token');
       
       // 로그인 상태 변경 이벤트 발생
       window.dispatchEvent(new Event(LOGIN_STATUS_CHANGE));
