@@ -1,70 +1,84 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { code, redirectUri } = body;
+    const { code, redirectUri } = await request.json();
 
+    // Validate the code
     if (!code) {
-      return NextResponse.json({ error: '인증 코드가 없습니다.' }, { status: 400 });
+      return NextResponse.json({ error: '인증 코드가 필요합니다' }, { status: 400 });
     }
 
-    // 인증 코드로 액세스 토큰 요청
-    const response = await fetch('https://kauth.kakao.com/oauth/token', {
+    // Exchange code for token
+    const tokenResponse = await fetch('https://kauth.kakao.com/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
-        client_id: process.env.NEXT_PUBLIC_KAKAO_CLIENT_ID!,
-        client_secret: process.env.KAKAO_CLIENT_SECRET!,
+        client_id: process.env.NEXT_PUBLIC_KAKAO_CLIENT_ID || '',
+        client_secret: process.env.KAKAO_CLIENT_SECRET || '',
         code,
-        redirect_uri: redirectUri,
+        redirect_uri: redirectUri || `${process.env.NEXT_PUBLIC_SITE_URL}/auth/kakao/callback`,
       }),
     });
 
-    const tokenData = await response.json();
+    const tokenData = await tokenResponse.json();
 
-    if (tokenData.error) {
-      console.error('Kakao 토큰 오류:', tokenData);
-      return NextResponse.json({ error: tokenData.error_description || tokenData.error }, { status: 400 });
-    }
-
-    // 액세스 토큰으로 사용자 정보 요청
-    if (tokenData.access_token) {
-      const userInfoResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
-        headers: {
-          'Authorization': `Bearer ${tokenData.access_token}`,
-          'Content-type': 'application/x-www-form-urlencoded;charset=utf-8',
-        },
-      });
-
-      const userInfoData = await userInfoResponse.json();
-      
-      if (userInfoData.id === undefined) {
-        console.error('Kakao 사용자 정보 오류:', userInfoData);
-        return NextResponse.json({ error: '사용자 정보를 가져오는데 실패했습니다.' }, { status: 400 });
-      }
-      
-      // 카카오는 kakao_account 구조로 사용자 정보를 반환
-      const userInfo = {
-        id: userInfoData.id.toString(),
-        email: userInfoData.kakao_account?.email || '',
-        name: userInfoData.kakao_account?.profile?.nickname || userInfoData.properties?.nickname || '',
-        picture: userInfoData.kakao_account?.profile?.profile_image_url || userInfoData.properties?.profile_image || '',
-        nickname: userInfoData.kakao_account?.profile?.nickname || userInfoData.properties?.nickname || ''
-      };
-      
+    if (!tokenResponse.ok || tokenData.error) {
+      console.error('Error exchanging code for token:', tokenData);
       return NextResponse.json({ 
-        access_token: tokenData.access_token,
-        userInfo
-      });
+        error: '인증 코드로 토큰을 교환하는데 실패했습니다',
+        details: tokenData.error_description || tokenData.error
+      }, { status: 400 });
     }
 
-    return NextResponse.json({ error: '액세스 토큰을 받지 못했습니다.' }, { status: 400 });
+    // Get user info using the access token
+    const userInfoResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      },
+    });
+
+    const userData = await userInfoResponse.json();
+
+    if (!userInfoResponse.ok || userData.error) {
+      console.error('Error fetching user info:', userData);
+      return NextResponse.json({ 
+        error: '사용자 정보를 가져오는데 실패했습니다', 
+        details: userData.error_description || userData.error
+      }, { status: 400 });
+    }
+
+    // Format the user data
+    const email = userData.kakao_account?.email;
+    const formattedUserData = {
+      id: userData.id.toString(),
+      email: email,
+      name: userData.kakao_account?.profile?.nickname || '카카오 사용자',
+      picture: userData.kakao_account?.profile?.profile_image_url,
+      nickname: userData.kakao_account?.profile?.nickname,
+      provider: 'kakao',
+    };
+
+    // Check if we have email permission
+    if (!email) {
+      return NextResponse.json({ 
+        error: '이메일이 제공되지 않았습니다. 카카오 계정에서 이메일 권한을 허용해주세요.', 
+        userData: formattedUserData
+      }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      userData: formattedUserData,
+      token: tokenData.access_token,
+    });
   } catch (error) {
-    console.error('Kakao OAuth 처리 오류:', error);
-    return NextResponse.json({ error: '인증 처리 중 오류가 발생했습니다.' }, { status: 500 });
+    console.error('Unexpected error during Kakao authentication:', error);
+    return NextResponse.json({ 
+      error: '인증 과정에서 예상치 못한 오류가 발생했습니다' 
+    }, { status: 500 });
   }
 } 

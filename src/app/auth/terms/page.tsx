@@ -9,8 +9,9 @@ interface GoogleUserInfo {
   email: string;
   name: string;
   picture: string;
-  nickname?: string;
   provider?: string; // 소셜 로그인 제공자 정보
+  nickname?: string;
+  phone_number?: string; // 전화번호 필드 추가
 }
 
 interface DatabaseError {
@@ -75,6 +76,11 @@ export default function TermsPage() {
       } else if (parsedInfo.name) {
         setNickname(parsedInfo.name);
       }
+      
+      // 네이버 전화번호 정보 로깅 (디버깅용)
+      if (parsedInfo.phone_number) {
+        console.log('Naver phone number:', parsedInfo.phone_number);
+      }
     } else if (savedKakaoInfo) {
       const parsedInfo = JSON.parse(savedKakaoInfo);
       if (!parsedInfo.email) {
@@ -126,7 +132,7 @@ export default function TermsPage() {
           : userInfo.provider === 'kakao' 
             ? { kakao_id: userInfo.id }
             : {};
-
+      
       // API 라우트를 통해 사용자 정보 저장
       const response = await fetch('/api/users', {
         method: 'POST',
@@ -142,6 +148,7 @@ export default function TermsPage() {
           avatar_url: userInfo.picture || '',
           terms_agreed: isAgreed,
           marketing_agreed: isMarketingAgreed,
+          phone_number: userInfo.phone_number || '', // 전화번호 정보 추가
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }),
@@ -152,7 +159,7 @@ export default function TermsPage() {
       if (result.error) {
         throw new Error(result.error);
       }
-
+      
       // JWT 토큰 생성 및 저장
       const token = {
         accessToken: localStorage.getItem(`${userInfo.provider}_access_token`) || '',
@@ -165,7 +172,7 @@ export default function TermsPage() {
         expiresAt: Date.now() + 3600000 // 1시간 후 만료
       };
       localStorage.setItem('token', JSON.stringify(token));
-
+      
       // localStorage에서 사용자 정보 삭제
       localStorage.removeItem('google_user_info');
       localStorage.removeItem('google_access_token');
