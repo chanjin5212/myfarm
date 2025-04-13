@@ -126,16 +126,24 @@ export default function Header() {
                       {user?.nickname?.charAt(0) || user?.name?.charAt(0) || 'U'}
                     </div>
                   )}
-                  <span className="text-gray-800 font-medium">
+                  <span className="text-gray-800 font-medium ml-2">
                     {user.nickname || user.name || user.email.split('@')[0]}
                   </span>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-md"
-                >
-                  로그아웃
-                </button>
+                <div className="flex space-x-2">
+                  <Link
+                    href="/mypage"
+                    className="px-4 py-2 text-white bg-blue-500 hover:bg-blue-600 rounded-md"
+                  >
+                    마이페이지
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-md"
+                  >
+                    로그아웃
+                  </button>
+                </div>
               </div>
             ) : (
               <Link

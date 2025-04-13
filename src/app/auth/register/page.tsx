@@ -19,6 +19,8 @@ interface FormData {
   termsAgreed: boolean;
   marketingAgreed: boolean;
   loginIdChecked: boolean;
+  emailVerificationCode: string;
+  emailVerified: boolean;
 }
 
 interface FormErrors {
@@ -33,6 +35,7 @@ interface FormErrors {
   phoneNumberSuffix?: string;
   phoneVerificationCode?: string;
   termsAgreed?: string;
+  emailVerificationCode?: string;
 }
 
 interface PasswordValidation {
@@ -59,13 +62,15 @@ export default function RegisterPage() {
     phoneVerified: false,
     termsAgreed: false,
     marketingAgreed: false,
-    loginIdChecked: false
+    loginIdChecked: false,
+    emailVerificationCode: '',
+    emailVerified: false
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [sendingCode, setSendingCode] = useState(false);
-  const [verifyingCode, setVerifyingCode] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
   const [checkingId, setCheckingId] = useState(false);
   const [passwordValidation, setPasswordValidation] = useState<PasswordValidation>({
     length: false,
@@ -150,60 +155,140 @@ export default function RegisterPage() {
     return '';
   };
 
-  const handleSendVerificationCode = async () => {
-    // 전화번호 유효성 검사
-    const { phoneNumberMiddle, phoneNumberSuffix } = formData;
-    
-    if (!phoneNumberMiddle || phoneNumberMiddle.length !== 4) {
+  const handleSendVerification = async () => {
+    // 이메일 유효성 검사
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email) {
       setErrors(prev => ({
         ...prev,
-        phoneNumberMiddle: '4자리 숫자를 입력해주세요'
+        email: '이메일을 입력해주세요'
       }));
       return;
     }
     
-    if (!phoneNumberSuffix || phoneNumberSuffix.length !== 4) {
+    if (!emailRegex.test(formData.email)) {
       setErrors(prev => ({
         ...prev,
-        phoneNumberSuffix: '4자리 숫자를 입력해주세요'
+        email: '유효한 이메일 형식이 아닙니다'
       }));
       return;
     }
-
+    
     // 에러 초기화
-    setErrors(prev => ({ 
-      ...prev, 
-      phoneNumberPrefix: undefined,
-      phoneNumberMiddle: undefined,
-      phoneNumberSuffix: undefined
-    }));
+    setErrors(prev => ({ ...prev, email: undefined }));
+    setSendingVerification(true);
     
-    // UI 상태 업데이트만 수행
-    setSendingCode(true);
-    setTimeout(() => {
-      setSendingCode(false);
-      setCodeSent(true);
-      alert('인증 기능이 일시적으로 비활성화되었습니다.');
-    }, 1000);
+    try {
+      // 인증 코드 발송 API 호출
+      const response = await fetch('/api/email/send-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+        }),
+      });
+      
+      const data = await response.json();
+      console.log('이메일 인증 코드 발송 응답:', data);
+      
+      if (response.ok && data.success) {
+        // 인증 코드 발송 성공
+        setVerificationSent(true);
+        
+        // 개발 환경에서 API에서 직접 코드를 반환한 경우, 자동으로 입력
+        if (data.code) {
+          setFormData(prev => ({
+            ...prev,
+            emailVerificationCode: data.code
+          }));
+          console.log('개발 환경: 인증 코드가 자동으로 입력되었습니다:', data.code);
+          alert(`인증 코드가 이메일로 발송되었습니다. (개발 환경: ${data.code})`);
+        } else {
+          alert('인증 코드가 이메일로 발송되었습니다. 이메일을 확인해주세요.');
+        }
+      } else {
+        // API 오류 발생
+        const errorMessage = data.error || '인증 코드 발송 중 오류가 발생했습니다';
+        console.error('이메일 인증 코드 발송 실패:', errorMessage);
+        setErrors(prev => ({
+          ...prev,
+          email: errorMessage
+        }));
+        alert(`이메일 발송 실패: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error('이메일 인증 코드 발송 중 오류:', error);
+      const errorMessage = error instanceof Error ? error.message : '서버 연결 중 오류가 발생했습니다';
+      setErrors(prev => ({
+        ...prev,
+        email: errorMessage
+      }));
+      alert(`이메일 발송 오류: ${errorMessage}`);
+    } finally {
+      setSendingVerification(false);
+    }
   };
 
-  const handleVerifyCode = async () => {
-    if (!formData.phoneVerificationCode) {
+  const handleVerifyEmail = async () => {
+    // 인증 코드 유효성 검사
+    if (!formData.emailVerificationCode) {
       setErrors(prev => ({
         ...prev,
-        phoneVerificationCode: '인증번호를 입력해주세요'
+        emailVerificationCode: '인증 코드를 입력해주세요'
       }));
       return;
     }
-
-    setErrors(prev => ({ ...prev, phoneVerificationCode: undefined }));
     
-    // UI 상태 업데이트만 수행
-    setVerifyingCode(true);
-    setTimeout(() => {
-      setVerifyingCode(false);
-      alert('인증 기능이 일시적으로 비활성화되었습니다.');
-    }, 1000);
+    // 에러 초기화
+    setErrors(prev => ({ ...prev, emailVerificationCode: undefined }));
+    setVerifyingEmail(true);
+    
+    try {
+      // 인증 코드 확인 API 호출
+      const response = await fetch('/api/email/verify-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          code: formData.emailVerificationCode,
+        }),
+      });
+      
+      const data = await response.json();
+      console.log('이메일 인증 코드 확인 응답:', data);
+      
+      if (response.ok && data.verified) {
+        // 인증 성공
+        setFormData(prev => ({
+          ...prev,
+          emailVerified: true
+        }));
+        alert('이메일 인증이 완료되었습니다.');
+      } else {
+        // 인증 실패
+        const errorMessage = data.error || '유효하지 않은 인증 코드입니다';
+        console.error('이메일 인증 실패:', errorMessage);
+        setErrors(prev => ({
+          ...prev,
+          emailVerificationCode: errorMessage
+        }));
+        alert(`인증 실패: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error('이메일 인증 중 오류:', error);
+      const errorMessage = error instanceof Error ? error.message : '서버 연결 중 오류가 발생했습니다';
+      setErrors(prev => ({
+        ...prev,
+        emailVerificationCode: errorMessage
+      }));
+      alert(`인증 오류: ${errorMessage}`);
+    } finally {
+      setVerifyingEmail(false);
+    }
   };
 
   // 아이디 중복 확인 함수
@@ -292,6 +377,9 @@ export default function RegisterPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email) newErrors.email = '이메일을 입력해주세요';
     else if (!emailRegex.test(formData.email)) newErrors.email = '유효한 이메일 형식이 아닙니다';
+    
+    // 이메일 인증 검증
+    if (!formData.emailVerified) newErrors.emailVerificationCode = '이메일 인증이 필요합니다';
     
     // 비밀번호 정책 검증
     if (!formData.password) {
@@ -440,6 +528,74 @@ export default function RegisterPage() {
             </div>
             
             <div className="mb-4">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                이메일
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className={`appearance-none relative block w-full px-3 py-2 border ${
+                    errors.email ? 'border-red-300' : 
+                    formData.emailVerified ? 'border-green-500' : 'border-gray-300'
+                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                  placeholder="you@example.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  disabled={formData.emailVerified}
+                />
+                <button
+                  type="button"
+                  onClick={handleSendVerification}
+                  disabled={sendingVerification || formData.emailVerified || !formData.email}
+                  className={`whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
+                    formData.emailVerified ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
+                >
+                  {sendingVerification ? '발송 중...' : 
+                   formData.emailVerified ? '인증 완료' : 
+                   verificationSent ? '재발송' : '인증코드 받기'}
+                </button>
+              </div>
+              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+            </div>
+            
+            {verificationSent && !formData.emailVerified && (
+              <div className="mb-4">
+                <label htmlFor="emailVerificationCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  이메일 인증 코드
+                </label>
+                <div className="flex space-x-2">
+                  <input
+                    id="emailVerificationCode"
+                    name="emailVerificationCode"
+                    type="text"
+                    className={`appearance-none relative block w-full px-3 py-2 border ${
+                      errors.emailVerificationCode ? 'border-red-300' : 'border-gray-300'
+                    } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                    placeholder="6자리 인증 코드"
+                    value={formData.emailVerificationCode}
+                    onChange={handleChange}
+                    maxLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyEmail}
+                    disabled={verifyingEmail || !formData.emailVerificationCode}
+                    className="whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    {verifyingEmail ? '확인 중...' : '인증 확인'}
+                  </button>
+                </div>
+                {errors.emailVerificationCode && <p className="mt-1 text-sm text-red-600">{errors.emailVerificationCode}</p>}
+                {formData.emailVerified && <p className="mt-1 text-sm text-green-600">이메일 인증이 완료되었습니다</p>}
+              </div>
+            )}
+            
+            <div className="mb-4">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 비밀번호
               </label>
@@ -553,26 +709,6 @@ export default function RegisterPage() {
             </div>
 
             <div className="mb-4">
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                이메일
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className={`appearance-none relative block w-full px-3 py-2 border ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="이메일 주소"
-                value={formData.email}
-                onChange={handleChange}
-              />
-              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-            </div>
-            
-            <div>
               <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
                 휴대폰 번호
               </label>
@@ -627,58 +763,6 @@ export default function RegisterPage() {
                     <p className="mt-1 text-xs text-red-600">{errors.phoneNumberSuffix}</p>
                   )}
                 </div>
-              </div>
-              <div className="mt-2 flex space-x-2">
-                <button
-                  type="button"
-                  onClick={handleSendVerificationCode}
-                  disabled={sendingCode || codeSent}
-                  className={`px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
-                    codeSent
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
-                >
-                  {sendingCode
-                    ? '전송 중...'
-                    : codeSent
-                    ? '인증번호 발송됨'
-                    : '인증번호 받기'}
-                </button>
-                {codeSent && (
-                  <div className="flex-1">
-                    <div className="flex space-x-2">
-                      <input
-                        id="phoneVerificationCode"
-                        name="phoneVerificationCode"
-                        type="text"
-                        placeholder="인증번호 입력"
-                        value={formData.phoneVerificationCode}
-                        onChange={handleChange}
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleVerifyCode}
-                        disabled={verifyingCode || formData.phoneVerified}
-                        className={`whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
-                          formData.phoneVerified
-                            ? 'bg-green-600 hover:bg-green-700'
-                            : 'bg-blue-600 hover:bg-blue-700'
-                        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
-                      >
-                        {verifyingCode
-                          ? '확인 중...'
-                          : formData.phoneVerified
-                          ? '인증됨'
-                          : '확인'}
-                      </button>
-                    </div>
-                    {errors.phoneVerificationCode && (
-                      <p className="mt-1 text-xs text-red-600">{errors.phoneVerificationCode}</p>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
             
