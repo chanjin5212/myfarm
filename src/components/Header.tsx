@@ -113,12 +113,18 @@ export default function Header() {
             ) : user ? (
               <div className="flex items-center space-x-4">
                 <div className="flex items-center">
-                  {user.avatar_url && (
-                    <img
+                  {user.avatar_url ? (
+                    <Image
                       src={user.avatar_url}
-                      alt="프로필"
-                      className="w-8 h-8 rounded-full mr-2"
+                      alt="User Profile"
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 rounded-full"
                     />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600">
+                      {user?.nickname?.charAt(0) || user?.name?.charAt(0) || 'U'}
+                    </div>
                   )}
                   <span className="text-gray-800 font-medium">
                     {user.nickname || user.name || user.email.split('@')[0]}

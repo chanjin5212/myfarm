@@ -57,6 +57,8 @@ export default function AuthPage() {
     }
   };
 
+  // 구글 로그인 함수는 주석 처리되었지만 나중에 필요할 수 있으므로 보존
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleGoogleLogin = () => {
     // Generate a random state
     const state = Math.random().toString(36).substring(2, 15);
