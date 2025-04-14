@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Button, Input } from '@/components/ui/CommonStyles';
 
 export default function FindIdPage() {
   const [name, setName] = useState('');
@@ -148,44 +149,37 @@ export default function FindIdPage() {
         {verificationStep === 'form' && (
           <form className="mt-8 space-y-6" onSubmit={handleFindId}>
             <div className="rounded-md shadow-sm space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  이름
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm mt-1"
-                  placeholder="이름을 입력하세요"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  이메일
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm mt-1"
-                  placeholder="이메일을 입력하세요"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                />
-              </div>
+              <Input
+                label="이름"
+                id="name"
+                name="name"
+                type="text"
+                required
+                placeholder="이름을 입력하세요"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={isLoading}
+                fullWidth
+              />
+              
+              <Input
+                label="이메일"
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="이메일을 입력하세요"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                fullWidth
+              />
             </div>
 
             <div>
               <button
                 type="submit"
-                className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 transition-all duration-200 hover:bg-green-700 hover:shadow-md active:scale-98 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 cursor-pointer ${
                   isLoading ? 'opacity-75 cursor-not-allowed' : ''
                 }`}
                 disabled={isLoading}
@@ -203,30 +197,26 @@ export default function FindIdPage() {
                 {email}로 인증 코드가 발송되었습니다. 메일에 포함된 인증 코드를 입력해주세요.
               </p>
               <div className="rounded-md shadow-sm">
-                <div>
-                  <label htmlFor="verificationCode" className="block text-sm font-medium text-gray-700">
-                    인증 코드
-                  </label>
-                  <input
-                    id="verificationCode"
-                    name="verificationCode"
-                    type="text"
-                    required
-                    className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm mt-1"
-                    placeholder="인증 코드 6자리"
-                    value={userVerificationCode}
-                    onChange={(e) => setUserVerificationCode(e.target.value)}
-                    disabled={isLoading}
-                  />
-                </div>
+                <Input
+                  label="인증 코드"
+                  id="verificationCode"
+                  name="verificationCode"
+                  type="text"
+                  required
+                  placeholder="인증 코드 6자리"
+                  value={userVerificationCode}
+                  onChange={(e) => setUserVerificationCode(e.target.value)}
+                  disabled={isLoading}
+                  fullWidth
+                />
               </div>
             </div>
-
+            
             <div className="flex items-center justify-between">
               <button
                 type="button"
                 onClick={handleResendVerification}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="text-sm text-green-600 hover:text-green-800 font-medium transition-all duration-200 hover:underline focus:outline-none cursor-pointer"
                 disabled={isResending}
               >
                 {isResending ? '재발송 중...' : '인증번호 재발송'}
@@ -236,7 +226,7 @@ export default function FindIdPage() {
             <div>
               <button
                 type="submit"
-                className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 transition-all duration-200 hover:bg-green-700 hover:shadow-md active:scale-98 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 cursor-pointer ${
                   isLoading ? 'opacity-75 cursor-not-allowed' : ''
                 }`}
                 disabled={isLoading}
@@ -247,41 +237,40 @@ export default function FindIdPage() {
           </form>
         )}
         
-        {verificationStep === 'result' && foundId && (
+        {verificationStep === 'result' && (
           <div className="mt-8 space-y-6">
-            <div className="bg-gray-50 p-6 rounded-md border border-gray-200">
-              <p className="text-gray-700 mb-2">
-                회원님의 아이디는 다음과 같습니다:
+            <div className="bg-green-50 p-6 rounded-md border border-green-200">
+              <p className="text-green-700 mb-2 font-medium">
+                아이디 찾기가 완료되었습니다.
               </p>
-              <p className="text-lg font-bold text-blue-700 py-2">{foundId}</p>
+              <p className="text-lg font-bold text-gray-700 py-2">
+                {foundId}
+              </p>
+              <p className="text-sm text-gray-600">
+                로그인 페이지로 이동하여 로그인해 주세요.
+              </p>
             </div>
             
-            <div className="flex space-x-4">
-              <Link href="/auth" className="w-full">
+            <div>
+              <Link href="/auth">
                 <button
                   type="button"
-                  className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 transition-all duration-200 hover:bg-green-700 hover:shadow-md active:scale-98 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 cursor-pointer"
                 >
                   로그인하기
-                </button>
-              </Link>
-              <Link href="/auth/reset-password" className="w-full">
-                <button
-                  type="button"
-                  className="w-full py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  비밀번호 찾기
                 </button>
               </Link>
             </div>
           </div>
         )}
         
-        <div className="mt-4 text-center">
-          <Link href="/auth" className="text-sm text-blue-600 hover:text-blue-800">
-            로그인 페이지로 돌아가기
-          </Link>
-        </div>
+        {verificationStep !== 'result' && (
+          <div className="mt-4 text-center">
+            <Link href="/auth" className="text-sm text-green-600 hover:text-green-800">
+              로그인 페이지로 돌아가기
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

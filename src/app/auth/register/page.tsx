@@ -4,6 +4,7 @@ import { useState, ChangeEvent, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
+import { Button, Input, Checkbox, Select } from '@/components/ui/CommonStyles';
 
 // 다음 주소검색 API를 위한 타입 정의
 declare global {
@@ -604,220 +605,161 @@ export default function RegisterPage() {
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
               이미 계정이 있으신가요?{' '}
-              <Link href="/auth" className="font-medium text-blue-600 hover:text-blue-500">
-                로그인하기
+              <Link href="/auth" className="font-medium text-green-600 hover:text-green-500">
+                로그인
               </Link>
             </p>
           </div>
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <div className="rounded-md shadow-sm -space-y-px">
-              <div className="mb-4">
-                <label htmlFor="loginId" className="block text-sm font-medium text-gray-700 mb-1">
-                  로그인 아이디
-                </label>
-                <div className="flex space-x-2">
-                  <input
+            <div className="rounded-md shadow-sm space-y-4">
+              <div>
+                <div className="flex items-end space-x-2 mb-4">
+                  <Input
+                    label="아이디"
                     id="loginId"
                     name="loginId"
                     type="text"
                     autoComplete="username"
                     required
-                    className={`appearance-none relative block w-full px-3 py-2 border ${
-                      errors.loginId ? 'border-red-300' : 
-                      formData.loginIdChecked ? 'border-green-500' : 'border-gray-300'
-                    } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                    placeholder="로그인 아이디 (4자 이상)"
+                    placeholder="로그인 아이디"
                     value={formData.loginId}
                     onChange={handleChange}
+                    error={errors.loginId}
+                    fullWidth
                   />
-                  <button
+                  <Button
                     type="button"
                     onClick={handleCheckLoginId}
-                    disabled={checkingId || formData.loginId.length < 4}
-                    className={`whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
-                      formData.loginIdChecked ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
+                    disabled={checkingId || !formData.loginId || formData.loginIdChecked}
+                    className="mb-1 shrink-0"
+                    variant={formData.loginIdChecked ? "outline" : "secondary"}
                   >
-                    {checkingId ? '확인 중...' : formData.loginIdChecked ? '확인 완료' : '중복 확인'}
-                  </button>
+                    {checkingId ? '확인중...' : formData.loginIdChecked ? '확인완료' : '중복확인'}
+                  </Button>
                 </div>
-                {errors.loginId && <p className="mt-1 text-sm text-red-600">{errors.loginId}</p>}
-                {formData.loginIdChecked && !errors.loginId && (
-                  <p className="mt-1 text-sm text-green-600">사용 가능한 아이디입니다</p>
-                )}
               </div>
               
               <div className="mb-4">
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  이메일
-                </label>
-                <div className="flex space-x-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                <div className="flex items-center space-x-2">
                   <input
-                    id="emailId"
-                    name="emailId"
                     type="text"
-                    autoComplete="username"
-                    required
-                    className={`appearance-none relative block w-1/3 px-3 py-2 border ${
-                      errors.email ? 'border-red-300' : 
-                      formData.emailVerified ? 'border-green-500' : 'border-gray-300'
-                    } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                    placeholder="아이디"
+                    name="emailId"
                     value={formData.emailId}
                     onChange={handleChange}
-                    disabled={formData.emailVerified}
+                    className="px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 border-gray-300 flex-1"
+                    placeholder="이메일 아이디"
+                    required
                   />
-                  <span className="flex items-center text-gray-500">@</span>
-                  <select
+                  <span className="text-gray-500">@</span>
+                  <Select
                     name="emailDomain"
-                    value={formData.emailDomain === '' && isCustomDomain ? 'custom' : formData.emailDomain}
+                    value={formData.emailDomain || 'custom'}
                     onChange={handleChange}
-                    disabled={formData.emailVerified}
-                    className={`appearance-none relative block w-1/3 px-3 py-2 border ${
-                      errors.email ? 'border-red-300' : 
-                      formData.emailVerified ? 'border-green-500' : 'border-gray-300'
-                    } text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                  >
-                    <option value="">선택</option>
-                    <option value="naver.com">naver.com</option>
-                    <option value="gmail.com">gmail.com</option>
-                    <option value="daum.net">daum.net</option>
-                    <option value="hanmail.net">hanmail.net</option>
-                    <option value="hotmail.com">hotmail.com</option>
-                    <option value="nate.com">nate.com</option>
-                    <option value="yahoo.com">yahoo.com</option>
-                    <option value="custom">직접입력</option>
-                  </select>
-                  {isCustomDomain && (
-                    <input
-                      name="emailDomain"
-                      type="text"
-                      placeholder="도메인 입력"
-                      value={formData.emailDomain}
-                      onChange={handleChange}
-                      disabled={formData.emailVerified}
-                      className={`appearance-none relative block w-1/3 px-3 py-2 border ${
-                        errors.email ? 'border-red-300' : 
-                        formData.emailVerified ? 'border-green-500' : 'border-gray-300'
-                      } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                    />
-                  )}
-                  <button
+                    options={[
+                      { value: 'custom', label: '직접입력' },
+                      { value: 'naver.com', label: 'naver.com' },
+                      { value: 'gmail.com', label: 'gmail.com' },
+                      { value: 'daum.net', label: 'daum.net' },
+                      { value: 'hanmail.net', label: 'hanmail.net' },
+                      { value: 'nate.com', label: 'nate.com' }
+                    ]}
+                    className="flex-1"
+                  />
+                </div>
+                {isCustomDomain && (
+                  <input
+                    type="text"
+                    name="emailDomain"
+                    value={formData.emailDomain}
+                    onChange={handleChange}
+                    className="mt-2 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 border-gray-300 w-full"
+                    placeholder="도메인 입력 (예: gmail.com)"
+                  />
+                )}
+                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+              </div>
+              
+              <div className="flex items-end space-x-2 mb-4">
+                <div className="flex-1">
+                  <Input
+                    label="이메일 인증 코드"
+                    id="emailVerificationCode"
+                    name="emailVerificationCode"
+                    type="text"
+                    placeholder="인증 코드 입력"
+                    value={formData.emailVerificationCode}
+                    onChange={handleChange}
+                    disabled={!verificationSent || formData.emailVerified}
+                    error={errors.emailVerificationCode}
+                  />
+                </div>
+                {!verificationSent ? (
+                  <Button
                     type="button"
                     onClick={handleSendVerification}
-                    disabled={sendingVerification || formData.emailVerified || !formData.email}
-                    className={`whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white ${
-                      formData.emailVerified ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
+                    disabled={sendingVerification || !formData.email}
+                    variant="secondary"
+                    className="mb-1 shrink-0"
                   >
-                    {sendingVerification ? '발송 중...' : 
-                     formData.emailVerified ? '인증 완료' : 
-                     verificationSent ? '재발송' : '인증코드 받기'}
-                  </button>
-                </div>
-                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-                {!errors.email && formData.emailId && formData.emailDomain && !formData.emailVerified && (
-                  <p className="mt-1 text-sm text-gray-600">입력된 이메일: {formData.email}</p>
+                    {sendingVerification ? '전송 중...' : '인증코드 전송'}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={handleVerifyEmail}
+                    disabled={verifyingEmail || !formData.emailVerificationCode || formData.emailVerified}
+                    variant={formData.emailVerified ? "outline" : "secondary"}
+                    className="mb-1 shrink-0"
+                  >
+                    {verifyingEmail ? '확인 중...' : formData.emailVerified ? '인증 완료' : '인증 확인'}
+                  </Button>
                 )}
               </div>
               
-              {verificationSent && !formData.emailVerified && (
-                <div className="mb-4">
-                  <label htmlFor="emailVerificationCode" className="block text-sm font-medium text-gray-700 mb-1">
-                    이메일 인증 코드
-                  </label>
-                  <div className="flex space-x-2">
-                    <input
-                      id="emailVerificationCode"
-                      name="emailVerificationCode"
-                      type="text"
-                      className={`appearance-none relative block w-full px-3 py-2 border ${
-                        errors.emailVerificationCode ? 'border-red-300' : 'border-gray-300'
-                      } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                      placeholder="6자리 인증 코드"
-                      value={formData.emailVerificationCode}
-                      onChange={handleChange}
-                      maxLength={6}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleVerifyEmail}
-                      disabled={verifyingEmail || !formData.emailVerificationCode}
-                      className="whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                    >
-                      {verifyingEmail ? '확인 중...' : '인증 확인'}
-                    </button>
-                  </div>
-                  {errors.emailVerificationCode && <p className="mt-1 text-sm text-red-600">{errors.emailVerificationCode}</p>}
-                  {formData.emailVerified && <p className="mt-1 text-sm text-green-600">이메일 인증이 완료되었습니다</p>}
-                </div>
-              )}
-              
               <div className="mb-4">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  비밀번호
-                </label>
-                <input
+                <Input
+                  label="비밀번호"
                   id="password"
                   name="password"
                   type="password"
                   autoComplete="new-password"
                   required
-                  className={`appearance-none relative block w-full px-3 py-2 border ${
-                    errors.password ? 'border-red-300' : 
-                    formData.password && formData.confirmPassword && passwordMatch === true ? 'border-green-500' : 
-                    formData.password && formData.confirmPassword && passwordMatch === false ? 'border-red-500' : 
-                    'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                  placeholder="비밀번호 (8~16자, 대/소문자, 숫자, 특수문자 포함)"
+                  placeholder="비밀번호"
                   value={formData.password}
                   onChange={handleChange}
+                  error={errors.password}
                 />
-                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
                 
-                {formData.password.length > 0 && (
-                  <div className="mt-2 text-xs space-y-1">
-                    <p className={`flex items-center ${passwordValidation.length ? 'text-green-600' : 'text-red-600'}`}>
-                      <span className="mr-1">{passwordValidation.length ? '✓' : '✗'}</span>
-                      8~16자 길이
-                    </p>
-                    <p className={`flex items-center ${passwordValidation.upperLower ? 'text-green-600' : 'text-red-600'}`}>
-                      <span className="mr-1">{passwordValidation.upperLower ? '✓' : '✗'}</span>
-                      대문자와 소문자 포함
-                    </p>
-                    <p className={`flex items-center ${passwordValidation.number ? 'text-green-600' : 'text-red-600'}`}>
-                      <span className="mr-1">{passwordValidation.number ? '✓' : '✗'}</span>
-                      숫자 포함
-                    </p>
-                    <p className={`flex items-center ${passwordValidation.special ? 'text-green-600' : 'text-red-600'}`}>
-                      <span className="mr-1">{passwordValidation.special ? '✓' : '✗'}</span>
-                      특수문자 포함
-                    </p>
-                  </div>
-                )}
+                <div className="mt-2 text-xs text-gray-600 space-y-1">
+                  <p className={passwordValidation.length ? 'text-green-600' : 'text-gray-400'}>
+                    * 8~16자의 길이
+                  </p>
+                  <p className={passwordValidation.upperLower ? 'text-green-600' : 'text-gray-400'}>
+                    * 대문자와 소문자 포함
+                  </p>
+                  <p className={passwordValidation.number ? 'text-green-600' : 'text-gray-400'}>
+                    * 숫자 포함
+                  </p>
+                  <p className={passwordValidation.special ? 'text-green-600' : 'text-gray-400'}>
+                    * 특수문자 포함
+                  </p>
+                </div>
               </div>
               
               <div className="mb-4">
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  비밀번호 확인
-                </label>
-                <input
+                <Input
+                  label="비밀번호 확인"
                   id="confirmPassword"
                   name="confirmPassword"
                   type="password"
                   autoComplete="new-password"
                   required
-                  className={`appearance-none relative block w-full px-3 py-2 border ${
-                    errors.confirmPassword ? 'border-red-300' : 
-                    formData.confirmPassword && passwordMatch === true ? 'border-green-500' : 
-                    formData.confirmPassword && passwordMatch === false ? 'border-red-500' : 
-                    'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                   placeholder="비밀번호 확인"
                   value={formData.confirmPassword}
                   onChange={handleChange}
+                  error={errors.confirmPassword}
                 />
-                {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                 {formData.confirmPassword && passwordMatch === false && !errors.confirmPassword && (
                   <p className="mt-1 text-sm text-red-600">비밀번호가 일치하지 않습니다</p>
                 )}
@@ -827,47 +769,37 @@ export default function RegisterPage() {
               </div>
               
               <div className="mb-4">
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  이름
-                </label>
-                <input
+                <Input
+                  label="이름"
                   id="name"
                   name="name"
                   type="text"
                   autoComplete="name"
                   required
-                  className={`appearance-none relative block w-full px-3 py-2 border ${
-                    errors.name ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                   placeholder="이름"
                   value={formData.name}
                   onChange={handleChange}
+                  error={errors.name}
                 />
-                {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
               </div>
               
               <div className="mb-4">
-                <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-1">
-                  닉네임
-                </label>
-                <input
+                <Input
+                  label="닉네임"
                   id="nickname"
                   name="nickname"
                   type="text"
                   autoComplete="nickname"
                   required
-                  className={`appearance-none relative block w-full px-3 py-2 border ${
-                    errors.nickname ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                   placeholder="닉네임"
                   value={formData.nickname}
                   onChange={handleChange}
+                  error={errors.nickname}
                 />
-                {errors.nickname && <p className="mt-1 text-sm text-red-600">{errors.nickname}</p>}
               </div>
 
               <div className="mb-4">
-                <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   주소
                 </label>
                 <div className="flex space-x-2 mb-2">
@@ -875,66 +807,58 @@ export default function RegisterPage() {
                     id="postcode"
                     name="postcode"
                     type="text"
-                    className={`appearance-none relative block w-1/3 px-3 py-2 border ${
-                      errors.address ? 'border-red-300' : 'border-gray-300'
-                    } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                    className="px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 border-gray-300 w-1/3"
                     placeholder="우편번호"
                     value={formData.postcode}
                     readOnly
                   />
-                  <button
+                  <Button
                     type="button"
                     onClick={handleSearchAddress}
-                    className="whitespace-nowrap px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    variant="secondary"
                   >
                     주소 검색
-                  </button>
+                  </Button>
                 </div>
-                <input
+                <Input
                   id="address"
                   name="address"
                   type="text"
-                  className={`appearance-none relative block w-full px-3 py-2 border ${
-                    errors.address ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm mb-2`}
                   placeholder="기본주소"
                   value={formData.address}
                   readOnly
+                  className="mb-2"
                 />
-                <input
+                <Input
                   id="detailAddress"
                   name="detailAddress"
                   type="text"
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                   placeholder="상세주소"
                   value={formData.detailAddress}
                   onChange={handleChange}
+                  error={errors.address}
                 />
-                {errors.address && <p className="mt-1 text-sm text-red-600">{errors.address}</p>}
               </div>
 
               <div className="mb-4">
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   휴대폰 번호
                 </label>
                 <div className="flex space-x-2">
                   <div className="w-1/4">
-                    <select
+                    <Select
                       name="phoneNumberPrefix"
                       value={formData.phoneNumberPrefix}
                       onChange={handleChange}
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    >
-                      <option value="010">010</option>
-                      <option value="011">011</option>
-                      <option value="016">016</option>
-                      <option value="017">017</option>
-                      <option value="018">018</option>
-                      <option value="019">019</option>
-                    </select>
-                    {errors.phoneNumberPrefix && (
-                      <p className="mt-1 text-xs text-red-600">{errors.phoneNumberPrefix}</p>
-                    )}
+                      options={[
+                        { value: '010', label: '010' },
+                        { value: '011', label: '011' },
+                        { value: '016', label: '016' },
+                        { value: '017', label: '017' },
+                        { value: '018', label: '018' },
+                        { value: '019', label: '019' }
+                      ]}
+                    />
                   </div>
                   <div className="w-1/3">
                     <input
@@ -946,11 +870,8 @@ export default function RegisterPage() {
                       placeholder="0000"
                       value={formData.phoneNumberMiddle}
                       onChange={handleChange}
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      className="px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 border-gray-300 w-full"
                     />
-                    {errors.phoneNumberMiddle && (
-                      <p className="mt-1 text-xs text-red-600">{errors.phoneNumberMiddle}</p>
-                    )}
                   </div>
                   <div className="w-1/3">
                     <input
@@ -962,57 +883,49 @@ export default function RegisterPage() {
                       placeholder="0000"
                       value={formData.phoneNumberSuffix}
                       onChange={handleChange}
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      className="px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 border-gray-300 w-full"
                     />
-                    {errors.phoneNumberSuffix && (
-                      <p className="mt-1 text-xs text-red-600">{errors.phoneNumberSuffix}</p>
-                    )}
                   </div>
                 </div>
+                {(errors.phoneNumberPrefix || errors.phoneNumberMiddle || errors.phoneNumberSuffix) && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.phoneNumberPrefix || errors.phoneNumberMiddle || errors.phoneNumberSuffix}
+                  </p>
+                )}
               </div>
               
               <div className="mb-4">
-                <div className="flex items-center">
-                  <input
-                    id="termsAgreed"
-                    name="termsAgreed"
-                    type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    checked={formData.termsAgreed}
-                    onChange={handleChange}
-                  />
-                  <label htmlFor="termsAgreed" className="ml-2 block text-sm text-gray-900">
-                    이용약관에 동의합니다
-                  </label>
-                </div>
+                <Checkbox
+                  label="이용약관에 동의합니다"
+                  id="termsAgreed"
+                  name="termsAgreed"
+                  checked={formData.termsAgreed}
+                  onChange={handleChange}
+                />
                 {errors.termsAgreed && <p className="mt-1 text-sm text-red-600">{errors.termsAgreed}</p>}
               </div>
               
               <div className="mb-4">
-                <div className="flex items-center">
-                  <input
-                    id="marketingAgreed"
-                    name="marketingAgreed"
-                    type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    checked={formData.marketingAgreed}
-                    onChange={handleChange}
-                  />
-                  <label htmlFor="marketingAgreed" className="ml-2 block text-sm text-gray-900">
-                    마케팅 정보 수신에 동의합니다 (선택)
-                  </label>
-                </div>
+                <Checkbox
+                  label="마케팅 정보 수신에 동의합니다 (선택)"
+                  id="marketingAgreed"
+                  name="marketingAgreed"
+                  checked={formData.marketingAgreed}
+                  onChange={handleChange}
+                />
               </div>
             </div>
 
             <div>
-              <button
+              <Button
                 type="submit"
                 disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                variant="primary"
+                size="lg"
+                fullWidth
               >
                 {isLoading ? '처리 중...' : '회원가입'}
-              </button>
+              </Button>
             </div>
           </form>
         </div>

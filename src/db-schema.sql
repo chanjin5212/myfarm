@@ -248,3 +248,42 @@ CREATE TABLE cart_items (
 	CONSTRAINT cart_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
 	CONSTRAINT cart_items_product_option_id_fkey FOREIGN KEY (product_option_id) REFERENCES product_options(id) ON DELETE SET NULL
 ); 
+
+
+CREATE TABLE shipping_addresses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_name VARCHAR(100) NOT NULL,
+  phone VARCHAR(20) NOT NULL,
+  address VARCHAR(255) NOT NULL,
+  detail_address VARCHAR(255),
+  is_default BOOLEAN DEFAULT false,
+  memo VARCHAR(255),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스 생성 (조회 속도 향상)
+CREATE INDEX idx_shipping_addresses_user_id ON shipping_addresses(user_id);
+
+-- 각 사용자별로 기본 배송지는 하나만 존재하도록 제약조건 추가
+CREATE UNIQUE INDEX idx_user_default_address ON shipping_addresses(user_id) WHERE is_default = true;
+
+-- RLS 정책 설정 (Row Level Security)
+ALTER TABLE shipping_addresses ENABLE ROW LEVEL SECURITY;
+
+-- 사용자는 자신의 배송지만 확인 가능
+CREATE POLICY shipping_addresses_select_policy ON shipping_addresses
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- 사용자는 자신의 배송지만 추가 가능
+CREATE POLICY shipping_addresses_insert_policy ON shipping_addresses
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 사용자는 자신의 배송지만 수정 가능
+CREATE POLICY shipping_addresses_update_policy ON shipping_addresses
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- 사용자는 자신의 배송지만 삭제 가능
+CREATE POLICY shipping_addresses_delete_policy ON shipping_addresses
+  FOR DELETE USING (auth.uid() = user_id);

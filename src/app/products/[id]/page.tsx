@@ -71,6 +71,12 @@ export default function ProductDetailPage() {
   const [isAddingToCart, setIsAddingToCart] = useState<boolean>(false);
   const [cartSuccessPopup, setCartSuccessPopup] = useState<boolean>(false);
   
+  // 버튼별 로딩 상태 추가
+  const [changingOptionId, setChangingOptionId] = useState<string | null>(null);
+  const [changingBaseQuantity, setChangingBaseQuantity] = useState<boolean>(false);
+  const [removingOptionId, setRemovingOptionId] = useState<string | null>(null);
+  const [isBuyingNow, setIsBuyingNow] = useState<boolean>(false);
+  
   // UUID 형식 검증 함수
   const isValidUUID = (id: string) => {
     const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -119,13 +125,6 @@ export default function ProductDetailPage() {
     }
   }, [params.id]);
 
-  // 옵션이 없는 상품의 수량 변경
-  const handleBaseQuantityChange = (newQuantity: number) => {
-    if (newQuantity < 1) return;
-    if (productDetails && productDetails.stock && newQuantity > productDetails.stock) return;
-    setQuantity(newQuantity);
-  };
-
   const handleQuantityChange = (optionId: string, newQuantity: number) => {
     // 수량은 최소 1 이상이어야 함
     if (newQuantity < 1) {
@@ -133,26 +132,64 @@ export default function ProductDetailPage() {
       return;
     }
     
-    // 선택한 옵션 찾기
-    const option = selectedOptions.find(opt => opt.optionId === optionId);
-    if (!option) return;
+    // 수량 변경 로딩 상태 시작
+    setChangingOptionId(optionId);
     
-    // 재고 확인
-    if (newQuantity > option.stock) {
-      alert(`최대 ${option.stock}개까지 구매 가능합니다.`);
-      return;
+    try {
+      // 선택한 옵션 찾기
+      const option = selectedOptions.find(opt => opt.optionId === optionId);
+      if (!option) return;
+      
+      // 재고 확인
+      if (newQuantity > option.stock) {
+        alert(`최대 ${option.stock}개까지 구매 가능합니다.`);
+        return;
+      }
+      
+      // 수량 업데이트
+      setSelectedOptions(
+        selectedOptions.map(opt => 
+          opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
+        )
+      );
+    } finally {
+      // 수량 변경 로딩 상태 종료
+      setTimeout(() => {
+        setChangingOptionId(null);
+      }, 300);
     }
-    
-    // 수량 업데이트
-    setSelectedOptions(
-      selectedOptions.map(opt => 
-        opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
-      )
-    );
   };
 
   const handleRemoveOption = (optionId: string) => {
-    setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
+    setRemovingOptionId(optionId);
+    try {
+      setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
+    } finally {
+      setTimeout(() => {
+        setRemovingOptionId(null);
+      }, 300);
+    }
+  };
+
+  const handleBaseQuantityChange = (newQuantity: number) => {
+    if (newQuantity < 1) {
+      alert('최소 수량은 1개입니다.');
+      return;
+    }
+    
+    setChangingBaseQuantity(true);
+    
+    try {
+      if (productDetails && productDetails.stock && newQuantity > productDetails.stock) {
+        alert(`최대 ${productDetails.stock}개까지 구매 가능합니다.`);
+        return;
+      }
+      setQuantity(newQuantity);
+    } finally {
+      setTimeout(() => {
+        setChangingBaseQuantity(false);
+      }, 300);
+    }
   };
 
   const handleOptionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -366,6 +403,8 @@ export default function ProductDetailPage() {
       return;
     }
     
+    setIsBuyingNow(true);
+    
     // 장바구니에 추가 후 checkout 페이지로 이동
     handleAddToCart()
       .then(() => {
@@ -375,6 +414,9 @@ export default function ProductDetailPage() {
       })
       .catch((error) => {
         console.error('즉시 구매 실패:', error);
+      })
+      .finally(() => {
+        setIsBuyingNow(false);
       });
   };
 
@@ -579,10 +621,11 @@ export default function ProductDetailPage() {
                 className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-green-500"
                 onChange={handleOptionChange}
                 value=""
+                disabled={isAddingToCart || isBuyingNow}
               >
                 <option value="">옵션을 선택하세요</option>
                 {options.map((option) => (
-                  <option key={option.id} value={option.id} disabled={option.stock < 1}>
+                  <option key={option.id} value={option.id} disabled={option.stock < 1 || isAddingToCart || isBuyingNow}>
                     {option.option_name}: {option.option_value} 
                     {option.additional_price > 0 ? ` (+${option.additional_price.toLocaleString()}원)` : ''} 
                     {option.stock < 1 ? ' (품절)' : ` (재고: ${option.stock}개)`}
@@ -605,10 +648,13 @@ export default function ProductDetailPage() {
                       <div className="flex items-center">
                         <div className="flex items-center border rounded mr-2">
                           <button
-                            className="px-2 py-1 hover:bg-gray-200"
+                            className="px-2 py-1 hover:bg-gray-200 disabled:opacity-50"
                             onClick={() => handleQuantityChange(option.optionId, option.quantity - 1)}
+                            disabled={changingOptionId === option.optionId || isAddingToCart || isBuyingNow}
                           >
-                            -
+                            {changingOptionId === option.optionId ? (
+                              <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                            ) : '-'}
                           </button>
                           <input
                             type="number"
@@ -617,20 +663,27 @@ export default function ProductDetailPage() {
                             onChange={(e) => handleQuantityChange(option.optionId, parseInt(e.target.value) || 1)}
                             min="1"
                             max={option.stock}
+                            disabled={changingOptionId === option.optionId || isAddingToCart || isBuyingNow}
                           />
                           <button
-                            className="px-2 py-1 hover:bg-gray-200"
+                            className="px-2 py-1 hover:bg-gray-200 disabled:opacity-50"
                             onClick={() => handleQuantityChange(option.optionId, option.quantity + 1)}
+                            disabled={changingOptionId === option.optionId || isAddingToCart || isBuyingNow}
                           >
-                            +
+                            {changingOptionId === option.optionId ? (
+                              <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                            ) : '+'}
                           </button>
                         </div>
                         <button
-                          className="text-gray-500 hover:text-red-500 p-1 bg-gray-200 hover:bg-gray-300 rounded-full h-6 w-6 flex items-center justify-center"
+                          className="text-gray-500 hover:text-red-500 p-1 bg-gray-200 hover:bg-gray-300 rounded-full h-6 w-6 flex items-center justify-center disabled:opacity-50"
                           onClick={() => handleRemoveOption(option.optionId)}
+                          disabled={removingOptionId === option.optionId || isAddingToCart || isBuyingNow}
                           aria-label="옵션 삭제"
                         >
-                          X
+                          {removingOptionId === option.optionId ? (
+                            <span className="inline-block w-3 h-3 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                          ) : 'X'}
                         </button>
                       </div>
                     </div>
@@ -651,10 +704,13 @@ export default function ProductDetailPage() {
               </label>
               <div className="flex">
                 <button
-                  className="px-3 py-2 border border-gray-300 rounded-l-md hover:bg-gray-100"
+                  className="px-3 py-2 border border-gray-300 rounded-l-md hover:bg-gray-100 disabled:opacity-50"
                   onClick={() => handleBaseQuantityChange(quantity - 1)}
+                  disabled={changingBaseQuantity || isAddingToCart || isBuyingNow}
                 >
-                  -
+                  {changingBaseQuantity ? (
+                    <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                  ) : '-'}
                 </button>
                 <input
                   type="number"
@@ -664,12 +720,16 @@ export default function ProductDetailPage() {
                   className="w-16 text-center border-t border-b border-gray-300 focus:outline-none"
                   value={quantity}
                   onChange={(e) => handleBaseQuantityChange(parseInt(e.target.value) || 1)}
+                  disabled={changingBaseQuantity || isAddingToCart || isBuyingNow}
                 />
                 <button
-                  className="px-3 py-2 border border-gray-300 rounded-r-md hover:bg-gray-100"
+                  className="px-3 py-2 border border-gray-300 rounded-r-md hover:bg-gray-100 disabled:opacity-50"
                   onClick={() => handleBaseQuantityChange(quantity + 1)}
+                  disabled={changingBaseQuantity || isAddingToCart || isBuyingNow}
                 >
-                  +
+                  {changingBaseQuantity ? (
+                    <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                  ) : '+'}
                 </button>
               </div>
             </div>
@@ -686,18 +746,30 @@ export default function ProductDetailPage() {
           </div>
 
           {/* 구매 버튼 */}
-          <div className="flex gap-3">
+          <div className="flex space-x-3 mb-8">
             <button
-              className="flex-1 px-6 py-3 bg-white border-2 border-green-600 text-green-600 rounded-md hover:bg-green-50 font-semibold"
               onClick={handleAddToCart}
+              disabled={isAddingToCart || isBuyingNow}
+              className="flex-1 bg-white border-2 border-green-600 text-green-600 rounded-md py-3 font-semibold hover:bg-green-50 transition duration-200 disabled:opacity-50 flex items-center justify-center"
             >
-              장바구니
+              {isAddingToCart ? (
+                <>
+                  <span className="inline-block w-5 h-5 mr-2 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></span>
+                  담는 중...
+                </>
+              ) : '장바구니에 담기'}
             </button>
             <button
-              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold"
               onClick={handleBuyNow}
+              disabled={isAddingToCart || isBuyingNow}
+              className="flex-1 bg-green-600 text-white rounded-md py-3 font-semibold hover:bg-green-700 transition duration-200 disabled:opacity-50 flex items-center justify-center"
             >
-              바로 구매하기
+              {isBuyingNow ? (
+                <>
+                  <span className="inline-block w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  주문 중...
+                </>
+              ) : '바로 구매하기'}
             </button>
           </div>
         </div>

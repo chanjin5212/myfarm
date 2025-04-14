@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Button } from '@/components/ui/CommonStyles';
 
 interface User {
   id: string;
@@ -33,6 +34,30 @@ interface OrderHistory {
   }>;
 }
 
+interface MenuItemProps {
+  href: string;
+  title: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+}
+
+function MenuItem({ href, title, icon, onClick }: MenuItemProps) {
+  return (
+    <Link 
+      href={href} 
+      className="flex items-center p-4 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm"
+      onClick={onClick}
+    >
+      <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+        {icon}
+      </div>
+      <div className="ml-3">
+        <p className="text-base font-medium text-gray-800">{title}</p>
+      </div>
+    </Link>
+  );
+}
+
 export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,7 +66,7 @@ export default function MyPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const checkLoginStatus = () => {
+    const checkLoginStatus = async () => {
       try {
         const tokenData = localStorage.getItem('token');
         if (tokenData) {
@@ -108,6 +133,12 @@ export default function MyPage() {
       return `${phone.substring(0, 3)}-${phone.substring(3, 7)}-${phone.substring(7)}`;
     }
     return phone;
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('userId');
+    localStorage.removeItem('token');
+    router.push('/auth');
   };
 
   if (isLoading) {
@@ -219,18 +250,54 @@ export default function MyPage() {
                       {user.address ? (
                         <div>
                           <p className="font-medium">[{user.postcode}] {user.address}</p>
-                          {user.detail_address && (
-                            <p className="text-gray-700">{user.detail_address}</p>
-                          )}
+                          <p className="font-medium">{user.detail_address}</p>
                         </div>
                       ) : (
-                        <p className="font-medium">등록된 주소가 없습니다</p>
+                        <p className="font-medium">등록된 주소가 없습니다.</p>
                       )}
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500">마케팅 정보 수신 동의</p>
-                      <p className="font-medium">{user.marketing_agreed ? '동의함' : '동의하지 않음'}</p>
-                    </div>
+                  </div>
+                  
+                  <h3 className="text-xl font-semibold mt-8 mb-4">바로가기</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <MenuItem 
+                      href="/mypage/edit-profile"
+                      title="개인정보 수정"
+                      icon={
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      }
+                    />
+                    <MenuItem 
+                      href="/mypage/orders"
+                      title="주문 내역"
+                      icon={
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                      }
+                    />
+                    <MenuItem 
+                      href="/mypage/shipping-addresses"
+                      title="배송지 관리"
+                      icon={
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                        </svg>
+                      }
+                    />
+                    <MenuItem 
+                      href="#"
+                      title="로그아웃"
+                      icon={
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5-5H3zm6.293 11.293a1 1 0 001.414 1.414l4-4a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 1.414L11.586 10l-2.293 2.293z" clipRule="evenodd" />
+                        </svg>
+                      }
+                      onClick={handleLogout}
+                    />
                   </div>
                 </div>
               )}
@@ -295,12 +362,21 @@ export default function MyPage() {
                     개인정보를 수정하시려면 아래 버튼을 클릭하세요.
                   </p>
                   <div className="space-y-4">
-                    <Link href="/mypage/edit-profile" className="inline-block px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700">
+                    <Button 
+                      variant="primary" 
+                      size="lg" 
+                      className="mb-2"
+                      onClick={() => router.push('/mypage/edit-profile')}
+                    >
                       개인정보 수정하기
-                    </Link>
-                    <Link href="/mypage/change-password" className="block px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 inline-block">
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="lg" 
+                      onClick={() => router.push('/mypage/change-password')}
+                    >
                       비밀번호 변경하기
-                    </Link>
+                    </Button>
                   </div>
                 </div>
               )}

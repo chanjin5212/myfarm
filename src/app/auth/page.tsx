@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LOGIN_STATUS_CHANGE } from '@/components/Header';
+import { Button, Input } from '@/components/ui/CommonStyles';
 
 export default function AuthPage() {
   const [loginId, setLoginId] = useState('');
@@ -43,6 +44,9 @@ export default function AuthPage() {
         expiresAt: Date.now() + 3600000 // 1시간 후 만료
       };
       localStorage.setItem('token', JSON.stringify(token));
+      
+      // 사용자 ID 저장 (API 호출을 위한 간편한 방법)
+      localStorage.setItem('userId', data.user.id);
       
       // 로그인 상태 변경 이벤트 발생
       window.dispatchEvent(new Event(LOGIN_STATUS_CHANGE));
@@ -140,117 +144,87 @@ export default function AuthPage() {
           </div>
         )}
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="loginId" className="sr-only">
-                아이디
-              </label>
-              <input
-                id="loginId"
-                name="loginId"
-                type="text"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="아이디"
-                value={loginId}
-                onChange={(e) => setLoginId(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                비밀번호
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="비밀번호"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
+          <div className="space-y-4">
+            <Input
+              label="아이디"
+              id="loginId"
+              name="loginId"
+              type="text"
+              required
+              placeholder="아이디"
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
+              disabled={isLoading}
+            />
+            <Input
+              label="비밀번호"
+              id="password"
+              name="password"
+              type="password"
+              required
+              placeholder="비밀번호"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+            />
           </div>
 
           <div>
-            <button
+            <Button
               type="submit"
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                isLoading ? 'opacity-75 cursor-not-allowed' : ''
-              }`}
+              variant="primary"
+              size="lg"
+              fullWidth
               disabled={isLoading}
+              className="transition-all duration-200 hover:shadow-md active:scale-[0.98] transform"
             >
               {isLoading ? '로그인 중...' : '로그인'}
-            </button>
+            </Button>
           </div>
           
           <div className="flex justify-between text-sm mt-2">
-            <Link href="/auth/find-id" className="text-blue-600 hover:text-blue-800">
+            <Link href="/auth/find-id" className="text-green-600 hover:text-green-800">
               아이디 찾기
             </Link>
             <span className="text-gray-500">|</span>
-            <Link href="/auth/reset-password" className="text-blue-600 hover:text-blue-800">
+            <Link href="/auth/reset-password" className="text-green-600 hover:text-green-800">
               비밀번호 찾기
             </Link>
-          </div>
-          
-          <div className="mt-4">
-            <Link href="/auth/register">
-              <button
-                type="button"
-                className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                회원가입
-              </button>
+            <span className="text-gray-500">|</span>
+            <Link href="/auth/register" className="text-green-600 hover:text-green-800">
+              회원가입
             </Link>
           </div>
         </form>
-
-        <div className="mt-6 space-y-4">
-          {/* 구글 로그인 버튼 숨김 - 코드는 유지 */}
-          {/* <button
-            onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
-            disabled={isLoading}
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032
-                s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814
-                C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10
-                c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"
-              />
-            </svg>
-            Google로 로그인
-          </button> */}
-
-          <button
-            onClick={handleNaverLogin}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-            disabled={isLoading}
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M13.6,10l-2.8,4H7.4V6h3.3l2.8,4V10z" />
-              <path fillRule="evenodd" clipRule="evenodd" d="M10,0C4.5,0,0,4.5,0,10s4.5,10,10,10s10-4.5,10-10S15.5,0,10,0z M14.4,15l-4.1-5.9H6.4v5.9h-2V4h7.6l4.1,5.9v5.2H14.4z"/>
-            </svg>
-            네이버로 로그인
-          </button>
+        
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">간편 로그인</span>
+            </div>
+          </div>
           
-          <button
-            type="button"
-            onClick={handleKakaoLogin}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-2 px-4 rounded-lg flex items-center justify-center mb-4"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-              <path d="M12 3C6.48 3 2 6.48 2 10.8C2 13.8 3.9 16.3 6.7 17.8C6.4 18.9 5.8 20.8 5.7 21.2C5.5 21.7 5.9 22.1 6.3 21.9C6.8 21.6 9.1 20.1 10.4 19.3C10.9 19.4 11.4 19.4 12 19.4C17.5 19.4 22 15.9 22 10.8C22 6.48 17.52 3 12 3Z" fill="currentColor" />
-            </svg>
-            Kakao로 로그인
-          </button>
+          <div className="mt-6 flex justify-center gap-4">
+            <button
+              type="button"
+              onClick={handleNaverLogin}
+              className="w-14 h-14 rounded-full flex items-center justify-center bg-[#03C75A] text-white border-0 shadow-md transition-all duration-200 transform hover:scale-110 hover:shadow-lg hover:-translate-y-1 active:scale-95 active:shadow-md focus:outline-none cursor-pointer"
+              disabled={isLoading}
+            >
+              <span className="font-bold text-lg">N</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleKakaoLogin}
+              className="w-14 h-14 rounded-full flex items-center justify-center bg-[#FEE500] text-black border-0 shadow-md transition-all duration-200 transform hover:scale-110 hover:shadow-lg hover:-translate-y-1 active:scale-95 active:shadow-md focus:outline-none cursor-pointer"
+              disabled={isLoading}
+            >
+              <span className="font-bold text-lg">K</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

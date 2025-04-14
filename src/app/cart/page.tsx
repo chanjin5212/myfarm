@@ -88,13 +88,25 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [editItemId, setEditItemId] = useState<string | null>(null);
-  const [editQuantity, setEditQuantity] = useState<number>(1);
+  const [user, setUser] = useState<User | null>(null);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(0);
   const [groupedCartItems, setGroupedCartItems] = useState<GroupedCartItem[]>([]);
+  
+  // 주문 편집 관련 상태 추가
+  const [editItemId, setEditItemId] = useState<string | null>(null);
   const [editProductId, setEditProductId] = useState<string | null>(null);
+  const [editQuantity, setEditQuantity] = useState(1);
   const [editOptions, setEditOptions] = useState<EditableOption[]>([]);
+  
+  // 로딩 상태 관련 추가
+  const [actionLoading, setActionLoading] = useState(false);
+  const [editModalLoading, setEditModalLoading] = useState(false);
+  const [removingItemIds, setRemovingItemIds] = useState<string[]>([]);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  
   const router = useRouter();
 
   useEffect(() => {
@@ -380,14 +392,55 @@ export default function CartPage() {
       return;
     }
     
+    setActionLoading(true);
+    
     if (!user) {
       if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
         router.push('/auth');
+      } else {
+        setActionLoading(false);
       }
       return;
     }
     
-    router.push('/checkout');
+    try {
+      // 선택된 상품이 있으면 선택된 상품만, 없으면 모든 상품
+      const itemsToCheckout = selectedItems.length > 0
+        ? cartItems.filter(item => selectedItems.includes(item.id))
+        : cartItems;
+      
+      // 주문 정보 구성 - CartItem 형태로 변환
+      const checkoutItems = itemsToCheckout.map(item => ({
+        id: item.id,
+        productId: item.product_id,
+        name: item.product.name,
+        price: item.product_option 
+          ? (item.product.discount_price || item.product.price) + (item.product_option.additional_price || 0)
+          : (item.product.discount_price || item.product.price),
+        quantity: item.quantity,
+        image: item.product.thumbnail_url || '/images/default-product.png',
+        option: item.product_option ? {
+          name: item.product_option.option_name,
+          value: item.product_option.option_value
+        } : undefined,
+        shippingFee: calculateShippingFee(
+          item.quantity * (
+            (item.product.discount_price || item.product.price) + 
+            (item.product_option ? (item.product_option.additional_price || 0) : 0)
+          )
+        )
+      }));
+      
+      // 체크아웃 아이템 로컬 스토리지에 저장
+      localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
+      
+      // 체크아웃 페이지로 이동
+      router.push('/checkout');
+    } catch (error) {
+      console.error('체크아웃 처리 오류:', error);
+      alert('주문 처리 중 오류가 발생했습니다.');
+      setActionLoading(false);
+    }
   };
 
   // 총 상품 금액 계산 함수 수정
@@ -411,9 +464,12 @@ export default function CartPage() {
     }, 0);
   };
 
-  const totalPrice = calculateTotalPrice();
-  const shippingFee = calculateTotalShippingFee();
-  const finalPrice = totalPrice + shippingFee;
+  // useEffect 추가 - 계산된 가격 정보를 상태에 업데이트
+  useEffect(() => {
+    setTotalPrice(calculateTotalPrice());
+    setShippingFee(calculateTotalShippingFee());
+    setFinalPrice(calculateTotalPrice() + calculateTotalShippingFee());
+  }, [groupedCartItems]);
 
   // 모든 아이템 선택/해제
   const handleSelectAll = (isSelected: boolean) => {
@@ -447,6 +503,9 @@ export default function CartPage() {
     
     if (confirm(`선택한 ${selectedItems.length}개 상품을 장바구니에서 삭제하시겠습니까?`)) {
       try {
+        setActionLoading(true);
+        setRemovingItemIds(selectedItems);
+        
         if (!user) {
           // 로컬 스토리지에서 선택한 아이템 제거
           const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
@@ -499,41 +558,51 @@ export default function CartPage() {
       } catch (err) {
         console.error('선택 상품 삭제 오류:', err);
         alert('선택한 상품 삭제에 실패했습니다.');
+      } finally {
+        setActionLoading(false);
+        setRemovingItemIds([]);
       }
     }
   };
 
   // 주문 편집 모달 열기 함수 수정 - 상품 그룹 단위로 편집
   const handleOpenEditModal = (groupProductId: string) => {
-    const group = groupedCartItems.find(g => g.product_id === groupProductId);
-    if (!group) return;
+    setEditModalLoading(true);
+    setEditingProductId(groupProductId);
     
-    // 해당 상품의 모든 옵션 정보 설정
-    setEditProductId(groupProductId);
-    
-    // 옵션 정보 설정
-    const options = group.options.map(opt => ({
-      cart_item_id: opt.cart_item_id,
-      option_name: opt.option_name,
-      option_value: opt.option_value,
-      additional_price: opt.additional_price,
-      quantity: opt.quantity,
-      stock: opt.stock
-    }));
-    
-    setEditOptions(options);
-    
-    // 기본 상품 ID 설정 (뒤 호환성)
-    if (options.length > 0) {
-      setEditItemId(options[0].cart_item_id);
-      setEditQuantity(options[0].quantity);
-    } else {
-      // 옵션이 없는 상품일 경우
-      const basicItem = cartItems.find(item => item.product_id === groupProductId);
-      if (basicItem) {
-        setEditItemId(basicItem.id);
-        setEditQuantity(basicItem.quantity);
+    try {
+      const group = groupedCartItems.find(g => g.product_id === groupProductId);
+      if (!group) return;
+      
+      // 해당 상품의 모든 옵션 정보 설정
+      setEditProductId(groupProductId);
+      
+      // 옵션 정보 설정
+      const options = group.options.map(opt => ({
+        cart_item_id: opt.cart_item_id,
+        option_name: opt.option_name,
+        option_value: opt.option_value,
+        additional_price: opt.additional_price,
+        quantity: opt.quantity,
+        stock: opt.stock
+      }));
+      
+      setEditOptions(options);
+      
+      // 기본 상품 ID 설정 (뒤 호환성)
+      if (options.length > 0) {
+        setEditItemId(options[0].cart_item_id);
+        setEditQuantity(options[0].quantity);
+      } else {
+        // 옵션이 없는 상품일 경우
+        const basicItem = cartItems.find(item => item.product_id === groupProductId);
+        if (basicItem) {
+          setEditItemId(basicItem.id);
+          setEditQuantity(basicItem.quantity);
+        }
       }
+    } finally {
+      setEditModalLoading(false);
     }
   };
   
@@ -543,11 +612,14 @@ export default function CartPage() {
     setEditProductId(null);
     setEditOptions([]);
     setEditQuantity(1);
+    setEditingProductId(null);
   };
   
   // 편집 내용 저장 함수 수정
   const handleSaveEdit = async () => {
     try {
+      setActionLoading(true);
+      
       // 선택된 옵션들의 수량 변경 처리
       const updatePromises = editOptions.map(option => 
         handleQuantityChange(option.cart_item_id, option.quantity)
@@ -563,6 +635,8 @@ export default function CartPage() {
     } catch (err) {
       console.error('주문 편집 저장 오류:', err);
       alert('주문 내용 저장에 실패했습니다.');
+    } finally {
+      setActionLoading(false);
     }
   };
   
@@ -731,10 +805,16 @@ export default function CartPage() {
                     
                     <div className="w-24 text-center">
                       <button
-                        className="text-blue-500 hover:text-blue-700 text-sm underline"
+                        className="text-blue-500 hover:text-blue-700 text-sm underline flex items-center justify-center"
                         onClick={() => handleOpenEditModal(groupItem.product_id)}
+                        disabled={editModalLoading || editingProductId === groupItem.product_id}
                       >
-                        주문 수정
+                        {editingProductId === groupItem.product_id ? (
+                          <>
+                            <span className="inline-block w-4 h-4 mr-1 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
+                            로딩중
+                          </>
+                        ) : '주문 수정'}
                       </button>
                     </div>
                   </div>
@@ -744,10 +824,16 @@ export default function CartPage() {
               {groupedCartItems.length > 0 && (
                 <div className="py-4 px-6 bg-gray-50">
                   <button
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                    className={`px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm flex items-center ${actionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                     onClick={handleRemoveSelectedItems}
+                    disabled={actionLoading || selectedItems.length === 0}
                   >
-                    선택 상품 삭제
+                    {actionLoading && removingItemIds.length > 0 ? (
+                      <>
+                        <span className="inline-block w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        삭제 중...
+                      </>
+                    ) : '선택 상품 삭제'}
                   </button>
                 </div>
               )}
@@ -779,10 +865,16 @@ export default function CartPage() {
                   <span className="text-xl font-bold text-green-600">{finalPrice.toLocaleString()}원</span>
                 </div>
                 <button
-                  className="w-full py-3 mt-6 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold"
+                  className={`w-full py-3 mt-6 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold flex items-center justify-center ${actionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                   onClick={handleCheckout}
+                  disabled={actionLoading}
                 >
-                  주문하기
+                  {actionLoading ? (
+                    <>
+                      <span className="inline-block w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      처리 중...
+                    </>
+                  ) : '주문하기'}
                 </button>
               </div>
             </div>
@@ -899,14 +991,21 @@ export default function CartPage() {
                     <button
                       className="px-4 py-2 bg-gray-200 text-gray-800 rounded mr-2 hover:bg-gray-300"
                       onClick={handleCloseEditModal}
+                      disabled={actionLoading}
                     >
                       취소
                     </button>
                     <button
-                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                      className={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center ${actionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                       onClick={handleSaveEdit}
+                      disabled={actionLoading}
                     >
-                      저장
+                      {actionLoading ? (
+                        <>
+                          <span className="inline-block w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          저장 중...
+                        </>
+                      ) : '저장'}
                     </button>
                   </div>
                 </>

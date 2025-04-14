@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Button, Select, Card } from '@/components/ui/CommonStyles';
 
 interface Product {
   id: string;
@@ -10,164 +12,255 @@ interface Product {
   price: number;
   discount_price?: number;
   thumbnail_url?: string;
+  image_url?: string;
   stock: number;
-  status: string;
-  category_id?: string;
+  description?: string;
 }
 
 interface Category {
   id: string;
   name: string;
-  parent_id?: string;
 }
 
-export default function ProductsPage() {
+export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortOption, setSortOption] = useState<string>('newest');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch('/api/categories');
-        if (!response.ok) {
-          throw new Error('카테고리 정보를 불러오는데 실패했습니다.');
-        }
-        const data = await response.json();
-        setCategories(data);
-      } catch (err) {
-        console.error('카테고리 로딩 오류:', err);
-        setError('카테고리 정보를 불러오는데 실패했습니다.');
-      }
-    };
+    // 상품 로드
+    loadProducts();
+  }, [selectedCategory, sortOption, currentPage]);
 
-    fetchCategories();
+  useEffect(() => {
+    // 카테고리 로드
+    loadCategories();
   }, []);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
+  const loadProducts = async () => {
+    try {
       setLoading(true);
-      try {
-        let url = '/api/products';
-        if (selectedCategory) {
-          url += `?category=${selectedCategory}`;
-        }
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error('상품 정보를 불러오는데 실패했습니다.');
-        }
-        const data = await response.json();
-        setProducts(data);
-        setError(null);
-      } catch (err) {
-        console.error('상품 로딩 오류:', err);
-        setError('상품 정보를 불러오는데 실패했습니다.');
-        setProducts([]);
-      } finally {
-        setLoading(false);
+      setError(null);
+      
+      // 쿼리 파라미터 구성
+      const params = new URLSearchParams();
+      if (selectedCategory) {
+        params.append('category', selectedCategory);
       }
-    };
+      if (sortOption) {
+        params.append('sort', sortOption);
+      }
+      params.append('page', String(currentPage));
+      
+      // API 요청
+      const url = `/api/products${params.toString() ? `?${params.toString()}` : ''}`;
+      console.log('상품 로드 URL:', url);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('상품을 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      // API가 배열을 직접 반환하므로, data.products 대신 data를 사용
+      setProducts(Array.isArray(data) ? data : []);
+      console.log('로드된 상품 수:', Array.isArray(data) ? data.length : 0);
+    } catch (err) {
+      setError('상품을 불러오는 중 오류가 발생했습니다.');
+      console.error('상품 로드 오류:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchProducts();
-  }, [selectedCategory]);
+  const loadCategories = async () => {
+    try {
+      const response = await fetch('/api/categories');
+      if (!response.ok) {
+        throw new Error('카테고리를 불러오는데 실패했습니다.');
+      }
+      const data = await response.json();
+      // API가 배열을 직접 반환하므로, data.categories 대신 data를 사용
+      setCategories(Array.isArray(data) ? data : []);
+      console.log('로드된 카테고리 수:', Array.isArray(data) ? data.length : 0);
+    } catch (err) {
+      console.error('카테고리 로드 오류:', err);
+    }
+  };
 
-  const handleCategoryChange = (categoryId: string) => {
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const categoryId = e.target.value;
     setSelectedCategory(categoryId);
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const option = e.target.value;
+    setSortOption(option);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleAddToCart = async (productId: string) => {
+    try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        alert('로그인이 필요합니다.');
+        router.push('/auth');
+        return;
+      }
+
+      const response = await fetch('/api/cart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          productId,
+          quantity: 1,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('장바구니에 추가하지 못했습니다.');
+      }
+
+      alert('상품이 장바구니에 추가되었습니다.');
+    } catch (error) {
+      console.error('장바구니 추가 오류:', error);
+      alert('장바구니에 추가하는 중 오류가 발생했습니다.');
+    }
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">상품 목록</h1>
-
-      {/* 카테고리 필터 */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">카테고리</h2>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className={`px-4 py-2 rounded ${
-              selectedCategory === '' ? 'bg-green-600 text-white' : 'bg-gray-200'
-            }`}
-            onClick={() => handleCategoryChange('')}
-          >
-            전체
-          </button>
-          {categories.length > 0 ? (
-            categories.map((category) => (
-              <button
-                key={category.id}
-                className={`px-4 py-2 rounded ${
-                  selectedCategory === category.id ? 'bg-green-600 text-white' : 'bg-gray-200'
-                }`}
-                onClick={() => handleCategoryChange(category.id)}
-              >
-                {category.name}
-              </button>
-            ))
-          ) : (
-            <div className="text-gray-500">카테고리 정보를 불러오는 중...</div>
-          )}
+      <h1 className="text-2xl font-bold mb-6">상품 목록</h1>
+      
+      <div className="flex flex-col sm:flex-row justify-between mb-6">
+        {/* 카테고리 필터 */}
+        <div className="mb-4 sm:mb-0 w-full sm:w-auto">
+          <Select
+            label="카테고리"
+            value={selectedCategory || ''}
+            onChange={handleCategoryChange}
+            options={[
+              { value: '', label: '전체 카테고리' },
+              ...(categories.map(cat => ({
+                value: cat.id,
+                label: cat.name
+              })))
+            ]}
+          />
+        </div>
+        
+        {/* 정렬 옵션 */}
+        <div className="w-full sm:w-auto">
+          <Select
+            label="정렬"
+            value={sortOption}
+            onChange={handleSortChange}
+            options={[
+              { value: 'newest', label: '최신순' },
+              { value: 'price_low', label: '가격 낮은순' },
+              { value: 'price_high', label: '가격 높은순' },
+              { value: 'popularity', label: '인기순' }
+            ]}
+          />
         </div>
       </div>
-
-      {loading ? (
-        <div className="text-center py-10">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
-          <p className="mt-2 text-gray-600">상품을 불러오는 중...</p>
+      
+      {/* 상품 로딩 중 */}
+      {loading && (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
         </div>
-      ) : error ? (
-        <div className="text-center py-10 text-red-600">{error}</div>
-      ) : products.length === 0 ? (
-        <div className="text-center py-10 text-gray-600">
-          <p>등록된 상품이 없습니다.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <Link href={`/products/${product.id}`} key={product.id}>
-              <div className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
-                <div className="relative h-48 w-full">
-                  <Image
-                    src={product.thumbnail_url || 'https://via.placeholder.com/300'}
-                    alt={product.name}
-                    fill
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    className="object-cover"
-                  />
-                  {product.discount_price && (
-                    <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold">
-                      {Math.round(((product.price - product.discount_price) / product.price) * 100)}% 할인
+      )}
+      
+      {/* 상품 목록 */}
+      {!loading && (
+        <>
+          {products.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {products.map((product) => (
+                <Card key={product.id} className="transition-transform hover:shadow-lg hover:scale-105">
+                  <Link href={`/products/${product.id}`} className="block">
+                    <div className="relative w-full h-48 mb-4">
+                      <Image
+                        src={product.image_url || '/images/default-product.png'}
+                        alt={product.name}
+                        fill
+                        className="object-cover rounded-t-lg"
+                      />
                     </div>
-                  )}
-                  {product.stock <= 0 && (
-                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                      <span className="text-white font-bold text-lg">품절</span>
+                    <div className="p-4">
+                      <h2 className="text-lg font-medium mb-2 truncate">{product.name}</h2>
+                      <p className="text-gray-600 text-sm mb-2 truncate">{product.description || ''}</p>
+                      <p className="text-lg font-bold text-green-600">{product.price.toLocaleString()} 원</p>
                     </div>
-                  )}
-                </div>
-                <div className="p-4 flex-grow">
-                  <h3 className="text-lg font-semibold mb-2 line-clamp-2">{product.name}</h3>
-                  <div className="flex items-baseline">
-                    {product.discount_price ? (
-                      <>
-                        <span className="text-gray-400 line-through text-sm mr-2">
-                          {product.price.toLocaleString()}원
-                        </span>
-                        <span className="text-lg font-bold text-green-600">
-                          {product.discount_price.toLocaleString()}원
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-lg font-bold text-green-600">
-                        {product.price.toLocaleString()}원
-                      </span>
-                    )}
+                  </Link>
+                  <div className="px-4 pb-4">
+                    <Button
+                      onClick={() => handleAddToCart(product.id)}
+                      variant="outline"
+                      fullWidth
+                    >
+                      장바구니에 추가
+                    </Button>
                   </div>
-                </div>
-              </div>
-            </Link>
-          ))}
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">상품이 없습니다.</p>
+            </div>
+          )}
+        </>
+      )}
+      
+      {/* 페이지네이션 */}
+      {!loading && totalPages > 1 && (
+        <div className="flex justify-center mt-8">
+          <div className="flex space-x-2">
+            <Button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              variant="outline"
+              className="px-4"
+            >
+              이전
+            </Button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <Button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                variant={currentPage === page ? 'primary' : 'outline'}
+                className="w-10"
+              >
+                {page}
+              </Button>
+            ))}
+            
+            <Button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              variant="outline"
+              className="px-4"
+            >
+              다음
+            </Button>
+          </div>
         </div>
       )}
     </div>
