@@ -2,6 +2,30 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
+
+// 다음 주소검색 API를 위한 타입 정의
+declare global {
+  interface Window {
+    daum: {
+      Postcode: new (config: {
+        oncomplete: (data: DaumPostcodeResult) => void;
+      }) => { open: () => void };
+    };
+  }
+}
+
+// 다음 주소검색 결과 타입
+interface DaumPostcodeResult {
+  zonecode: string; // 우편번호
+  address: string; // 기본 주소
+  addressType: string;
+  userSelectedType: string;
+  jibunAddress: string;
+  roadAddress: string;
+  buildingName?: string;
+  apartment?: string;
+}
 
 interface User {
   id: string;
@@ -9,6 +33,9 @@ interface User {
   name?: string;
   nickname?: string;
   phone_number?: string;
+  postcode?: string;
+  address?: string;
+  detail_address?: string;
   marketing_agreed?: boolean;
 }
 
@@ -18,6 +45,9 @@ interface FormData {
   phoneNumberPrefix: string;
   phoneNumberMiddle: string;
   phoneNumberSuffix: string;
+  postcode: string;
+  address: string;
+  detailAddress: string;
   marketingAgreed: boolean;
 }
 
@@ -26,6 +56,7 @@ interface FormErrors {
   nickname?: string;
   phoneNumberMiddle?: string;
   phoneNumberSuffix?: string;
+  address?: string;
 }
 
 export default function EditProfile() {
@@ -38,6 +69,9 @@ export default function EditProfile() {
     phoneNumberPrefix: '010',
     phoneNumberMiddle: '',
     phoneNumberSuffix: '',
+    postcode: '',
+    address: '',
+    detailAddress: '',
     marketingAgreed: false,
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -81,6 +115,9 @@ export default function EditProfile() {
                 phoneNumberPrefix: prefix,
                 phoneNumberMiddle: middle,
                 phoneNumberSuffix: suffix,
+                postcode: userData.postcode || '',
+                address: userData.address || '',
+                detailAddress: userData.detail_address || '',
                 marketingAgreed: userData.marketing_agreed || false,
               });
             }
@@ -151,6 +188,27 @@ export default function EditProfile() {
     return `${phoneNumberPrefix}${phoneNumberMiddle}${phoneNumberSuffix}`;
   };
 
+  // 다음 주소검색 API 호출 함수
+  const handleSearchAddress = () => {
+    if (window.daum && window.daum.Postcode) {
+      new window.daum.Postcode({
+        oncomplete: function(data: DaumPostcodeResult) {
+          // 검색 결과 데이터 처리
+          setFormData(prev => ({
+            ...prev,
+            postcode: data.zonecode,
+            address: data.address
+          }));
+          
+          // 상세주소 입력란에 포커스
+          document.getElementById('detailAddress')?.focus();
+        }
+      }).open();
+    } else {
+      alert('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+    }
+  };
+
   const validateForm = () => {
     const errors: FormErrors = {};
     
@@ -200,6 +258,9 @@ export default function EditProfile() {
           name: formData.name || null,
           nickname: formData.nickname || null,
           phone_number: fullPhoneNumber || null,
+          postcode: formData.postcode || null,
+          address: formData.address || null,
+          detail_address: formData.detailAddress || null,
           marketing_agreed: formData.marketingAgreed,
         }),
       });
@@ -221,6 +282,9 @@ export default function EditProfile() {
           name: formData.name || parsedToken.user.name,
           nickname: formData.nickname || parsedToken.user.nickname,
           phone_number: fullPhoneNumber || parsedToken.user.phone_number,
+          postcode: formData.postcode || parsedToken.user.postcode,
+          address: formData.address || parsedToken.user.address,
+          detail_address: formData.detailAddress || parsedToken.user.detail_address,
           marketing_agreed: formData.marketingAgreed,
         };
         localStorage.setItem('token', JSON.stringify(parsedToken));
@@ -253,135 +317,187 @@ export default function EditProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl">
-        <h1 className="text-3xl font-bold text-center mb-10">개인정보 수정</h1>
-        
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* 이름 입력 */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">이름</label>
-              <input
-                type="text"
-                name="name"
-                id="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="이름을 입력하세요"
-              />
-            </div>
-            
-            {/* 닉네임 입력 */}
-            <div>
-              <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-1">닉네임</label>
-              <input
-                type="text"
-                name="nickname"
-                id="nickname"
-                value={formData.nickname}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="닉네임을 입력하세요"
-              />
-            </div>
-            
-            {/* 휴대폰 번호 입력 */}
-            <div>
-              <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">휴대폰 번호</label>
-              <div className="flex items-center space-x-2">
-                <select
-                  name="phoneNumberPrefix"
-                  id="phoneNumberPrefix"
-                  value={formData.phoneNumberPrefix}
-                  onChange={handleChange}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    <>
+      <Script
+        src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"
+        strategy="lazyOnload"
+      />
+      <div className="min-h-screen bg-gray-50 py-12">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl">
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold">개인정보 수정</h1>
+                <button
+                  onClick={handleCancel}
+                  className="text-gray-500 hover:text-gray-700"
                 >
-                  {prefixOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-gray-500">-</span>
-                <input
-                  type="text"
-                  name="phoneNumberMiddle"
-                  id="phoneNumberMiddle"
-                  value={formData.phoneNumberMiddle}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0000"
-                  maxLength={4}
-                />
-                <span className="text-gray-500">-</span>
-                <input
-                  type="text"
-                  name="phoneNumberSuffix"
-                  id="phoneNumberSuffix"
-                  value={formData.phoneNumberSuffix}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0000"
-                  maxLength={4}
-                />
+                  뒤로 가기
+                </button>
               </div>
-              {formErrors.phoneNumberMiddle && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.phoneNumberMiddle}</p>
+              
+              {successMessage && (
+                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
+                  {successMessage}
+                </div>
               )}
-              {formErrors.phoneNumberSuffix && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.phoneNumberSuffix}</p>
-              )}
+              
+              <form onSubmit={handleSubmit}>
+                {/* 이름 입력 */}
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">이름</label>
+                  <input
+                    type="text"
+                    name="name"
+                    id="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="이름을 입력하세요"
+                  />
+                </div>
+                
+                {/* 닉네임 입력 */}
+                <div>
+                  <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-1">닉네임</label>
+                  <input
+                    type="text"
+                    name="nickname"
+                    id="nickname"
+                    value={formData.nickname}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="닉네임을 입력하세요"
+                  />
+                </div>
+                
+                {/* 휴대폰 번호 입력 */}
+                <div>
+                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">휴대폰 번호</label>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      name="phoneNumberPrefix"
+                      id="phoneNumberPrefix"
+                      value={formData.phoneNumberPrefix}
+                      onChange={handleChange}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {prefixOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-gray-500">-</span>
+                    <input
+                      type="text"
+                      name="phoneNumberMiddle"
+                      id="phoneNumberMiddle"
+                      value={formData.phoneNumberMiddle}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0000"
+                      maxLength={4}
+                    />
+                    <span className="text-gray-500">-</span>
+                    <input
+                      type="text"
+                      name="phoneNumberSuffix"
+                      id="phoneNumberSuffix"
+                      value={formData.phoneNumberSuffix}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0000"
+                      maxLength={4}
+                    />
+                  </div>
+                  {formErrors.phoneNumberMiddle && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.phoneNumberMiddle}</p>
+                  )}
+                  {formErrors.phoneNumberSuffix && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.phoneNumberSuffix}</p>
+                  )}
+                </div>
+                
+                {/* 주소 입력 필드 */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    주소
+                  </label>
+                  <div className="flex space-x-2 mb-2">
+                    <input
+                      type="text"
+                      name="postcode"
+                      value={formData.postcode}
+                      placeholder="우편번호"
+                      className="w-1/3 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearchAddress}
+                      className="whitespace-nowrap px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      주소 검색
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    placeholder="기본주소"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 mb-2"
+                    readOnly
+                  />
+                  <input
+                    type="text"
+                    id="detailAddress"
+                    name="detailAddress"
+                    value={formData.detailAddress}
+                    onChange={handleChange}
+                    placeholder="상세주소"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                {/* 마케팅 동의 체크박스 */}
+                <div className="mb-6">
+                  <div className="flex items-center">
+                    <input
+                      id="marketingAgreed"
+                      name="marketingAgreed"
+                      type="checkbox"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      checked={formData.marketingAgreed}
+                      onChange={handleChange}
+                    />
+                    <label htmlFor="marketingAgreed" className="ml-2 block text-sm text-gray-700">
+                      마케팅 정보 수신 동의
+                    </label>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    {isSaving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </form>
             </div>
-            
-            {/* 마케팅 정보 수신 동의 */}
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  type="checkbox"
-                  name="marketingAgreed"
-                  id="marketingAgreed"
-                  checked={formData.marketingAgreed}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-              </div>
-              <div className="ml-3 text-sm">
-                <label htmlFor="marketingAgreed" className="font-medium text-gray-700">마케팅 정보 수신 동의</label>
-                <p className="text-gray-500">이벤트 및 할인 정보를 이메일/SMS로 받아보실 수 있습니다.</p>
-              </div>
-            </div>
-            
-            {/* 성공 메시지 */}
-            {successMessage && (
-              <div className="py-3 px-4 bg-green-100 text-green-800 rounded-md">
-                {successMessage}
-              </div>
-            )}
-            
-            {/* 버튼 영역 */}
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                취소
-              </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className={`px-6 py-2 bg-blue-600 rounded-md text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isSaving ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-              >
-                {isSaving ? '저장 중...' : '저장하기'}
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 } 

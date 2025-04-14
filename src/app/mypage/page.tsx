@@ -12,6 +12,9 @@ interface User {
   nickname?: string;
   avatar_url?: string;
   phone_number?: string;
+  postcode?: string;
+  address?: string;
+  detail_address?: string;
   marketing_agreed?: boolean;
   terms_agreed?: boolean;
   created_at?: string;
@@ -47,6 +50,7 @@ export default function MyPage() {
           // 토큰이 만료되었는지 확인
           if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
             setUser(parsedToken.user || null);
+            fetchOrderHistory(parsedToken.user?.id);
           } else {
             // 만료된 토큰이면 로그인 페이지로 리다이렉션
             router.push('/auth');
@@ -63,34 +67,28 @@ export default function MyPage() {
       }
     };
 
-    checkLoginStatus();
-    
-    // 주문 내역 가져오기 (현재는 더미 데이터를 사용)
-    const dummyOrderHistory: OrderHistory[] = [
-      {
-        id: '1',
-        order_number: 'ORD-2023-001',
-        total_amount: 35000,
-        status: '배송 완료',
-        created_at: '2023-11-15T12:00:00Z',
-        items: [
-          { product_name: '유기농 당근', quantity: 2, price: 15000 },
-          { product_name: '친환경 양배추', quantity: 1, price: 5000 }
-        ]
-      },
-      {
-        id: '2',
-        order_number: 'ORD-2023-002',
-        total_amount: 45000,
-        status: '배송중',
-        created_at: '2023-11-20T14:30:00Z',
-        items: [
-          { product_name: '제철 과일 세트', quantity: 1, price: 45000 }
-        ]
+    // 주문 내역 가져오기
+    const fetchOrderHistory = async (userId: string) => {
+      if (!userId) return;
+      
+      try {
+        setIsLoading(true);
+        // 실제 API 호출 (현재는 API가 없으므로 빈 배열 반환)
+        // const response = await fetch(`/api/orders?userId=${userId}`);
+        // if (!response.ok) throw new Error('주문 내역을 불러오는데 실패했습니다.');
+        // const data = await response.json();
+        // setOrderHistory(data);
+        
+        // API 개발 전까지는 빈 배열 설정
+        setOrderHistory([]);
+      } catch (error) {
+        console.error('주문 내역 조회 오류:', error);
+      } finally {
+        setIsLoading(false);
       }
-    ];
-    
-    setOrderHistory(dummyOrderHistory);
+    };
+
+    checkLoginStatus();
   }, [router]);
 
   const formatDate = (dateString: string) => {
@@ -217,6 +215,19 @@ export default function MyPage() {
                       </div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-500">주소</p>
+                      {user.address ? (
+                        <div>
+                          <p className="font-medium">[{user.postcode}] {user.address}</p>
+                          {user.detail_address && (
+                            <p className="text-gray-700">{user.detail_address}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="font-medium">등록된 주소가 없습니다</p>
+                      )}
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
                       <p className="text-sm text-gray-500">마케팅 정보 수신 동의</p>
                       <p className="font-medium">{user.marketing_agreed ? '동의함' : '동의하지 않음'}</p>
                     </div>
@@ -266,8 +277,11 @@ export default function MyPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 bg-gray-50 rounded-lg">
-                      <p className="text-gray-500">주문 내역이 없습니다.</p>
+                    <div className="text-center py-10">
+                      <p className="text-gray-500 mb-4">주문 내역이 없습니다.</p>
+                      <Link href="/products" className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        상품 보러가기
+                      </Link>
                     </div>
                   )}
                 </div>

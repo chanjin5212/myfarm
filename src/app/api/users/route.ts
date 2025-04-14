@@ -21,6 +21,9 @@ interface UserData {
   nickname?: string;   // 사용자 닉네임
   avatar_url?: string;
   phone_number?: string; // 휴대폰 번호
+  postcode?: string;   // 우편번호
+  address?: string;    // 기본주소
+  detail_address?: string; // 상세주소
   terms_agreed?: boolean;
   marketing_agreed?: boolean;
   created_at?: string;
@@ -44,6 +47,9 @@ interface ExistingUser {
   nickname?: string;   // 사용자 닉네임
   avatar_url?: string | null;
   phone_number?: string; // 휴대폰 번호
+  postcode?: string;   // 우편번호
+  address?: string;    // 기본주소
+  detail_address?: string; // 상세주소
   terms_agreed?: boolean;
   marketing_agreed?: boolean;
   created_at?: string;
@@ -100,43 +106,44 @@ export async function POST(request: Request) {
     // 소셜 ID와 제공자 정보 확인
     const provider = userData.provider || 'google';
     
-    // 소셜 ID로만 기존 사용자 확인 (이메일 체크 제거)
-    let existingUser = null;
+    // 이메일로 기존 사용자 확인
+    const { data: existingUserByEmail } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', userData.email)
+      .maybeSingle();
     
-    // 소셜 로그인 제공자별 ID 확인
-    if (provider === 'google' && userData.google_id) {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('google_id', userData.google_id)
-        .maybeSingle();
-      existingUser = data as ExistingUser;
-    } else if (provider === 'kakao' && userData.kakao_id) {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('kakao_id', userData.kakao_id)
-        .maybeSingle();
-      existingUser = data as ExistingUser;  
-    } else if (provider === 'naver' && userData.naver_id) {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('naver_id', userData.naver_id)
-        .maybeSingle();
-      existingUser = data as ExistingUser;
-    }
-    
-    // 기존 사용자가 있는 경우
-    if (existingUser) {
+    // 이메일로 검색된 사용자가 있는 경우
+    if (existingUserByEmail) {
+      const existingUser = existingUserByEmail as ExistingUser;
       const now = new Date().toISOString();
-      // 사용자가 있으면 nickname과 last_login, updated_at만 업데이트
-      const updateData = {
-        nickname: userData.nickname || existingUser.nickname,
+      
+      // 업데이트할 데이터 구성
+      const updateData: Record<string, string | boolean | null> = {
         updated_at: now,
         last_login: now
       };
       
+      // 소셜 ID 업데이트
+      if (provider === 'google' && userData.google_id && !existingUser.google_id) {
+        updateData.google_id = userData.google_id;
+      } else if (provider === 'kakao' && userData.kakao_id && !existingUser.kakao_id) {
+        updateData.kakao_id = userData.kakao_id;
+      } else if (provider === 'naver' && userData.naver_id && !existingUser.naver_id) {
+        updateData.naver_id = userData.naver_id;
+      }
+      
+      // 닉네임이 있으면 업데이트
+      if (userData.nickname) {
+        updateData.nickname = userData.nickname;
+      }
+      
+      // 아바타 URL이 있으면 업데이트
+      if (userData.avatar_url) {
+        updateData.avatar_url = userData.avatar_url;
+      }
+      
+      // 사용자 정보 업데이트
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update(updateData)
@@ -155,6 +162,61 @@ export async function POST(request: Request) {
       });
     }
     
+    // 소셜 ID로만 기존 사용자 확인 (이메일로 검색된 사용자가 없는 경우)
+    let existingUserBySocialId = null;
+    
+    // 소셜 로그인 제공자별 ID 확인
+    if (provider === 'google' && userData.google_id) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('google_id', userData.google_id)
+        .maybeSingle();
+      existingUserBySocialId = data as ExistingUser;
+    } else if (provider === 'kakao' && userData.kakao_id) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('kakao_id', userData.kakao_id)
+        .maybeSingle();
+      existingUserBySocialId = data as ExistingUser;  
+    } else if (provider === 'naver' && userData.naver_id) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('naver_id', userData.naver_id)
+        .maybeSingle();
+      existingUserBySocialId = data as ExistingUser;
+    }
+    
+    // 소셜 ID로 검색된 사용자가 있는 경우
+    if (existingUserBySocialId) {
+      const now = new Date().toISOString();
+      // 사용자가 있으면 nickname과 last_login, updated_at만 업데이트
+      const updateData = {
+        nickname: userData.nickname || existingUserBySocialId.nickname,
+        updated_at: now,
+        last_login: now
+      };
+      
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', existingUserBySocialId.id)
+        .select()
+        .single();
+        
+      if (updateError) {
+        console.error('사용자 정보 업데이트 오류:', updateError);
+      }
+      
+      return NextResponse.json({ 
+        success: true, 
+        data: updatedUser || existingUserBySocialId,
+        message: '기존 사용자 정보가 업데이트되었습니다.'
+      });
+    }
+    
     // 새 사용자 등록
     const newUserData: Record<string, string | boolean | null> = {
       id: uuidv4(), // 항상 새로운 UUID 생성
@@ -163,6 +225,9 @@ export async function POST(request: Request) {
       nickname: userData.nickname || '사용자',
       avatar_url: userData.avatar_url || null,
       phone_number: userData.phone_number || null,
+      postcode: userData.postcode || null,
+      address: userData.address || null,
+      detail_address: userData.detail_address || null,
       terms_agreed: userData.terms_agreed || false,
       marketing_agreed: userData.marketing_agreed || false,
       created_at: userData.created_at || new Date().toISOString(),
@@ -202,6 +267,101 @@ export async function POST(request: Request) {
     }
     
     return NextResponse.json({ success: true, data });
+    
+  } catch (error) {
+    const err = error as ApiError;
+    return NextResponse.json({ error: err.message || '알 수 없는 오류가 발생했습니다.' }, { status: 500 });
+  }
+}
+
+interface UpdateUserData {
+  userId: string;
+  name?: string | null;
+  nickname?: string | null;
+  phone_number?: string | null;
+  postcode?: string | null;
+  address?: string | null;
+  detail_address?: string | null;
+  marketing_agreed?: boolean;
+}
+
+export async function PUT(request: Request) {
+  try {
+    // 요청 데이터 파싱
+    const updateData = await request.json() as UpdateUserData;
+    
+    // 필수 필드 확인
+    if (!updateData.userId) {
+      return NextResponse.json({ error: '사용자 ID는 필수 항목입니다.' }, { status: 400 });
+    }
+    
+    // 사용자 존재 여부 확인
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', updateData.userId)
+      .single();
+      
+    if (userError || !existingUser) {
+      return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 });
+    }
+    
+    // 업데이트할 데이터 구성
+    const updatedFields: Record<string, string | boolean | null> = {
+      updated_at: new Date().toISOString()
+    };
+    
+    // 이름이 제공된 경우
+    if (updateData.name !== undefined) {
+      updatedFields.name = updateData.name;
+    }
+    
+    // 닉네임이 제공된 경우
+    if (updateData.nickname !== undefined) {
+      updatedFields.nickname = updateData.nickname;
+    }
+    
+    // 휴대폰 번호가 제공된 경우
+    if (updateData.phone_number !== undefined) {
+      updatedFields.phone_number = updateData.phone_number;
+    }
+    
+    // 우편번호가 제공된 경우
+    if (updateData.postcode !== undefined) {
+      updatedFields.postcode = updateData.postcode;
+    }
+    
+    // 기본주소가 제공된 경우
+    if (updateData.address !== undefined) {
+      updatedFields.address = updateData.address;
+    }
+    
+    // 상세주소가 제공된 경우
+    if (updateData.detail_address !== undefined) {
+      updatedFields.detail_address = updateData.detail_address;
+    }
+    
+    // 마케팅 동의 여부가 제공된 경우
+    if (updateData.marketing_agreed !== undefined) {
+      updatedFields.marketing_agreed = updateData.marketing_agreed;
+    }
+    
+    // 사용자 정보 업데이트
+    const { data, error } = await supabase
+      .from('users')
+      .update(updatedFields)
+      .eq('id', updateData.userId)
+      .select();
+      
+    if (error) {
+      throw new Error(error.message);
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      data,
+      message: '사용자 정보가 성공적으로 업데이트되었습니다.'
+    });
     
   } catch (error) {
     const err = error as ApiError;

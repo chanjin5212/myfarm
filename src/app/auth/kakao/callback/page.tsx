@@ -77,7 +77,8 @@ export default function KakaoCallbackPage() {
           },
           body: JSON.stringify({
             kakao_id: data.userData.id,
-            provider: 'kakao'
+            provider: 'kakao',
+            email: data.userData.email
           }),
         });
         

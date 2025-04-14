@@ -78,7 +78,8 @@ export default function NaverCallbackPage() {
           },
           body: JSON.stringify({
             naver_id: data.userData.id,
-            provider: 'naver'
+            provider: 'naver',
+            email: data.userData.email
           }),
         });
 

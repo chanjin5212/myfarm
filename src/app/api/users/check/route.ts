@@ -17,6 +17,7 @@ interface UserCheckRequest {
   kakao_id?: string;
   naver_id?: string;
   provider: string;
+  email?: string;
 }
 
 export async function POST(request: Request) {
@@ -28,13 +29,13 @@ export async function POST(request: Request) {
     const provider = checkData.provider || 'google';
     let existingUser = null;
     
-    // 소셜 로그인 제공자별 ID 확인
-    if (provider === 'google' && checkData.google_id) {
+    // 먼저 이메일로 사용자 조회 시도
+    if (checkData.email) {
       try {
         const { data, error } = await supabase
           .from('users')
           .select('*')
-          .eq('google_id', checkData.google_id)
+          .eq('email', checkData.email)
           .maybeSingle();
           
         if (error) {
@@ -43,6 +44,115 @@ export async function POST(request: Request) {
             details: error.message,
             code: error.code 
           }, { status: 500 });
+        }
+        
+        existingUser = data;
+        
+        // 기존 사용자가 있는 경우, 해당 소셜 ID가 없다면 업데이트
+        if (existingUser) {
+          const updateData: Record<string, string | boolean | null> = {
+            last_login: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          // 소셜 ID 업데이트
+          if (provider === 'google' && checkData.google_id && !existingUser.google_id) {
+            updateData.google_id = checkData.google_id;
+          } else if (provider === 'kakao' && checkData.kakao_id && !existingUser.kakao_id) {
+            updateData.kakao_id = checkData.kakao_id;
+          } else if (provider === 'naver' && checkData.naver_id && !existingUser.naver_id) {
+            updateData.naver_id = checkData.naver_id;
+          }
+          
+          const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update(updateData)
+            .eq('id', existingUser.id)
+            .select()
+            .single();
+            
+          if (updateError) {
+            return NextResponse.json({ 
+              error: '사용자 정보 업데이트 중 오류가 발생했습니다.',
+              details: updateError.message 
+            }, { status: 500 });
+          }
+          
+          // 업데이트된 사용자 정보 사용
+          existingUser = updatedUser;
+          
+          return NextResponse.json({
+            exists: true,
+            user: existingUser
+          });
+        }
+      } catch (dbError) {
+        return NextResponse.json({ 
+          error: 'Supabase 쿼리 실행 중 오류가 발생했습니다.',
+          details: dbError instanceof Error ? dbError.message : 'Unknown error'
+        }, { status: 500 });
+      }
+    }
+    
+    // 이메일로 검색된 사용자가 없는 경우, 소셜 ID로 검색
+    if (!existingUser) {
+      // 소셜 로그인 제공자별 ID 확인
+      if (provider === 'google' && checkData.google_id) {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('google_id', checkData.google_id)
+            .maybeSingle();
+            
+          if (error) {
+            return NextResponse.json({ 
+              error: '사용자 정보 조회 중 오류가 발생했습니다.',
+              details: error.message,
+              code: error.code 
+            }, { status: 500 });
+          }
+          
+          existingUser = data;
+          
+          // 기존 사용자가 있는 경우 마지막 로그인 시간 업데이트
+          if (existingUser) {
+            const now = new Date().toISOString();
+            const { data: updatedUser, error: updateError } = await supabase
+              .from('users')
+              .update({ 
+                last_login: now,
+                updated_at: now 
+              })
+              .eq('id', existingUser.id)
+              .select()
+              .single();
+              
+            if (updateError) {
+              return NextResponse.json({ 
+                error: '로그인 시간 업데이트 중 오류가 발생했습니다.',
+                details: updateError.message 
+              }, { status: 500 });
+            }
+            
+            // 업데이트된 사용자 정보 사용
+            existingUser = updatedUser;
+          }
+        } catch (dbError) {
+          return NextResponse.json({ 
+            error: 'Supabase 쿼리 실행 중 오류가 발생했습니다.',
+            details: dbError instanceof Error ? dbError.message : 'Unknown error'
+          }, { status: 500 });
+        }
+      } else if (provider === 'kakao' && checkData.kakao_id) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('kakao_id', checkData.kakao_id)
+          .maybeSingle();
+          
+        if (error) {
+          return NextResponse.json({ error: '사용자 정보 조회 중 오류가 발생했습니다.' }, { status: 500 });
         }
         
         existingUser = data;
@@ -70,83 +180,42 @@ export async function POST(request: Request) {
           // 업데이트된 사용자 정보 사용
           existingUser = updatedUser;
         }
-      } catch (dbError) {
-        return NextResponse.json({ 
-          error: 'Supabase 쿼리 실행 중 오류가 발생했습니다.',
-          details: dbError instanceof Error ? dbError.message : 'Unknown error'
-        }, { status: 500 });
-      }
-    } else if (provider === 'kakao' && checkData.kakao_id) {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('kakao_id', checkData.kakao_id)
-        .maybeSingle();
-        
-      if (error) {
-        return NextResponse.json({ error: '사용자 정보 조회 중 오류가 발생했습니다.' }, { status: 500 });
-      }
-      
-      existingUser = data;
-      
-      // 기존 사용자가 있는 경우 마지막 로그인 시간 업데이트
-      if (existingUser) {
-        const now = new Date().toISOString();
-        const { data: updatedUser, error: updateError } = await supabase
+      } else if (provider === 'naver' && checkData.naver_id) {
+        const { data, error } = await supabase
           .from('users')
-          .update({ 
-            last_login: now,
-            updated_at: now 
-          })
-          .eq('id', existingUser.id)
-          .select()
-          .single();
+          .select('*')
+          .eq('naver_id', checkData.naver_id)
+          .maybeSingle();
           
-        if (updateError) {
-          return NextResponse.json({ 
-            error: '로그인 시간 업데이트 중 오류가 발생했습니다.',
-            details: updateError.message 
-          }, { status: 500 });
+        if (error) {
+          return NextResponse.json({ error: '사용자 정보 조회 중 오류가 발생했습니다.' }, { status: 500 });
         }
         
-        // 업데이트된 사용자 정보 사용
-        existingUser = updatedUser;
-      }
-    } else if (provider === 'naver' && checkData.naver_id) {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('naver_id', checkData.naver_id)
-        .maybeSingle();
+        existingUser = data;
         
-      if (error) {
-        return NextResponse.json({ error: '사용자 정보 조회 중 오류가 발생했습니다.' }, { status: 500 });
-      }
-      
-      existingUser = data;
-      
-      // 기존 사용자가 있는 경우 마지막 로그인 시간 업데이트
-      if (existingUser) {
-        const now = new Date().toISOString();
-        const { data: updatedUser, error: updateError } = await supabase
-          .from('users')
-          .update({ 
-            last_login: now,
-            updated_at: now 
-          })
-          .eq('id', existingUser.id)
-          .select()
-          .single();
+        // 기존 사용자가 있는 경우 마지막 로그인 시간 업데이트
+        if (existingUser) {
+          const now = new Date().toISOString();
+          const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update({ 
+              last_login: now,
+              updated_at: now 
+            })
+            .eq('id', existingUser.id)
+            .select()
+            .single();
+            
+          if (updateError) {
+            return NextResponse.json({ 
+              error: '로그인 시간 업데이트 중 오류가 발생했습니다.',
+              details: updateError.message 
+            }, { status: 500 });
+          }
           
-        if (updateError) {
-          return NextResponse.json({ 
-            error: '로그인 시간 업데이트 중 오류가 발생했습니다.',
-            details: updateError.message 
-          }, { status: 500 });
+          // 업데이트된 사용자 정보 사용
+          existingUser = updatedUser;
         }
-        
-        // 업데이트된 사용자 정보 사용
-        existingUser = updatedUser;
       }
     }
     

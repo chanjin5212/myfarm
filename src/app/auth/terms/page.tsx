@@ -6,12 +6,19 @@ import { LOGIN_STATUS_CHANGE } from '@/components/Header';
 
 interface GoogleUserInfo {
   id: string;
-  email: string;
-  name: string;
-  picture: string;
+  email?: string;
+  name?: string;
+  picture?: string;
   provider?: string; // 소셜 로그인 제공자 정보
   nickname?: string;
   phone_number?: string; // 전화번호 필드 추가
+  kakao_account?: {
+    email?: string;
+    profile?: {
+      nickname?: string;
+      profile_image_url?: string;
+    };
+  };
 }
 
 interface DatabaseError {
@@ -83,11 +90,18 @@ export default function TermsPage() {
       }
     } else if (savedKakaoInfo) {
       const parsedInfo = JSON.parse(savedKakaoInfo);
-      if (!parsedInfo.email) {
+      
+      // 카카오의 경우 email 정보는 kakao_account 내에 있을 수 있음
+      const kakaoEmail = parsedInfo.kakao_account?.email || parsedInfo.email;
+      
+      if (!kakaoEmail) {
         alert('사용자 이메일 정보가 없습니다.');
         router.push('/auth');
         return;
       }
+      
+      // email 정보를 상위 레벨에 복사
+      parsedInfo.email = kakaoEmail;
       
       // 제공자 정보가 없는 경우 기본값으로 'kakao' 설정
       if (!parsedInfo.provider) {
@@ -96,11 +110,21 @@ export default function TermsPage() {
       
       setUserInfo(parsedInfo);
       
-      // 카카오는 nickname 필드를 제공하므로 이를 먼저 사용
-      if (parsedInfo.nickname) {
-        setNickname(parsedInfo.nickname);
+      // 카카오 프로필 정보 처리
+      const kakaoNickname = parsedInfo.kakao_account?.profile?.nickname || parsedInfo.nickname;
+      const kakaoProfileImage = parsedInfo.kakao_account?.profile?.profile_image_url || parsedInfo.picture;
+      
+      // 닉네임 설정
+      if (kakaoNickname) {
+        setNickname(kakaoNickname);
+        parsedInfo.nickname = kakaoNickname;
       } else if (parsedInfo.name) {
         setNickname(parsedInfo.name);
+      }
+      
+      // 프로필 이미지 설정
+      if (kakaoProfileImage) {
+        parsedInfo.picture = kakaoProfileImage;
       }
     } else {
       alert('사용자 정보를 찾을 수 없습니다.');

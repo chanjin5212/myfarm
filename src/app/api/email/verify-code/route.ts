@@ -16,43 +16,54 @@ export async function POST(request: Request) {
     }
 
     // 인증 코드 확인
-    const { data, error } = await supabase
-      .from('email_verifications')
-      .select('*')
-      .eq('email', email)
-      .eq('code', code)
-      .gt('expires_at', new Date().toISOString()) // 아직 만료되지 않은 코드
-      .maybeSingle();
+    try {
+      const { data: verifications, error } = await supabase
+        .from('email_verifications')
+        .select('*')
+        .eq('email', email)
+        .eq('code', code)
+        .gt('expires_at', new Date().toISOString()) // 아직 만료되지 않은 코드
+        .limit(1);
 
-    if (error) {
-      throw new Error(error.message);
+      if (error) {
+        throw new Error(`인증 코드 확인 중 오류: ${error.message}`);
+      }
+
+      if (!verifications || verifications.length === 0) {
+        return NextResponse.json({ 
+          verified: false, 
+          error: '인증 코드가 유효하지 않거나 만료되었습니다.' 
+        }, { status: 400 });
+      }
+
+      // 이메일 인증 상태 업데이트
+      try {
+        const { error: updateError } = await supabase
+          .from('email_verifications')
+          .update({ verified: true })
+          .eq('email', email);
+
+        if (updateError) {
+          throw new Error(`인증 상태 업데이트 오류: ${updateError.message}`);
+        }
+
+        return NextResponse.json({
+          verified: true,
+          message: '이메일 인증이 완료되었습니다.'
+        });
+      } catch (updateError) {
+        if (updateError instanceof Error) {
+          return NextResponse.json({ error: updateError.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: '인증 상태 업데이트 중 오류가 발생했습니다.' }, { status: 500 });
+      }
+    } catch (verifyError) {
+      if (verifyError instanceof Error) {
+        return NextResponse.json({ error: verifyError.message }, { status: 500 });
+      }
+      return NextResponse.json({ error: '인증 처리 중 오류가 발생했습니다.' }, { status: 500 });
     }
-
-    if (!data) {
-      return NextResponse.json({ 
-        verified: false, 
-        error: '인증 코드가 유효하지 않거나 만료되었습니다.' 
-      }, { status: 400 });
-    }
-
-    // 이메일 인증 상태 업데이트
-    const { error: updateError } = await supabase
-      .from('email_verifications')
-      .update({ verified: true })
-      .eq('email', email);
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-
-    return NextResponse.json({
-      verified: true,
-      message: '이메일 인증이 완료되었습니다.'
-    });
-
   } catch (error) {
-    console.error('이메일 인증 코드 검증 오류:', error);
-    
     if (error instanceof Error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
