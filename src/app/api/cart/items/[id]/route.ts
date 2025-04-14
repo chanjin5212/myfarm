@@ -66,10 +66,10 @@ async function verifyToken(token: string) {
 // 장바구니 아이템 수량 업데이트
 export async function PATCH(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const itemId = context.params.id;
+    const itemId = params.id;
     
     // 사용자 인증
     const userId = await getUserId(request);
@@ -163,10 +163,10 @@ export async function PATCH(
 // 장바구니 아이템 삭제
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const itemId = context.params.id;
+    const itemId = params.id;
     
     // 사용자 인증
     const userId = await getUserId(request);
