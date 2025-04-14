@@ -187,6 +187,16 @@ export default function AuthPage() {
             </button>
           </div>
           
+          <div className="flex justify-between text-sm mt-2">
+            <Link href="/auth/find-id" className="text-blue-600 hover:text-blue-800">
+              아이디 찾기
+            </Link>
+            <span className="text-gray-500">|</span>
+            <Link href="/auth/reset-password" className="text-blue-600 hover:text-blue-800">
+              비밀번호 찾기
+            </Link>
+          </div>
+          
           <div className="mt-4">
             <Link href="/auth/register">
               <button

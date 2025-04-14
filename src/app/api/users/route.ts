@@ -278,11 +278,13 @@ interface UpdateUserData {
   userId: string;
   name?: string | null;
   nickname?: string | null;
+  email?: string | null;
   phone_number?: string | null;
   postcode?: string | null;
   address?: string | null;
   detail_address?: string | null;
   marketing_agreed?: boolean;
+  password?: string;
 }
 
 export async function PUT(request: Request) {
@@ -311,6 +313,31 @@ export async function PUT(request: Request) {
       updated_at: new Date().toISOString()
     };
     
+    // 비밀번호가 제공된 경우 비밀번호 정책 검증 및 해싱
+    if (updateData.password) {
+      // 8~16자 검증
+      if (updateData.password.length < 8 || updateData.password.length > 16) {
+        return NextResponse.json({ error: '비밀번호는 8~16자여야 합니다.' }, { status: 400 });
+      }
+      // 대/소문자 포함 검증
+      if (!/(?=.*[a-z])(?=.*[A-Z])/.test(updateData.password)) {
+        return NextResponse.json({ error: '비밀번호는 대문자와 소문자를 모두 포함해야 합니다.' }, { status: 400 });
+      }
+      // 숫자 포함 검증
+      if (!/(?=.*\d)/.test(updateData.password)) {
+        return NextResponse.json({ error: '비밀번호는 숫자를 포함해야 합니다.' }, { status: 400 });
+      }
+      // 특수문자 포함 검증
+      if (!/(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(updateData.password)) {
+        return NextResponse.json({ error: '비밀번호는 특수문자를 포함해야 합니다.' }, { status: 400 });
+      }
+      
+      // 비밀번호 해싱
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash(updateData.password, salt);
+      updatedFields.password = hashedPassword;
+    }
+    
     // 이름이 제공된 경우
     if (updateData.name !== undefined) {
       updatedFields.name = updateData.name;
@@ -321,7 +348,12 @@ export async function PUT(request: Request) {
       updatedFields.nickname = updateData.nickname;
     }
     
-    // 휴대폰 번호가 제공된 경우
+    // 이메일이 제공된 경우
+    if (updateData.email !== undefined) {
+      updatedFields.email = updateData.email;
+    }
+    
+    // 전화번호가 제공된 경우
     if (updateData.phone_number !== undefined) {
       updatedFields.phone_number = updateData.phone_number;
     }
@@ -331,7 +363,7 @@ export async function PUT(request: Request) {
       updatedFields.postcode = updateData.postcode;
     }
     
-    // 기본주소가 제공된 경우
+    // 주소가 제공된 경우
     if (updateData.address !== undefined) {
       updatedFields.address = updateData.address;
     }
@@ -354,17 +386,17 @@ export async function PUT(request: Request) {
       .select();
       
     if (error) {
-      throw new Error(error.message);
+      console.error('사용자 정보 업데이트 오류:', error);
+      return NextResponse.json({ error: '사용자 정보 업데이트 중 오류가 발생했습니다.' }, { status: 500 });
     }
     
     return NextResponse.json({ 
-      success: true, 
-      data,
-      message: '사용자 정보가 성공적으로 업데이트되었습니다.'
-    });
+      message: '사용자 정보가 성공적으로 업데이트되었습니다.',
+      user: data[0]
+    }, { status: 200 });
     
   } catch (error) {
-    const err = error as ApiError;
-    return NextResponse.json({ error: err.message || '알 수 없는 오류가 발생했습니다.' }, { status: 500 });
+    console.error('서버 오류:', error);
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 } 
