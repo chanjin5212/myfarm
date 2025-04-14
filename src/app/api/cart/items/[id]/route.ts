@@ -6,6 +6,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// 타입 정의
+type RouteParams = { params: { id: string } };
+
 // 현재 로그인한 사용자 ID 가져오기
 async function getUserId(request: NextRequest) {
   // Authorization 헤더에서 토큰 가져오기
@@ -66,10 +69,10 @@ async function verifyToken(token: string) {
 // 장바구니 아이템 수량 업데이트
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   try {
-    const itemId = params.id;
+    const itemId = context.params.id;
     
     // 사용자 인증
     const userId = await getUserId(request);
@@ -163,10 +166,10 @@ export async function PATCH(
 // 장바구니 아이템 삭제
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   try {
-    const itemId = params.id;
+    const itemId = context.params.id;
     
     // 사용자 인증
     const userId = await getUserId(request);
