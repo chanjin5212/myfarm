@@ -8,10 +8,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orderId = params.id;
+    const orderId = (await params).id;
     
     if (!orderId) {
       return NextResponse.json({ message: '주문 ID가 필요합니다.' }, { status: 400 });
@@ -99,9 +99,9 @@ export async function GET(
 }
 
 // 주문 상태 업데이트 (관리자용 또는 사용자 주문 취소용)
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const orderId = params.id;
+    const orderId = (await params).id;
     
     if (!orderId) {
       return NextResponse.json({ message: '주문 ID가 필요합니다.' }, { status: 400 });

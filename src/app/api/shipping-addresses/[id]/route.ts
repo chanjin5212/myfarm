@@ -9,10 +9,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // 배송지 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const addressId = params.id;
+    const addressId = (await params).id;
     
     if (!addressId) {
       return NextResponse.json({ error: '배송지 ID가 필요합니다.' }, { status: 400 });
@@ -45,10 +45,10 @@ export async function GET(
 // 배송지 수정
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const addressId = params.id;
+    const addressId = (await params).id;
     const body = await request.json();
     const { userId, recipient_name, phone, address, detail_address, is_default, memo } = body;
     
@@ -144,10 +144,10 @@ export async function PUT(
 // 배송지 삭제
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const addressId = params.id;
+    const addressId = (await params).id;
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
     

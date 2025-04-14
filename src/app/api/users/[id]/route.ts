@@ -15,10 +15,10 @@ const supabase = createClient(
 // 사용자 ID로 정보 조회
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id;
+    const userId = (await params).id;
     
     if (!userId) {
       return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
