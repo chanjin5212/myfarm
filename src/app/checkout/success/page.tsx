@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getAuthHeader } from '@/utils/auth';
 
-export default function SuccessPage() {
+// SearchParams를 사용하는 컴포넌트를 별도로 분리
+function SuccessContent() {
   const searchParams = useSearchParams();
   const pgToken = searchParams.get('pg_token');
   const orderId = searchParams.get('order_id');
@@ -140,5 +141,22 @@ export default function SuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// 메인 페이지 컴포넌트
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mx-auto mb-4"></div>
+          <h1 className="text-xl font-semibold text-gray-800 mb-2">페이지를 로드하는 중...</h1>
+          <p className="text-gray-600 text-sm">잠시만 기다려주세요.</p>
+        </div>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   );
 } 
