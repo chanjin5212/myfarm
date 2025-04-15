@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/CommonStyles';
+import { checkToken, getAuthHeader, logout } from '@/utils/auth';
+import toast from 'react-hot-toast';
+import ShippingAddressModal from './ShippingAddressModal';
 
 interface User {
   id: string;
@@ -19,6 +22,7 @@ interface User {
   marketing_agreed?: boolean;
   terms_agreed?: boolean;
   created_at?: string;
+  login_id?: string;
 }
 
 interface OrderHistory {
@@ -58,56 +62,128 @@ function MenuItem({ href, title, icon, onClick }: MenuItemProps) {
   );
 }
 
+// 주문 상태 표시 컴포넌트
+const OrderStatusBadge = ({ status }: { status: string }) => {
+  let bgColor = 'bg-gray-200';
+  let textColor = 'text-gray-800';
+  let statusText = '상태 정보 없음';
+
+  switch (status) {
+    case 'pending':
+      bgColor = 'bg-yellow-100';
+      textColor = 'text-yellow-800';
+      statusText = '주문 대기중';
+      break;
+    case 'payment_pending':
+      bgColor = 'bg-blue-100';
+      textColor = 'text-blue-800';
+      statusText = '결제 진행중';
+      break;
+    case 'paid':
+      bgColor = 'bg-green-100';
+      textColor = 'text-green-800';
+      statusText = '결제 완료';
+      break;
+    case 'preparing':
+      bgColor = 'bg-indigo-100';
+      textColor = 'text-indigo-800';
+      statusText = '상품 준비중';
+      break;
+    case 'shipping':
+      bgColor = 'bg-purple-100';
+      textColor = 'text-purple-800';
+      statusText = '배송중';
+      break;
+    case 'delivered':
+      bgColor = 'bg-green-100';
+      textColor = 'text-green-800';
+      statusText = '배송 완료';
+      break;
+    case 'canceled':
+    case 'cancelled':
+      bgColor = 'bg-red-100';
+      textColor = 'text-red-800';
+      statusText = '주문 취소';
+      break;
+    case 'refunded':
+      bgColor = 'bg-gray-100';
+      textColor = 'text-gray-800';
+      statusText = '환불 완료';
+      break;
+  }
+
+  return (
+    <span className={`${bgColor} ${textColor} px-3 py-1 rounded-full text-xs font-medium`}>
+      {statusText}
+    </span>
+  );
+};
+
 export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isShippingPopupOpen, setIsShippingPopupOpen] = useState(false);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const fetchUserData = async () => {
       setIsLoading(true);
       try {
-        const tokenData = localStorage.getItem('token');
-        if (!tokenData) {
+        // auth 유틸 함수를 사용하여 토큰 확인
+        const { user: authUser, isLoggedIn } = checkToken();
+        
+        if (!isLoggedIn || !authUser) {
           router.push('/auth');
           return;
         }
 
-        // 토큰 인코딩
-        const token = encodeURIComponent(tokenData);
-
+        // auth 유틸을 사용하여 인증 헤더 생성
+        const authHeader = getAuthHeader();
+        console.log('[마이페이지] 인증 헤더:', authHeader);
+        
         // 사용자 정보 요청
         const response = await fetch('/api/users/me', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: authHeader
         });
 
         if (!response.ok) {
-          throw new Error('사용자 정보를 불러오는데 실패했습니다.');
+          const errorData = await response.json().catch(() => ({}));
+          console.error('[마이페이지] 사용자 정보 요청 실패:', response.status, errorData);
+          throw new Error(errorData.error || '사용자 정보를 불러오는데 실패했습니다.');
         }
 
         const userData = await response.json();
         setUser(userData);
+        console.log('[마이페이지] 사용자 정보 로드 완료:', userData.id);
 
-        // 주문 정보 요청
-        const ordersResponse = await fetch('/api/orders/my', {
-          headers: {
-            'Authorization': `Bearer ${token}`
+        try {
+          // 주문 정보 요청 - 별도 try/catch로 분리하여 주문 오류가 있어도 페이지는 로드
+          console.log('[마이페이지] 주문 정보 요청 시작');
+          const ordersResponse = await fetch('/api/orders/my', {
+            headers: authHeader
+          });
+
+          console.log('[마이페이지] 주문 응답 상태:', ordersResponse.status);
+          if (!ordersResponse.ok) {
+            const orderErrorData = await ordersResponse.json().catch(() => ({}));
+            console.error('[마이페이지] 주문 정보 요청 실패:', ordersResponse.status, orderErrorData);
+            setOrderHistory([]);
+          } else {
+            const ordersData = await ordersResponse.json();
+            console.log('[마이페이지] 주문 정보 로드 완료:', ordersData.length, '건');
+            setOrderHistory(ordersData);
           }
-        });
-
-        if (!ordersResponse.ok) {
-          throw new Error('주문 정보를 불러오는데 실패했습니다.');
+        } catch (orderError) {
+          console.error('[마이페이지] 주문 정보 로딩 중 오류:', orderError);
+          setOrderHistory([]);
+          // 주문 오류는 전체 페이지 오류로 취급하지 않음
         }
-
-        const ordersData = await ordersResponse.json();
-        setOrderHistory(ordersData);
       } catch (error) {
-        console.error('데이터 로딩 오류:', error);
+        console.error('[마이페이지] 데이터 로딩 오류:', error);
         setError(error instanceof Error ? error.message : '데이터를 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);
@@ -137,9 +213,30 @@ export default function MyPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('userId');
-    localStorage.removeItem('token');
-    router.push('/auth');
+    try {
+      // auth.ts의 logout 함수 사용
+      logout();
+      console.log('[마이페이지] 로그아웃 실행됨');
+      // router.push 대신 location을 사용하여 직접 리디렉션
+      window.location.href = '/';
+    } catch (error) {
+      console.error('[마이페이지] 로그아웃 중 오류:', error);
+      // 오류가 발생해도 일단 메인 페이지로 이동
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    }
+  };
+
+  const handleAddressModalOpen = () => {
+    setIsAddressModalOpen(true);
+  };
+  
+  const handleAddressModalClose = () => {
+    setIsAddressModalOpen(false);
+  };
+  
+  const handleAddressUpdate = () => {
+    toast.success('배송지 정보가 업데이트되었습니다.');
   };
 
   if (isLoading) {
@@ -208,16 +305,6 @@ export default function MyPage() {
                 >
                   주문 내역
                 </button>
-                <button
-                  onClick={() => setActiveTab('edit')}
-                  className={`py-4 px-6 font-medium text-sm border-b-2 focus:outline-none ${
-                    activeTab === 'edit'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  개인정보 수정
-                </button>
               </nav>
             </div>
             
@@ -270,25 +357,32 @@ export default function MyPage() {
                         </svg>
                       }
                     />
-                    <MenuItem 
-                      href="/mypage/orders"
-                      title="주문 내역"
-                      icon={
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
-                          <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                      }
-                    />
-                    <MenuItem 
-                      href="/mypage/shipping-addresses"
-                      title="배송지 관리"
-                      icon={
+                    {user?.login_id && (
+                      <Link 
+                        href="/mypage/change-password" 
+                        className="flex items-center p-3 text-base font-medium text-gray-800 rounded-lg hover:bg-gray-100 group hover:shadow"
+                      >
+                        <span className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-gray-500 transition duration-75 group-hover:text-gray-900">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                        <span className="ml-3">비밀번호 변경</span>
+                      </Link>
+                    )}
+                    <div
+                      className="flex items-center p-4 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm cursor-pointer"
+                      onClick={handleAddressModalOpen}
+                    >
+                      <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                         </svg>
-                      }
-                    />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-base font-medium text-gray-800">배송지 관리</p>
+                      </div>
+                    </div>
                     <MenuItem 
                       href="#"
                       title="로그아웃"
@@ -310,37 +404,38 @@ export default function MyPage() {
                   {orderHistory.length > 0 ? (
                     <div className="space-y-6">
                       {orderHistory.map((order) => (
-                        <div key={order.id} className="border rounded-lg overflow-hidden">
-                          <div className="bg-gray-50 p-4 flex justify-between items-center">
-                            <div>
-                              <p className="font-medium">{order.order_number}</p>
-                              <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
+                        <div key={order.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                          <Link href={`/orders/${order.id}/detail`}>
+                            <div className="bg-gray-50 p-4 flex justify-between items-center">
+                              <div>
+                                <p className="font-medium">{order.order_number}</p>
+                                <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
+                              </div>
+                              <div>
+                                <OrderStatusBadge status={order.status} />
+                              </div>
                             </div>
-                            <div>
-                              <span className={`px-3 py-1 rounded-full text-xs ${
-                                order.status === '배송 완료' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                              }`}>
-                                {order.status}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <div className="space-y-2">
-                              {order.items.map((item, index) => (
-                                <div key={index} className="flex justify-between">
-                                  <div className="flex-1">
-                                    <p className="font-medium">{item.product_name}</p>
-                                    <p className="text-sm text-gray-500">{item.quantity}개</p>
+                            <div className="p-4">
+                              <div className="space-y-2">
+                                {order.items.map((item, index) => (
+                                  <div key={index} className="flex justify-between">
+                                    <div className="flex-1">
+                                      <p className="font-medium">{item.product_name}</p>
+                                      <p className="text-sm text-gray-500">{item.quantity}개</p>
+                                    </div>
+                                    <p className="text-right">{item.price.toLocaleString()}원</p>
                                   </div>
-                                  <p className="text-right">{item.price.toLocaleString()}원</p>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
+                              <div className="mt-4 pt-4 border-t flex justify-between items-center">
+                                <p className="font-semibold">총 금액</p>
+                                <p className="font-bold text-lg">{order.total_amount.toLocaleString()}원</p>
+                              </div>
+                              <div className="mt-4 text-right">
+                                <span className="text-blue-600 text-sm font-medium">주문 상세보기 &rarr;</span>
+                              </div>
                             </div>
-                            <div className="mt-4 pt-4 border-t flex justify-between items-center">
-                              <p className="font-semibold">총 금액</p>
-                              <p className="font-bold text-lg">{order.total_amount.toLocaleString()}원</p>
-                            </div>
-                          </div>
+                          </Link>
                         </div>
                       ))}
                     </div>
@@ -354,35 +449,18 @@ export default function MyPage() {
                   )}
                 </div>
               )}
-              
-              {/* 개인정보 수정 탭 */}
-              {activeTab === 'edit' && (
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">개인정보 수정</h3>
-                  <p className="mb-4 text-gray-600">
-                    개인정보를 수정하시려면 아래 버튼을 클릭하세요.
-                  </p>
-                  <div className="space-y-4">
-                    <Button 
-                      variant="primary" 
-                      size="lg" 
-                      className="mb-2"
-                      onClick={() => router.push('/mypage/edit-profile')}
-                    >
-                      개인정보 수정하기
-                    </Button>
-                    <Button 
-                      variant="secondary" 
-                      size="lg" 
-                      onClick={() => router.push('/mypage/change-password')}
-                    >
-                      비밀번호 변경하기
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
+        )}
+        
+        {/* 배송지 관리 모달 */}
+        {user && (
+          <ShippingAddressModal 
+            isOpen={isAddressModalOpen}
+            onClose={handleAddressModalClose}
+            userId={user.id}
+            onAddressUpdate={handleAddressUpdate}
+          />
         )}
       </div>
     </div>

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function PaymentApprovalPage() {
+// 메인 컨텐츠 컴포넌트 - useSearchParams을 사용
+function ApprovalContent() {
   const searchParams = useSearchParams();
   const pg_token = searchParams.get('pg_token');
   const order_id = searchParams.get('order_id');
@@ -174,5 +175,27 @@ export default function PaymentApprovalPage() {
         <p className="text-gray-600 text-sm">이 창은 잠시 후 자동으로 닫힙니다...</p>
       </div>
     </div>
+  );
+}
+
+// 로딩 상태를 표시하는 컴포넌트
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mx-auto mb-4"></div>
+        <h1 className="text-xl font-semibold text-gray-800 mb-2">페이지를 로드하는 중...</h1>
+        <p className="text-gray-600 text-sm">잠시만 기다려주세요.</p>
+      </div>
+    </div>
+  );
+}
+
+// 메인 페이지 컴포넌트
+export default function PaymentApprovalPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ApprovalContent />
+    </Suspense>
   );
 } 

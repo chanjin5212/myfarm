@@ -218,7 +218,7 @@ export default function RegisterPage() {
   const getFullPhoneNumber = () => {
     const { phoneNumberPrefix, phoneNumberMiddle, phoneNumberSuffix } = formData;
     if (phoneNumberPrefix && phoneNumberMiddle && phoneNumberSuffix) {
-      return `${phoneNumberPrefix}${phoneNumberMiddle}${phoneNumberSuffix}`;
+      return `${phoneNumberPrefix}-${phoneNumberMiddle}-${phoneNumberSuffix}`;
     }
     return '';
   };

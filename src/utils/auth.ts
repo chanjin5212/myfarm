@@ -51,13 +51,25 @@ export function getAuthHeader(): { Authorization?: string } {
     const tokenData = localStorage.getItem('token');
     if (!tokenData) return {};
     
-    const parsedToken = JSON.parse(tokenData);
+    let parsedToken;
+    try {
+      parsedToken = JSON.parse(tokenData);
+    } catch (error) {
+      // JSON 파싱에 실패하면 tokenData 자체를 토큰으로 사용
+      console.warn('토큰 데이터가 JSON 형식이 아닙니다. 원본 값을 사용합니다.');
+      return { Authorization: `Bearer ${encodeURIComponent(tokenData)}` };
+    }
     
     // 토큰이 만료되었는지 확인
     if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
       // 사용자 정보가 있으면 해당 ID를 인증 토큰으로 전달
       if (parsedToken.user && parsedToken.user.id) {
-        return { Authorization: `Bearer ${parsedToken.user.id}` };
+        return { Authorization: `Bearer ${encodeURIComponent(parsedToken.user.id)}` };
+      }
+      
+      // access_token이 있는 경우 (OAuth 로그인 등)
+      if (parsedToken.access_token) {
+        return { Authorization: `Bearer ${encodeURIComponent(parsedToken.access_token)}` };
       }
     } else {
       // 만료된 토큰 삭제

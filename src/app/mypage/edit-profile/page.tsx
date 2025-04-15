@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
-import { toast } from 'react-hot-toast';
+import { toast, Toaster } from 'react-hot-toast';
+import { checkToken, getAuthHeader } from '@/utils/auth';
 
 // 다음 주소검색 API를 위한 타입 정의
 declare global {
@@ -86,21 +87,21 @@ export default function EditProfile() {
     const loadUserInfo = async () => {
       setIsLoading(true);
       try {
-        const tokenData = localStorage.getItem('token');
-        if (!tokenData) {
+        // auth 유틸 함수를 사용하여 토큰 확인
+        const { user: authUser, isLoggedIn } = checkToken();
+        
+        if (!isLoggedIn || !authUser) {
           toast.error('로그인이 필요합니다.');
           router.push('/auth');
           return;
         }
 
-        // 토큰 인코딩
-        const token = encodeURIComponent(tokenData);
-
+        // auth 유틸을 사용하여 인증 헤더 생성
+        const authHeader = getAuthHeader();
+        
         // 사용자 정보 요청
         const response = await fetch('/api/users/me', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: authHeader
         });
 
         if (!response.ok) {
@@ -117,11 +118,16 @@ export default function EditProfile() {
         let phoneSuffix = '';
         
         if (userData.phone_number) {
-          const phoneNumber = userData.phone_number;
-          if (phoneNumber.length >= 11) {
+          const phoneNumber = userData.phone_number.replace(/-/g, ''); // 하이픈 제거
+          if (phoneNumber.length >= 10) { // 최소 10자리 (일부 국번은 3자리)
             phonePrefix = phoneNumber.substring(0, 3);
-            phoneMiddle = phoneNumber.substring(3, 7);
-            phoneSuffix = phoneNumber.substring(7);
+            
+            // 가운데 번호는 3자리 또는 4자리가 될 수 있음
+            const middleLength = phoneNumber.length === 10 ? 3 : 4;
+            phoneMiddle = phoneNumber.substring(3, 3 + middleLength);
+            
+            // 끝 번호는 항상 4자리
+            phoneSuffix = phoneNumber.substring(phoneNumber.length - 4);
           }
         }
         
@@ -249,15 +255,17 @@ export default function EditProfile() {
     setSuccessMessage('');
     
     try {
-      const tokenData = localStorage.getItem('token');
-      if (!tokenData) {
+      // auth 유틸 함수를 사용하여 토큰 확인
+      const { isLoggedIn } = checkToken();
+      
+      if (!isLoggedIn) {
         toast.error('로그인이 필요합니다.');
         router.push('/auth');
         return;
       }
       
-      // 토큰 인코딩
-      const token = encodeURIComponent(tokenData);
+      // auth 유틸을 사용하여 인증 헤더 생성
+      const authHeader = getAuthHeader();
       
       // 전화번호 결합
       const fullPhoneNumber = getFullPhoneNumber();
@@ -267,7 +275,7 @@ export default function EditProfile() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...authHeader
         },
         body: JSON.stringify({
           name: formData.name,
@@ -280,9 +288,28 @@ export default function EditProfile() {
         })
       });
       
+      // 응답 확인
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '프로필 업데이트에 실패했습니다.');
+        let errorMessage = '프로필 업데이트에 실패했습니다.';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          console.error('응답 파싱 오류:', jsonError);
+          errorMessage = `${errorMessage} (응답 파싱 오류)`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // 응답 데이터 파싱
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        // 응답이 JSON이 아니어도 정상 처리 (빈 본문일 수 있음)
+        console.log('응답 본문이 비었거나 JSON이 아닙니다.');
       }
       
       // 성공 메시지 표시
@@ -312,6 +339,7 @@ export default function EditProfile() {
 
   return (
     <>
+      <Toaster position="top-center" />
       <Script
         src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"
         strategy="lazyOnload"
