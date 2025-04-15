@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { LOGIN_STATUS_CHANGE } from '@/components/Header';
+import { triggerLoginEvent } from '@/utils/auth';
 
 export default function KakaoCallbackPage() {
   const router = useRouter();
@@ -93,10 +93,13 @@ export default function KakaoCallbackPage() {
           // 기존 사용자인 경우 홈페이지로 이동
           // JWT 토큰 생성 및 저장
           const token = {
-            accessToken: data.token,
             user: userData.user,
             expiresAt: Date.now() + 3600000 // 1시간 후 만료
           };
+          
+          // 토큰 정보 로깅 추가
+          console.log('Kakao 로그인 토큰 정보:', token);
+          
           localStorage.setItem('token', JSON.stringify(token));
           
           // 임시 저장된 정보 삭제
@@ -104,7 +107,7 @@ export default function KakaoCallbackPage() {
           localStorage.removeItem('kakao_access_token');
           
           // 로그인 상태 변경 이벤트 발생
-          window.dispatchEvent(new Event(LOGIN_STATUS_CHANGE));
+          triggerLoginEvent();
           
           router.push('/');
         } else {

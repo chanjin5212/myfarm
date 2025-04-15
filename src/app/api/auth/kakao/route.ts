@@ -52,14 +52,17 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    const userProfile = userData.properties || {};
+    const userAccount = userData.kakao_account || {};
+
     // Format the user data
-    const email = userData.kakao_account?.email;
+    const email = userAccount.email;
     const formattedUserData = {
       id: userData.id.toString(),
       email: email,
-      name: userData.kakao_account?.profile?.nickname || '카카오 사용자',
-      picture: userData.kakao_account?.profile?.profile_image_url,
-      nickname: userData.kakao_account?.profile?.nickname,
+      name: userAccount.profile?.nickname || '카카오 사용자',
+      picture: userAccount.profile?.profile_image_url,
+      nickname: userAccount.profile?.nickname,
       provider: 'kakao',
     };
 

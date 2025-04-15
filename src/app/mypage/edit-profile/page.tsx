@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
+import { toast } from 'react-hot-toast';
 
 // 다음 주소검색 API를 위한 타입 정의
 declare global {
@@ -82,62 +83,68 @@ export default function EditProfile() {
   const prefixOptions = ['010', '011', '016', '017', '018', '019'];
 
   useEffect(() => {
-    const checkLoginStatus = () => {
+    const loadUserInfo = async () => {
+      setIsLoading(true);
       try {
         const tokenData = localStorage.getItem('token');
-        if (tokenData) {
-          const parsedToken = JSON.parse(tokenData);
-          
-          // 토큰이 만료되었는지 확인
-          if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
-            const userData = parsedToken.user || null;
-            setUser(userData);
-            
-            if (userData) {
-              // 휴대폰 번호 파싱
-              let prefix = '010';
-              let middle = '';
-              let suffix = '';
-              
-              if (userData.phone_number) {
-                // 번호 형식에 따라 파싱 (01012345678)
-                if (userData.phone_number.length === 11) {
-                  prefix = userData.phone_number.substring(0, 3);
-                  middle = userData.phone_number.substring(3, 7);
-                  suffix = userData.phone_number.substring(7);
-                }
-              }
-              
-              // 폼 데이터 초기화
-              setFormData({
-                name: userData.name || '',
-                nickname: userData.nickname || '',
-                phoneNumberPrefix: prefix,
-                phoneNumberMiddle: middle,
-                phoneNumberSuffix: suffix,
-                postcode: userData.postcode || '',
-                address: userData.address || '',
-                detailAddress: userData.detail_address || '',
-                marketingAgreed: userData.marketing_agreed || false,
-              });
-            }
-          } else {
-            // 만료된 토큰이면 로그인 페이지로 리다이렉션
-            router.push('/auth');
-          }
-        } else {
-          // 토큰이 없으면 로그인 페이지로 리다이렉션
+        if (!tokenData) {
+          toast.error('로그인이 필요합니다.');
           router.push('/auth');
+          return;
         }
+
+        // 토큰 인코딩
+        const token = encodeURIComponent(tokenData);
+
+        // 사용자 정보 요청
+        const response = await fetch('/api/users/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('사용자 정보를 불러오는데 실패했습니다.');
+        }
+
+        const userData = await response.json();
+        
+        setUser(userData);
+        
+        // 전화번호 파싱 (예: "01012345678" -> "010", "1234", "5678")
+        let phonePrefix = '010';
+        let phoneMiddle = '';
+        let phoneSuffix = '';
+        
+        if (userData.phone_number) {
+          const phoneNumber = userData.phone_number;
+          if (phoneNumber.length >= 11) {
+            phonePrefix = phoneNumber.substring(0, 3);
+            phoneMiddle = phoneNumber.substring(3, 7);
+            phoneSuffix = phoneNumber.substring(7);
+          }
+        }
+        
+        setFormData({
+          name: userData.name || '',
+          nickname: userData.nickname || '',
+          phoneNumberPrefix: phonePrefix,
+          phoneNumberMiddle: phoneMiddle,
+          phoneNumberSuffix: phoneSuffix,
+          postcode: userData.postcode || '',
+          address: userData.address || '',
+          detailAddress: userData.detail_address || '',
+          marketingAgreed: userData.marketing_agreed || false,
+        });
       } catch (error) {
-        console.error('토큰 확인 오류:', error);
-        router.push('/auth');
+        console.error('사용자 정보 로딩 오류:', error);
+        toast.error('사용자 정보를 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);
       }
     };
-
-    checkLoginStatus();
+    
+    loadUserInfo();
   }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -242,63 +249,50 @@ export default function EditProfile() {
     setSuccessMessage('');
     
     try {
-      if (!user) {
-        throw new Error('사용자 정보를 찾을 수 없습니다.');
+      const tokenData = localStorage.getItem('token');
+      if (!tokenData) {
+        toast.error('로그인이 필요합니다.');
+        router.push('/auth');
+        return;
       }
       
+      // 토큰 인코딩
+      const token = encodeURIComponent(tokenData);
+      
+      // 전화번호 결합
       const fullPhoneNumber = getFullPhoneNumber();
       
-      const response = await fetch('/api/users', {
+      // 프로필 업데이트 요청
+      const response = await fetch('/api/users/me', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          userId: user.id,
-          name: formData.name || null,
-          nickname: formData.nickname || null,
-          phone_number: fullPhoneNumber || null,
-          postcode: formData.postcode || null,
-          address: formData.address || null,
-          detail_address: formData.detailAddress || null,
-          marketing_agreed: formData.marketingAgreed,
-        }),
+          name: formData.name,
+          nickname: formData.nickname,
+          phone_number: fullPhoneNumber,
+          postcode: formData.postcode,
+          address: formData.address,
+          detail_address: formData.detailAddress,
+          marketing_agreed: formData.marketingAgreed
+        })
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || '정보 업데이트에 실패했습니다.');
+        throw new Error(errorData.error || '프로필 업데이트에 실패했습니다.');
       }
       
-      // 성공적으로 업데이트된 경우
-      await response.json();
+      // 성공 메시지 표시
+      toast.success('프로필이 성공적으로 업데이트되었습니다.');
       
-      // 로컬 스토리지의 사용자 정보 업데이트
-      const tokenData = localStorage.getItem('token');
-      if (tokenData) {
-        const parsedToken = JSON.parse(tokenData);
-        parsedToken.user = {
-          ...parsedToken.user,
-          name: formData.name || parsedToken.user.name,
-          nickname: formData.nickname || parsedToken.user.nickname,
-          phone_number: fullPhoneNumber || parsedToken.user.phone_number,
-          postcode: formData.postcode || parsedToken.user.postcode,
-          address: formData.address || parsedToken.user.address,
-          detail_address: formData.detailAddress || parsedToken.user.detail_address,
-          marketing_agreed: formData.marketingAgreed,
-        };
-        localStorage.setItem('token', JSON.stringify(parsedToken));
-      }
-      
-      setSuccessMessage('개인정보가 성공적으로 업데이트되었습니다.');
-      
-      // 3초 후 성공 메시지 숨기기
-      setTimeout(() => {
-        setSuccessMessage('');
-      }, 3000);
+      // 마이페이지로 이동
+      router.push('/mypage');
     } catch (error) {
-      console.error('개인정보 업데이트 오류:', error);
-      alert(error instanceof Error ? error.message : '정보 업데이트 중 오류가 발생했습니다.');
+      console.error('프로필 업데이트 오류:', error);
+      toast.error(error instanceof Error ? error.message : '프로필 업데이트 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
     }

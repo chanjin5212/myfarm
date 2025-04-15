@@ -4,85 +4,40 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-// 로그인 상태 변경을 알리는 커스텀 이벤트
-export const LOGIN_STATUS_CHANGE = 'login-status-change';
-
-interface User {
-  id: string;
-  email: string;
-  name?: string;
-  nickname?: string;
-  avatar_url?: string;
-  google_id?: string;
-  terms_agreed?: boolean;
-}
+import { checkToken, logout, LOGIN_STATUS_CHANGE, User } from '@/utils/auth';
 
 export default function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
 
-  // 로그인 상태 확인 함수
-  const checkLoginStatus = () => {
-    try {
-      const tokenData = localStorage.getItem('token');
-      if (tokenData) {
-        const parsedToken = JSON.parse(tokenData);
-        
-        // 토큰이 만료되었는지 확인
-        if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
-          setUser(parsedToken.user || null);
-        } else {
-          // 만료된 토큰 삭제
-          localStorage.removeItem('token');
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('토큰 확인 오류:', error);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    // 로그인 상태 확인 함수
+    const checkLoginStatus = () => {
+      const { user: currentUser, isLoggedIn: loggedIn } = checkToken();
+      setUser(currentUser);
+      setIsLoggedIn(loggedIn);
+      setIsLoading(false);
+    };
+
     // 초기 로그인 상태 확인
     checkLoginStatus();
     
-    // 로컬 스토리지 변경 이벤트 리스너
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'token' || e.key === null) {
-        checkLoginStatus();
-      }
-    };
-    
-    // 커스텀 로그인 상태 변경 이벤트 리스너
+    // 로그인 상태 변경 이벤트 리스너
     const handleLoginStatusChange = () => {
       checkLoginStatus();
     };
     
-    // 이벤트 리스너 등록
-    window.addEventListener('storage', handleStorageChange);
     window.addEventListener(LOGIN_STATUS_CHANGE, handleLoginStatusChange);
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener(LOGIN_STATUS_CHANGE, handleLoginStatusChange);
     };
   }, []);
 
   const handleLogout = () => {
-    // 로그아웃 처리 - 토큰 삭제
-    localStorage.removeItem('token');
-    setUser(null);
-    
-    // 로그인 상태 변경 이벤트 발생
-    window.dispatchEvent(new Event(LOGIN_STATUS_CHANGE));
-    
+    logout();
     router.push('/');
   };
 

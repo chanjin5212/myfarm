@@ -264,25 +264,9 @@ export default function ProductDetailPage() {
       
       if (isLoggedIn) {
         // 로그인 상태라면 서버 API 호출
-        // JSON 토큰에서 사용자 ID 추출
         try {
-          // 사용자 ID만 추출하여 사용 (인코딩 문제 방지)
-          let token = '';
-          
-          try {
-            const parsedToken = JSON.parse(tokenData || '{}');
-            if (parsedToken.user && parsedToken.user.id) {
-              token = parsedToken.user.id;
-            } else if (parsedToken.token) {
-              token = parsedToken.token;
-            } else {
-              // JSON으로 저장된 토큰인 경우 다시 문자열로 변환하지 않음
-              token = '';
-            }
-          } catch (error) {
-            console.error('토큰 파싱 오류:', error);
-            token = '';
-          }
+          // 토큰 전체를 인코딩하여 전송
+          const token = encodeURIComponent(tokenData);
           
           if (selectedOptions.length > 0) {
             // 옵션 있는 상품

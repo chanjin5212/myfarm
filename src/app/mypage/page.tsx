@@ -63,57 +63,58 @@ export default function MyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const checkLoginStatus = async () => {
+    const fetchUserData = async () => {
+      setIsLoading(true);
       try {
         const tokenData = localStorage.getItem('token');
-        if (tokenData) {
-          const parsedToken = JSON.parse(tokenData);
-          
-          // 토큰이 만료되었는지 확인
-          if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
-            setUser(parsedToken.user || null);
-            fetchOrderHistory(parsedToken.user?.id);
-          } else {
-            // 만료된 토큰이면 로그인 페이지로 리다이렉션
-            router.push('/auth');
-          }
-        } else {
-          // 토큰이 없으면 로그인 페이지로 리다이렉션
+        if (!tokenData) {
           router.push('/auth');
+          return;
         }
+
+        // 토큰 인코딩
+        const token = encodeURIComponent(tokenData);
+
+        // 사용자 정보 요청
+        const response = await fetch('/api/users/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('사용자 정보를 불러오는데 실패했습니다.');
+        }
+
+        const userData = await response.json();
+        setUser(userData);
+
+        // 주문 정보 요청
+        const ordersResponse = await fetch('/api/orders/my', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!ordersResponse.ok) {
+          throw new Error('주문 정보를 불러오는데 실패했습니다.');
+        }
+
+        const ordersData = await ordersResponse.json();
+        setOrderHistory(ordersData);
       } catch (error) {
-        console.error('토큰 확인 오류:', error);
-        router.push('/auth');
+        console.error('데이터 로딩 오류:', error);
+        setError(error instanceof Error ? error.message : '데이터를 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    // 주문 내역 가져오기
-    const fetchOrderHistory = async (userId: string) => {
-      if (!userId) return;
-      
-      try {
-        setIsLoading(true);
-        // 실제 API 호출 (현재는 API가 없으므로 빈 배열 반환)
-        // const response = await fetch(`/api/orders?userId=${userId}`);
-        // if (!response.ok) throw new Error('주문 내역을 불러오는데 실패했습니다.');
-        // const data = await response.json();
-        // setOrderHistory(data);
-        
-        // API 개발 전까지는 빈 배열 설정
-        setOrderHistory([]);
-      } catch (error) {
-        console.error('주문 내역 조회 오류:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkLoginStatus();
+    fetchUserData();
   }, [router]);
 
   const formatDate = (dateString: string) => {

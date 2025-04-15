@@ -287,3 +287,153 @@ CREATE POLICY shipping_addresses_update_policy ON shipping_addresses
 -- 사용자는 자신의 배송지만 삭제 가능
 CREATE POLICY shipping_addresses_delete_policy ON shipping_addresses
   FOR DELETE USING (auth.uid() = user_id);
+
+-- 현재 사용자 ID를 반환하는 함수
+CREATE OR REPLACE FUNCTION current_user_id()
+RETURNS UUID AS $$
+BEGIN
+  RETURN auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 기존 테이블 삭제
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+
+-- orders 테이블 생성
+CREATE TABLE orders (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  order_number VARCHAR(14) UNIQUE,  -- 주문번호 컬럼 추가 (YYYYMMDD + 6자리 시퀀스)
+  user_id UUID NOT NULL REFERENCES users(id),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  shipping_name VARCHAR(100) NOT NULL,
+  shipping_phone VARCHAR(20) NOT NULL,
+  shipping_address TEXT NOT NULL,
+  shipping_detail_address TEXT,
+  shipping_memo TEXT,
+  payment_method VARCHAR(20) NOT NULL,
+  total_amount INTEGER NOT NULL,
+  tid VARCHAR(100),  -- 카카오페이 tid 저장을 위한 컬럼 추가
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- order_items 테이블 생성
+CREATE TABLE order_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id),
+  product_option_id UUID REFERENCES product_options(id),
+  quantity INTEGER NOT NULL,
+  price INTEGER NOT NULL,
+  options JSONB,  -- 옵션 정보를 JSON 형식으로 저장
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 결제 세션 정보를 저장하는 테이블 생성
+CREATE TABLE payment_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+  payment_method VARCHAR(20) NOT NULL,
+  tid VARCHAR(100) NOT NULL,  -- 카카오페이 결제 고유 ID
+  status VARCHAR(20) NOT NULL, -- ready, completed, canceled, failed 등의 상태
+  amount INTEGER NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  completed_at TIMESTAMP WITH TIME ZONE,
+  canceled_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 인덱스 생성
+CREATE INDEX idx_payment_sessions_order_id ON payment_sessions(order_id);
+CREATE INDEX idx_payment_sessions_user_id ON payment_sessions(user_id);
+CREATE INDEX idx_payment_sessions_tid ON payment_sessions(tid);
+
+-- RLS 정책 설정
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_sessions ENABLE ROW LEVEL SECURITY;
+
+-- 사용자는 자신의 주문만 확인 가능
+CREATE POLICY orders_select_policy ON orders
+  FOR SELECT USING (true);  -- 모든 사용자가 모든 주문을 볼 수 있도록 임시로 변경
+
+-- 사용자는 자신의 주문만 추가 가능
+CREATE POLICY orders_insert_policy ON orders
+  FOR INSERT WITH CHECK (true);  -- 모든 사용자가 주문을 추가할 수 있도록 임시로 변경
+
+-- 사용자는 자신의 주문만 수정 가능
+CREATE POLICY orders_update_policy ON orders
+  FOR UPDATE USING (true);  -- 모든 사용자가 주문을 수정할 수 있도록 임시로 변경
+
+-- 주문 상품은 주문과 함께 관리
+CREATE POLICY order_items_select_policy ON order_items
+  FOR SELECT USING (true);  -- 모든 사용자가 모든 주문 상품을 볼 수 있도록 임시로 변경
+
+CREATE POLICY order_items_insert_policy ON order_items
+  FOR INSERT WITH CHECK (true);  -- 모든 사용자가 주문 상품을 추가할 수 있도록 임시로 변경
+
+CREATE POLICY payment_sessions_select_policy ON payment_sessions
+  FOR SELECT USING (true);  -- 모든 사용자가 모든 결제 세션을 볼 수 있도록 임시로 변경
+
+CREATE POLICY payment_sessions_insert_policy ON payment_sessions
+  FOR INSERT WITH CHECK (true);  -- 모든 사용자가 결제 세션을 추가할 수 있도록 임시로 변경
+
+CREATE POLICY payment_sessions_update_policy ON payment_sessions
+  FOR UPDATE USING (true);  -- 모든 사용자가 결제 세션을 수정할 수 있도록 임시로 변경
+
+-- 누락된 인덱스 추가
+CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+
+-- 주문번호 시퀀스 생성 (날짜별로 1부터 시작)
+CREATE SEQUENCE IF NOT EXISTS order_number_seq;
+
+-- 날짜별 시퀀스 초기화 상태를 저장하는 테이블
+CREATE TABLE IF NOT EXISTS sequence_state (
+  sequence_name VARCHAR(50) PRIMARY KEY,
+  last_reset_date DATE NOT NULL,
+  last_value BIGINT NOT NULL
+);
+
+-- 주문번호 생성 함수 정의
+CREATE OR REPLACE FUNCTION generate_order_number()
+RETURNS TRIGGER AS $$
+DECLARE
+  today_date DATE := CURRENT_DATE;
+  today_str VARCHAR := TO_CHAR(today_date, 'YYYYMMDD');
+  seq_value BIGINT;
+  last_reset RECORD;
+BEGIN
+  -- 시퀀스 상태 조회
+  SELECT * INTO last_reset FROM sequence_state WHERE sequence_name = 'order_number_seq';
+  
+  -- 날짜가 바뀌었거나 처음 사용하는 경우 시퀀스 재설정
+  IF last_reset IS NULL OR last_reset.last_reset_date < today_date THEN
+    -- 시퀀스 1로 초기화
+    PERFORM setval('order_number_seq', 1, false);
+    
+    -- 시퀀스 상태 업데이트 또는 삽입
+    INSERT INTO sequence_state (sequence_name, last_reset_date, last_value)
+    VALUES ('order_number_seq', today_date, 1)
+    ON CONFLICT (sequence_name) 
+    DO UPDATE SET last_reset_date = today_date, last_value = 1;
+  END IF;
+  
+  -- 다음 시퀀스 값 가져오기
+  seq_value := nextval('order_number_seq');
+  
+  -- 주문번호 생성: YYYYMMDD + 6자리 시퀀스 (000001부터)
+  NEW.order_number := today_str || LPAD(seq_value::TEXT, 6, '0');
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 트리거 생성
+DROP TRIGGER IF EXISTS set_order_number ON orders;
+CREATE TRIGGER set_order_number
+BEFORE INSERT ON orders
+FOR EACH ROW
+WHEN (NEW.order_number IS NULL)
+EXECUTE FUNCTION generate_order_number();

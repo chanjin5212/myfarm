@@ -389,6 +389,6 @@ async function handleSocialCheck(checkData: UserCheckRequest) {
   
   return NextResponse.json({
     exists: !!existingUser,
-    user: existingUser
+    user: existingUser || null
   });
 } 

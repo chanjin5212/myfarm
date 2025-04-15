@@ -6,17 +6,20 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button, Textarea, Radio, Checkbox, Card } from '@/components/ui/CommonStyles';
 import ShippingAddressModal from './ShippingAddressModal';
+import { getAuthHeader } from '@/utils/auth';
 
 interface User {
   id: string;
   login_id?: string;
-  name: string;
+  name?: string;
   nickname?: string;
-  email: string;
+  email?: string;
   phone?: string;
   phone_number?: string;
   address?: string;
   detail_address?: string;
+  postcode?: string;
+  memo?: string;
 }
 
 interface CartItem {
@@ -62,117 +65,349 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState<ShippingAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
+  const [token, setToken] = useState('');
+  const [orderProcessing, setOrderProcessing] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [kakaoPayPopup, setKakaoPayPopup] = useState<Window | null>(null);
 
   useEffect(() => {
     checkLoginStatus();
     loadCheckoutItems();
-  }, []);
 
-  // 사용자 정보가 로드된 후 1초 후에 배송지 목록 로드 시도
+    // 결제 완료 메시지 수신을 위한 이벤트 리스너 등록
+    const handlePaymentMessage = async (event: MessageEvent) => {
+      // 메시지 타입 확인
+      if (!event.data?.type) return;
+      
+      console.log('결제 관련 메시지 수신:', event.data);
+      const { type, orderId, data, error } = event.data;
+      
+      // 주문 ID가 일치하는지 확인
+      const currentOrderId = localStorage.getItem('currentOrderId');
+      console.log('메시지 수신 - 주문 ID 비교:', { 
+        receivedOrderId: orderId, 
+        currentOrderId, 
+        isSame: currentOrderId === orderId 
+      });
+      
+      if (currentOrderId !== orderId) return;
+      
+      // 메시지 타입에 따른 처리
+      switch (type) {
+        case 'PAYMENT_APPROVAL_NEEDED':
+          // 결제 승인 요청 처리
+          console.log('결제 승인 요청 메시지 처리 시작');
+          setMessage('결제 승인 중입니다...');
+          
+          try {
+            const authHeader = getAuthHeader();
+            if (!authHeader.Authorization) {
+              throw new Error('로그인이 필요합니다.');
+            }
+            
+            // 결제 승인 API 호출
+            const approveResponse = await fetch(`/api/payments/kakao/approve`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...authHeader
+              },
+              body: JSON.stringify({
+                pg_token: data.pg_token,
+                orderId: orderId
+              })
+            });
+            
+            if (!approveResponse.ok) {
+              const errorData = await approveResponse.json();
+              throw new Error(errorData.error || '결제 승인 중 오류가 발생했습니다.');
+            }
+            
+            // 결제 승인 성공
+            console.log('결제 승인 완료');
+            
+            // 결제 완료 처리
+            setOrderProcessing(false);
+            setMessage('');
+            localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
+            localStorage.removeItem('currentOrderId');
+            localStorage.removeItem('paymentPending'); // 결제 진행 중 상태 제거
+            setKakaoPayPopup(null); // 팝업 참조 제거
+            
+            // 장바구니 비우기
+            try {
+              await fetch(`/api/cart/clear`, {
+                method: 'DELETE',
+                headers: { ...authHeader }
+              });
+            } catch (e) {
+              console.error('장바구니 비우기 실패:', e);
+            }
+            
+            // 리다이렉트 경로가 있으면 해당 경로로, 없으면 주문 상세 페이지로 이동
+            const redirectPath = data.redirectTo || `/orders/${orderId}/detail`;
+            console.log(`결제 완료 페이지로 이동: ${redirectPath}`);
+            
+            // 약간의 지연 후 페이지 이동 (상태 업데이트 보장)
+            setTimeout(() => {
+              router.push(redirectPath);
+            }, 100);
+          } catch (error) {
+            console.error('결제 승인 처리 오류:', error);
+            setOrderProcessing(false);
+            setMessage('');
+            setKakaoPayPopup(null);
+            localStorage.removeItem('currentOrderId');
+            localStorage.removeItem('paymentPending');
+            setOrderError(error instanceof Error ? error.message : '결제 승인 중 오류가 발생했습니다.');
+          }
+          break;
+          
+        case 'PAYMENT_COMPLETE':
+          // 결제 완료 처리
+          console.log('결제 완료 메시지 처리 시작');
+          setOrderProcessing(false);
+          setMessage('');
+          localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
+          localStorage.removeItem('currentOrderId');
+          localStorage.removeItem('paymentPending'); // 결제 진행 중 상태 제거
+          setKakaoPayPopup(null); // 팝업 참조 제거
+          
+          // 리다이렉트 경로가 있으면 해당 경로로, 없으면 주문 상세 페이지로 이동
+          const successRedirectPath = data?.redirectTo || `/orders/${orderId}/detail`;
+          console.log(`결제 완료 페이지로 이동: ${successRedirectPath}`);
+          
+          // 약간의 지연 후 페이지 이동 (상태 업데이트 보장)
+          setTimeout(() => {
+            router.push(successRedirectPath);
+          }, 100);
+          break;
+          
+        case 'PAYMENT_CANCELLED':
+          // 결제 취소 처리
+          setOrderProcessing(false);
+          setMessage('');
+          setKakaoPayPopup(null);
+          localStorage.removeItem('currentOrderId');
+          localStorage.removeItem('paymentPending');
+          
+          // 취소 메시지 표시
+          const cancelReason = data?.reason || '사용자에 의해 취소됨';
+          setOrderError(`결제가 취소되었습니다. (${cancelReason})`);
+          
+          // 취소 후 리다이렉트가 필요한 경우
+          if (data?.redirectTo && data.redirectTo !== '/checkout') {
+            setTimeout(() => {
+              router.push(data.redirectTo);
+            }, 1000);
+          }
+          break;
+          
+        case 'PAYMENT_FAILED':
+          // 결제 실패 처리
+          setOrderProcessing(false);
+          setMessage('');
+          setKakaoPayPopup(null);
+          localStorage.removeItem('currentOrderId');
+          localStorage.removeItem('paymentPending');
+          
+          // 오류 메시지 표시
+          setOrderError(data?.reason || error || '결제 처리 중 오류가 발생했습니다.');
+          
+          // 실패 후 리다이렉트가 필요한 경우
+          if (data?.redirectTo && data.redirectTo !== '/checkout') {
+            setTimeout(() => {
+              router.push(data.redirectTo);
+            }, 1000);
+          }
+          break;
+          
+        case 'PAYMENT_ERROR':
+          // 기타 오류 처리
+          setOrderProcessing(false);
+          setMessage('');
+          setKakaoPayPopup(null);
+          localStorage.removeItem('currentOrderId');
+          localStorage.removeItem('paymentPending');
+          
+          // 오류 메시지 표시
+          setOrderError(data?.reason || '결제 중 오류가 발생했습니다.');
+          
+          // 오류 후 리다이렉트가 필요한 경우
+          if (data?.redirectTo && data.redirectTo !== '/checkout') {
+            setTimeout(() => {
+              router.push(data.redirectTo);
+            }, 1000);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('message', handlePaymentMessage);
+    
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      window.removeEventListener('message', handlePaymentMessage);
+    };
+  }, [router]);
+
+  // 카카오페이 팝업 모니터링
+  useEffect(() => {
+    let popupCheckInterval: NodeJS.Timeout | null = null;
+    let paymentCompleted = false;  // 결제 완료 여부를 추적하는 플래그 추가
+    
+    // 메시지 이벤트 핸들러 추가 - 결제 완료 메시지를 감지
+    const handlePaymentComplete = (event: MessageEvent) => {
+      if (event.data?.type === 'PAYMENT_APPROVAL_NEEDED' || event.data?.type === 'PAYMENT_COMPLETE') {
+        const currentOrderId = localStorage.getItem('currentOrderId');
+        if (currentOrderId === event.data?.orderId) {
+          paymentCompleted = true;
+          console.log('결제 완료 메시지 감지 - 자동 취소 방지');
+        }
+      }
+    };
+    
+    window.addEventListener('message', handlePaymentComplete);
+    
+    // 카카오페이 팝업이 있고 주문 처리 중인 경우에만 모니터링
+    if (kakaoPayPopup && orderProcessing) {
+      popupCheckInterval = setInterval(() => {
+        // 팝업이 닫혔는지 확인
+        if (kakaoPayPopup.closed) {
+          clearInterval(popupCheckInterval!);
+          console.log('사용자가 카카오페이 팝업을 닫았습니다.');
+          
+          // 결제가 완료된 경우에는 취소 처리하지 않음
+          if (paymentCompleted) {
+            console.log('결제가 이미 완료되어 취소 처리하지 않음');
+            return;
+          }
+          
+          // 결제 완료 메시지를 받지 않았을 때만 취소 처리
+          const currentOrderId = localStorage.getItem('currentOrderId');
+          if (currentOrderId && orderProcessing) {
+            console.log('결제 팝업 닫힘 감지 - 주문 취소 처리:', currentOrderId);
+            setOrderProcessing(false);
+            setOrderError('결제가 취소되었습니다. (사용자가 창을 닫음)');
+            setKakaoPayPopup(null);
+            
+            // 주문 취소 API 호출
+            const cancelOrder = async () => {
+              try {
+                const authHeader = getAuthHeader();
+                if (!authHeader.Authorization) return;
+                
+                const response = await fetch(`/api/orders/cancel`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeader
+                  },
+                  body: JSON.stringify({ orderId: currentOrderId })
+                });
+                
+                if (response.ok) {
+                  console.log('주문 자동 취소 완료:', currentOrderId);
+                  localStorage.removeItem('currentOrderId');
+                  localStorage.removeItem('paymentPending');
+                } else {
+                  console.error('주문 자동 취소 실패 - 응답 오류:', await response.text());
+                }
+              } catch (err) {
+                console.error('주문 자동 취소 실패:', err);
+              }
+            };
+            
+            cancelOrder();
+          }
+        }
+      }, 300); // 300ms로 더 빠르게 체크
+    }
+    
+    // 컴포넌트 언마운트 또는 의존성 변경 시 인터벌 제거 및 이벤트 리스너 제거
+    return () => {
+      if (popupCheckInterval) {
+        clearInterval(popupCheckInterval);
+      }
+      window.removeEventListener('message', handlePaymentComplete);
+    };
+  }, [kakaoPayPopup, orderProcessing]);
+
+  // 사용자 정보가 로드된 후 배송지 목록 로드 시도
   useEffect(() => {
     if (user) {
-      const timer = setTimeout(() => {
-        loadShippingAddresses();
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      console.log('사용자 정보가 로드되어 배송지 목록 로드 시도');
+      loadShippingAddresses();
     }
   }, [user]);
 
   const checkLoginStatus = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/auth');
-        return;
-      }
+      const storedToken = localStorage.getItem('token');
       
-      // 토큰에서 직접 사용자 정보 추출 시도
-      try {
-        const tokenData = JSON.parse(token);
-        if (tokenData && tokenData.user) {
-          setUser(tokenData.user);
-          // 사용자 ID를 토큰에서 추출하여 저장
-          if (!localStorage.getItem('userId') && tokenData.user.id) {
-            localStorage.setItem('userId', tokenData.user.id);
+      if (storedToken) {
+        try {
+          const parsedToken = JSON.parse(storedToken);
+          let userInfo: User | null = null;
+          let accessToken = '';
+          
+          if (parsedToken.user && typeof parsedToken.user === 'object') {
+            // 사용자 정보가 객체인지 확인
+            const userData = parsedToken.user as User;
+            
+            // id가 존재하는지 확인
+            if (userData.id) {
+              userInfo = userData;
+              setUser(userInfo);
+              
+              // 사용자 정보를 사용하여 배송지 정보 설정
+              setShippingInfo(prev => ({
+                ...prev,
+                name: userData.name || '',
+                phone: userData.phone_number || '',
+                address: userData.address || '',
+                detailAddress: userData.detail_address || '',
+                memo: userData.memo || '',
+                postcode: userData.postcode || ''
+              }));
+              
+              // 사용자 로그인 확인 즉시 배송지 목록 로드 시도
+              localStorage.setItem('userId', userData.id);
+            } else {
+              setUser(null);
+            }
+          } else {
+            setUser(null);
           }
           
-          // 사용자 배송지 정보 초기화
-          if (tokenData.user.name || tokenData.user.phone_number || tokenData.user.phone || tokenData.user.address) {
-            setShippingInfo(prev => ({
-              ...prev,
-              name: tokenData.user.name || prev.name,
-              phone: tokenData.user.phone_number || tokenData.user.phone || prev.phone,
-              address: tokenData.user.address || prev.address,
-              detailAddress: tokenData.user.detail_address || prev.detailAddress
-            }));
+          // API 호출을 위한 액세스 토큰 추출
+          if (parsedToken.access_token) {
+            accessToken = parsedToken.access_token;
+            console.log('액세스 토큰 추출 성공, 길이:', accessToken.length);
+          } else {
+            // 토큰 원본 사용 (이전 방식 지원)
+            accessToken = storedToken;
+            console.log('기존 토큰 사용, 길이:', storedToken.length);
           }
-          return;
-        }
-      } catch (parseError) {
-        console.error('토큰 파싱 오류:', parseError);
-        localStorage.removeItem('token');
-        router.push('/auth');
-        return;
-      }
-      
-      // 로그인 상태 확인 API 호출
-      const response = await fetch('/api/users/is-logged-in', {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        // 로그인 상태 확인 실패
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        router.push('/auth');
-        return;
-      }
-
-      // 사용자 ID 확인
-      const userId = localStorage.getItem('userId');
-      if (!userId) {
-        localStorage.removeItem('token');
-        router.push('/auth');
-        return;
-      }
-      
-      // 사용자 ID로 정보 조회
-      const userResponse = await fetch(`/api/users/${userId}`, {
-        method: 'GET',
-      });
-      
-      if (!userResponse.ok) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        router.push('/auth');
-        return;
-      }
-      
-      const userData = await userResponse.json();
-      if (userData && userData.user) {
-        setUser(userData.user);
-        // 사용자 배송지 정보 초기화
-        if (userData.user.name || userData.user.phone_number || userData.user.phone || userData.user.address) {
-          setShippingInfo(prev => ({
-            ...prev,
-            name: userData.user.name || prev.name,
-            phone: userData.user.phone_number || userData.user.phone || prev.phone,
-            address: userData.user.address || prev.address,
-            detailAddress: userData.user.detail_address || prev.detailAddress
-          }));
+          
+          // 토큰 저장
+          setToken(accessToken);
+        } catch (error) {
+          console.error('토큰 파싱 에러:', error);
+          console.log('원본 토큰 사용');
+          setUser(null);
+          setToken(storedToken);
         }
       } else {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        router.push('/auth');
+        console.log('저장된 토큰이 없음');
+        setUser(null);
+        setToken('');
       }
     } catch (error) {
-      console.error('로그인 상태 확인 오류:', error);
-      setError('로그인 상태를 확인하는 중 오류가 발생했습니다.');
-      setTimeout(() => {
-        router.push('/auth');
-      }, 2000);
+      console.error('로그인 상태 확인 에러:', error);
+      setUser(null);
+      setToken('');
     }
   };
 
@@ -210,19 +445,30 @@ export default function CheckoutPage() {
   // 사용자의 배송지 목록 로드
   const loadShippingAddresses = async () => {
     try {
-      const userId = localStorage.getItem('userId');
-      if (!userId) return;
+      const userId = user?.id || localStorage.getItem('userId');
+      if (!userId) {
+        console.log('사용자 ID가 없어 배송지를 로드할 수 없습니다.');
+        return;
+      }
       
       console.log('배송지 목록 로드 시도:', userId);
       
-      const response = await fetch(`/api/shipping-addresses?userId=${userId}`, {
+      const response = await fetch(`/api/shipping-addresses?userId=${userId}&_=${Date.now()}`, {
         method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
       });
+      
+      let hasValidAddresses = false;
       
       if (response.ok) {
         const data = await response.json();
-        if (data.addresses && Array.isArray(data.addresses)) {
+        if (data.addresses && Array.isArray(data.addresses) && data.addresses.length > 0) {
           console.log('불러온 배송지 목록:', data.addresses.length);
+          hasValidAddresses = true;
           
           // 이미 선택된 배송지가 있는 경우, 해당 ID 저장
           const currentSelectedId = selectedAddressId;
@@ -264,19 +510,20 @@ export default function CheckoutPage() {
           }
           
           // 3. 첫 번째 배송지
-          if (data.addresses.length > 0) {
-            console.log('첫 번째 배송지 선택:', data.addresses[0].id);
-            setSelectedAddressId(data.addresses[0].id);
-            updateShippingInfo(data.addresses[0]);
-            return;
-          }
+          console.log('첫 번째 배송지 선택:', data.addresses[0].id);
+          setSelectedAddressId(data.addresses[0].id);
+          updateShippingInfo(data.addresses[0]);
+          return;
+        } else {
+          console.log('배송지 목록이 비어있습니다.');
+          setAddresses([]);
         }
       } else {
         console.error('배송지 목록 API 오류 응답:', response.status);
       }
       
-      // 배송지 목록을 가져오지 못하거나 선택할 배송지가 없는 경우 사용자 정보를 기본 배송지로 사용
-      if (!selectedAddressId && user) {
+      // 배송지가 없거나 API 오류시 사용자 정보로 배송지 설정
+      if (!hasValidAddresses && user) {
         console.log('배송지 목록을 불러올 수 없어 사용자 정보를 사용합니다.');
         setShippingInfo({
           name: user.name || '',
@@ -288,8 +535,8 @@ export default function CheckoutPage() {
       }
     } catch (error) {
       console.error('배송지 목록 로드 오류:', error);
-      // 오류가 발생해도 선택된 배송지가 없는 경우에만 사용자 정보를 기본 배송지로 사용
-      if (!selectedAddressId && user) {
+      // 오류가 발생하면 사용자 정보를 기본 배송지로 사용
+      if (user) {
         setShippingInfo({
           name: user.name || '',
           phone: user.phone_number || user.phone || '',
@@ -352,109 +599,224 @@ export default function CheckoutPage() {
     e.preventDefault();
     
     if (!agreeToTerms) {
-      alert('주문 정보 및 결제 동의가 필요합니다.');
+      alert('주문 및 결제 정보 수집 동의가 필요합니다.');
       return;
     }
     
-    if (items.length === 0) {
-      alert('주문할 상품이 없습니다.');
-      router.push('/cart');
+    if (!validateShippingInfo()) {
       return;
     }
     
-    // 배송 정보가 비어있는지 확인
-    const isShippingEmpty = !shippingInfo.name || !shippingInfo.phone || !shippingInfo.address;
-    
-    // 배송 정보가 비었지만 사용자 정보가 있는 경우, 사용자 정보로 채우기
-    if (isShippingEmpty && user) {
-      setShippingInfo({
-        name: user.name || '',
-        phone: user.phone_number || user.phone || '',
-        address: user.address || '',
-        detailAddress: user.detail_address || '',
-        memo: shippingInfo.memo
-      });
-      
-      // 그래도 필수 정보가 없으면 알림
-      if (!user.name || (!user.phone_number && !user.phone) || !user.address) {
-        alert('배송지 정보를 모두 입력해주세요. 마이페이지에서 기본 주소를 설정해주세요.');
-        return;
-      }
-    } else if (isShippingEmpty) {
-      alert('배송지 정보를 모두 입력해주세요.');
-      return;
-    }
+    setOrderProcessing(true);
+    setOrderError(null);
     
     try {
-      setLoading(true);
+      console.log('주문 처리 시작');
       
-      // 토큰 확인
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('로그인이 필요합니다.');
-        router.push('/auth');
-        return;
+      const authHeader = getAuthHeader();
+      if (!authHeader.Authorization) {
+        throw new Error('로그인이 필요합니다. 로그인 후 다시 시도해주세요.');
       }
       
-      // 사용자 ID 확인
-      const userId = localStorage.getItem('userId');
+      const userId = user?.id || localStorage.getItem('userId');
       if (!userId) {
-        // 토큰에서 사용자 ID 추출 시도
-        try {
-          const tokenData = JSON.parse(token);
-          if (tokenData && tokenData.user && tokenData.user.id) {
-            localStorage.setItem('userId', tokenData.user.id);
-          } else {
-            alert('로그인이 필요합니다.');
-            router.push('/auth');
-            return;
-          }
-        } catch (parseError) {
-          console.error('토큰 파싱 오류:', parseError);
-          localStorage.removeItem('token');
-          alert('로그인이 필요합니다.');
-          router.push('/auth');
-          return;
-        }
+        throw new Error('사용자 정보를 찾을 수 없습니다.');
       }
       
+      // 한글 등이 포함된 문자열을 안전하게 처리
+      const safeString = (str: string) => {
+        if (!str) return '';
+        // 비 ASCII 문자를 포함하는지 확인
+        return str.normalize('NFC');
+      };
+      
+      // 주문 데이터 구성
       const orderData = {
-        userId: localStorage.getItem('userId'), // 다시 가져와서 사용
-        items,
-        shipping: shippingInfo,
+        userId: userId,
+        items: items.map(item => ({
+          productId: item.productId,
+          name: safeString(item.name),
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image,
+          selectedOptions: item.option ? { 
+            name: safeString(item.option.name), 
+            value: safeString(item.option.value) 
+          } : null
+        })),
+        shipping: {
+          name: safeString(shippingInfo.name),
+          phone: shippingInfo.phone,
+          address: safeString(shippingInfo.address),
+          detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
+          memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
+        },
         payment: {
           method: paymentMethod,
           totalAmount: calculateTotalPrice() + calculateTotalShippingFee()
         }
       };
       
-      // 주문 API 호출
-      const response = await fetch('/api/orders', {
+      // JSON 문자열로 변환 후 다시 파싱하여 인코딩 문제 방지
+      const orderDataString = JSON.stringify(orderData);
+      const orderDataParsed = JSON.parse(orderDataString);
+      
+      console.log('주문 데이터:', orderDataParsed);
+      
+      // 주문 생성 API 호출
+      const orderResponse = await fetch('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeader
         },
-        body: JSON.stringify(orderData),
+        body: JSON.stringify({ orderData: orderDataParsed })
       });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: '주문 처리 중 오류가 발생했습니다.' }));
-        throw new Error(errorData.message || '주문 처리 중 오류가 발생했습니다.');
+      console.log('주문 API 응답 상태:', orderResponse.status);
+      
+      if (!orderResponse.ok) {
+        const errorData = await orderResponse.json();
+        console.error('주문 API 에러 응답:', errorData);
+        throw new Error(errorData.error || errorData.message || '주문 생성에 실패했습니다.');
       }
       
-      const data = await response.json();
+      const orderResult = await orderResponse.json();
+      console.log('주문 생성 결과:', orderResult);
       
-      // 주문 성공 처리
-      localStorage.removeItem('checkoutItems');
-      alert('주문이 완료되었습니다.');
-      router.push(`/mypage/orders/${data.orderId}`);
+      // 결제 방법에 따른 처리
+      if (paymentMethod === 'kakao') {
+        console.log('카카오페이 결제 시작');
+        // 카카오페이 결제 프로세스
+        const kakaoPayData = {
+          orderId: orderResult.orderId,
+          totalAmount: calculateTotalPrice() + calculateTotalShippingFee(),
+          productName: items.length > 1 
+            ? safeString(`${items[0].name} 외 ${items.length - 1}건`)
+            : safeString(items[0].name)
+        };
+        
+        console.log('카카오페이 요청 데이터:', kakaoPayData);
+        
+        const kakaoResponse = await fetch('/api/payments/kakao/ready', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader
+          },
+          body: JSON.stringify(kakaoPayData)
+        });
+        
+        console.log('카카오페이 API 응답 상태:', kakaoResponse.status);
+        
+        if (!kakaoResponse.ok) {
+          const errorData = await kakaoResponse.json();
+          console.error('카카오페이 API 에러 응답:', errorData);
+          throw new Error(errorData.error || errorData.message || '카카오페이 결제 요청에 실패했습니다.');
+        }
+        
+        const kakaoResult = await kakaoResponse.json();
+        console.log('카카오페이 요청 결과:', kakaoResult);
+        
+        // 체크아웃 정보 저장 (결제 성공 후 처리를 위함)
+        localStorage.setItem('currentOrderId', orderResult.orderId);
+        
+        // 카카오페이 결제 페이지를 팝업으로 열기
+        const width = 450;
+        const height = 650;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+        
+        const popup = window.open(
+          kakaoResult.next_redirect_pc_url,
+          'kakaopayPopup',
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
+        );
+        
+        // 카카오페이 팝업 참조 저장
+        setKakaoPayPopup(popup);
+        
+        // 결제 진행 중 표시 저장
+        localStorage.setItem('paymentPending', 'true');
+        
+        // 현재 페이지는 그대로 유지하면서 결제 진행 상태 메시지 표시
+        setOrderProcessing(true);
+        setMessage('카카오페이 결제가 진행 중입니다. 팝업 창을 확인해주세요.');
+      } else {
+        // 다른 결제 방식 처리
+        console.log('다른 결제 방식 처리');
+        localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
+        router.push(`/orders/${orderResult.orderId}/complete`);
+      }
     } catch (error) {
       console.error('주문 처리 오류:', error);
-      alert(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
+      setOrderError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
     } finally {
-      setLoading(false);
+      // paymentMethod가 kakao가 아닐 때만 orderProcessing을 false로 설정
+      // kakao 결제의 경우 메시지 이벤트에서 처리
+      if (paymentMethod !== 'kakao') {
+        setOrderProcessing(false);
+      }
     }
   };
+
+  // 배송 정보 유효성 검사
+  const validateShippingInfo = () => {
+    if (!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address) {
+      alert('배송지 정보를 모두 입력해주세요.');
+      return false;
+    }
+    return true;
+  };
+
+  // 컴포넌트 언마운트 시 또는 페이지 언로드 시 결제 취소 처리
+  useEffect(() => {
+    // 페이지 언로드 이벤트에 결제 취소 처리 추가
+    const handleBeforeUnload = () => {
+      const currentOrderId = localStorage.getItem('currentOrderId');
+      if (currentOrderId && orderProcessing) {
+        console.log('페이지 언로드 시 주문 취소 처리:', currentOrderId);
+        
+        // 동기적 API 호출 (페이지 종료 시 비동기 호출은 보장되지 않음)
+        try {
+          const authHeader = getAuthHeader();
+          if (authHeader.Authorization) {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `/api/orders/cancel`, false); // 동기적 호출
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Authorization', authHeader.Authorization);
+            xhr.send(JSON.stringify({ orderId: currentOrderId }));
+          }
+        } catch (e) {
+          console.error('페이지 언로드 시 주문 취소 실패:', e);
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거 및 미완료 주문 취소
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // 컴포넌트 언마운트 시에도 미완료 주문 취소
+      const currentOrderId = localStorage.getItem('currentOrderId');
+      if (currentOrderId && orderProcessing) {
+        console.log('컴포넌트 언마운트 시 주문 취소 처리:', currentOrderId);
+        const authHeader = getAuthHeader();
+        if (authHeader.Authorization) {
+          fetch(`/api/orders/cancel`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeader
+            },
+            body: JSON.stringify({ orderId: currentOrderId })
+          }).catch(err => console.error('컴포넌트 언마운트 시 주문 취소 실패:', err));
+        }
+      }
+    };
+  }, [orderProcessing]);
 
   if (loading) {
     return (
@@ -475,6 +837,47 @@ export default function CheckoutPage() {
           <Link href="/cart" className="text-green-600 hover:underline">
             장바구니로 돌아가기
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (orderProcessing && message) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
+          <h2 className="text-2xl font-bold text-center mb-6">결제 진행 중</h2>
+          <div className="flex justify-center mb-6">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
+          </div>
+          <p className="text-center text-gray-700 mb-4">{message}</p>
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 p-4 rounded-md">
+            <p className="text-center text-sm text-yellow-800 mb-2">
+              <strong>주의:</strong> 결제가 완료될 때까지 이 페이지를 닫지 마세요.
+            </p>
+            <p className="text-center text-sm text-yellow-700">
+              팝업 창이 보이지 않는 경우, 브라우저의 팝업 차단 설정을 확인하거나 아래 버튼을 클릭하세요.
+            </p>
+          </div>
+          {paymentMethod === 'kakao' && (
+            <div className="text-center">
+              <button 
+                className="bg-yellow-400 hover:bg-yellow-500 text-black py-2 px-4 rounded" 
+                onClick={() => {
+                  // 로컬 스토리지에서 현재 주문 ID 확인
+                  const currentOrderId = localStorage.getItem('currentOrderId');
+                  if (currentOrderId) {
+                    alert('카카오페이 결제 진행 중입니다. 결제를 완료해주세요.');
+                  } else {
+                    setOrderProcessing(false);
+                    setMessage('');
+                  }
+                }}
+              >
+                결제 진행 확인
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

@@ -5,7 +5,12 @@ import { v4 as uuidv4 } from 'uuid';
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 interface OrderItem {
   id: string;
@@ -43,131 +48,220 @@ interface OrderData {
 
 export async function POST(request: NextRequest) {
   try {
-    // 요청 본문에서 주문 데이터 추출
-    const orderData: OrderData = await request.json();
+    // 인증 토큰 확인
+    const authHeader = request.headers.get('Authorization');
     
-    // 사용자 ID 확인
-    const userId = orderData.userId;
-    if (!userId) {
-      return NextResponse.json({ message: '사용자 ID가 필요합니다.' }, { status: 400 });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: '인증 헤더가 필요합니다.' }, { status: 401 });
     }
     
-    // 사용자 존재 여부 확인
+    // Bearer 토큰에서 사용자 ID 추출
+    const userId = authHeader.split(' ')[1].trim();
+    
+    if (!userId) {
+      return NextResponse.json({ error: '유효하지 않은 토큰입니다.' }, { status: 401 });
+    }
+    
+    // Validate UUID format
+    const isValidUUID = (id: string) => {
+      const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return pattern.test(id);
+    };
+    
+    if (!isValidUUID(userId)) {
+      return NextResponse.json({ error: '유효하지 않은 사용자 ID 형식입니다.' }, { status: 401 });
+    }
+    
+    // DB에서 사용자 정보 직접 조회
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id')
+      .select('*')
       .eq('id', userId)
       .single();
-      
+    
     if (userError || !userData) {
-      console.error('사용자 정보 조회 오류:', userError);
-      return NextResponse.json({ message: '유효하지 않은 사용자입니다.' }, { status: 401 });
+      console.error('사용자 조회 오류:', userError);
+      return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 });
     }
     
-    // 주문 데이터 유효성 검사
+    // 요청 본문 파싱
+    const { orderData } = await request.json();
+    
+    if (!orderData) {
+      return NextResponse.json({ error: '주문 데이터가 필요합니다.' }, { status: 400 });
+    }
+    
+    // orderData의 userId와 인증된 사용자 ID가 일치하는지 확인
+    if (orderData.userId !== userId) {
+      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
+    }
+
+    console.log('주문 데이터 수신:', {
+      사용자ID: userId,
+      주문데이터: orderData
+    });
+
     if (!orderData.items || orderData.items.length === 0) {
-      return NextResponse.json({ message: '주문 상품이 없습니다.' }, { status: 400 });
+      return NextResponse.json(
+        { message: '주문할 상품이 없습니다.' },
+        { status: 400 }
+      );
     }
-    
-    if (!orderData.shipping.name || !orderData.shipping.phone || !orderData.shipping.address) {
-      return NextResponse.json({ message: '배송 정보가 불완전합니다.' }, { status: 400 });
+
+    if (!orderData.shipping || !orderData.shipping.name || !orderData.shipping.phone || !orderData.shipping.address) {
+      return NextResponse.json(
+        { message: '배송 정보가 필요합니다.' },
+        { status: 400 }
+      );
     }
-    
-    // 주문 ID 생성
-    const orderId = uuidv4();
-    const orderDate = new Date().toISOString();
-    
-    // 주문 정보 저장
-    const { error: orderError } = await supabase
+
+    if (!orderData.payment || !orderData.payment.totalAmount) {
+      return NextResponse.json(
+        { message: '결제 정보가 필요합니다.' },
+        { status: 400 }
+      );
+    }
+
+    // 주문 생성
+    const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
-        id: orderId,
         user_id: userId,
-        order_date: orderDate,
         status: 'pending',
         total_amount: orderData.payment.totalAmount,
-        payment_method: orderData.payment.method,
         shipping_name: orderData.shipping.name,
         shipping_phone: orderData.shipping.phone,
         shipping_address: orderData.shipping.address,
-        shipping_detail_address: orderData.shipping.detailAddress,
-        shipping_memo: orderData.shipping.memo
-      });
-    
+        shipping_detail_address: orderData.shipping.detailAddress || null,
+        shipping_memo: orderData.shipping.memo || null,
+        payment_method: 'kakao',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
     if (orderError) {
       console.error('주문 생성 오류:', orderError);
-      return NextResponse.json({ message: '주문을 처리할 수 없습니다.' }, { status: 500 });
+      return NextResponse.json(
+        { error: '주문 생성에 실패했습니다.' },
+        { status: 500 }
+      );
     }
-    
-    // 주문 상품 정보 저장
-    const orderItems = orderData.items.map(item => ({
-      id: uuidv4(),
-      order_id: orderId,
+
+    // 주문 상품 저장
+    const orderItems = orderData.items.map((item: any) => ({
+      order_id: order.id,
       product_id: item.productId,
-      product_name: item.name,
       quantity: item.quantity,
       price: item.price,
-      option_name: item.option?.name || null,
-      option_value: item.option?.value || null,
-      shipping_fee: item.shippingFee,
-      image: item.image
+      options: item.selectedOptions ? item.selectedOptions : null
     }));
-    
+
+    // 상품 ID 유효성 검사
+    for (const item of orderItems) {
+      console.log('상품 조회 시도:', item.product_id);
+      
+      // products 테이블에서 상품 조회
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', item.product_id)
+        .single();
+
+      if (productError) {
+        console.error('products 테이블 조회 오류:', productError);
+        console.error('상품 ID:', item.product_id);
+      }
+
+      if (!product) {
+        console.error('상품을 찾을 수 없음:', item.product_id);
+        // 주문 삭제
+        await supabase
+          .from('orders')
+          .delete()
+          .eq('id', order.id);
+        return NextResponse.json(
+          { message: '유효하지 않은 상품이 포함되어 있습니다.' },
+          { status: 400 }
+        );
+      }
+
+      console.log('찾은 상품:', product);
+    }
+
     const { error: itemsError } = await supabase
       .from('order_items')
       .insert(orderItems);
-    
+
     if (itemsError) {
       console.error('주문 상품 저장 오류:', itemsError);
-      // 주문 삭제 (롤백)
-      await supabase.from('orders').delete().eq('id', orderId);
-      return NextResponse.json({ message: '주문 상품을 처리할 수 없습니다.' }, { status: 500 });
+      // 주문 삭제
+      await supabase
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+      return NextResponse.json(
+        { message: '주문 상품 저장에 실패했습니다.' },
+        { status: 500 }
+      );
     }
-    
-    // 재고 업데이트 로직 (가정: 각 상품마다 재고가 있음)
-    for (const item of orderData.items) {
+
+    // 상품 재고 업데이트
+    for (const item of orderItems) {
+      console.log('재고 업데이트 시도:', item.product_id);
+      
       // 상품 정보 조회
-      const { data: productData } = await supabase
+      const { data: product, error: productError } = await supabase
         .from('products')
-        .select('stock, options')
-        .eq('id', item.productId)
+        .select('stock')
+        .eq('id', item.product_id)
         .single();
-      
-      if (!productData) continue;
-      
-      if (item.option) {
-        // 옵션이 있는 경우 해당 옵션의 재고 감소
-        const options = productData.options || [];
-        const updatedOptions = options.map((opt: any) => {
-          if (opt.name === item.option?.name && opt.value === item.option?.value) {
-            return { ...opt, stock: Math.max(0, opt.stock - item.quantity) };
-          }
-          return opt;
-        });
-        
+
+      if (productError || !product) {
+        console.error('상품 조회 오류:', productError);
+        // 주문 삭제
         await supabase
-          .from('products')
-          .update({ options: updatedOptions })
-          .eq('id', item.productId);
-      } else {
-        // 기본 재고 감소
-        const newStock = Math.max(0, productData.stock - item.quantity);
+          .from('orders')
+          .delete()
+          .eq('id', order.id);
+        return NextResponse.json(
+          { message: '상품 정보를 찾을 수 없습니다.' },
+          { status: 500 }
+        );
+      }
+
+      // 재고 업데이트
+      const { error: stockError } = await supabase
+        .from('products')
+        .update({ stock: product.stock - item.quantity })
+        .eq('id', item.product_id);
+
+      if (stockError) {
+        console.error('재고 업데이트 오류:', stockError);
+        // 주문 삭제
         await supabase
-          .from('products')
-          .update({ stock: newStock })
-          .eq('id', item.productId);
+          .from('orders')
+          .delete()
+          .eq('id', order.id);
+        return NextResponse.json(
+          { message: '재고 업데이트에 실패했습니다.' },
+          { status: 500 }
+        );
       }
     }
-    
-    // 응답 반환
-    return NextResponse.json({ 
-      message: '주문이 성공적으로 처리되었습니다.',
-      orderId
-    }, { status: 201 });
-    
+
+    return NextResponse.json({
+      orderId: order.id,
+      message: '주문이 성공적으로 생성되었습니다.'
+    });
+
   } catch (error) {
-    console.error('주문 처리 오류:', error);
-    return NextResponse.json({ message: '서버 오류가 발생했습니다.' }, { status: 500 });
+    console.error('주문 처리 중 오류:', error);
+    return NextResponse.json(
+      { message: '주문 처리 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 }
 
@@ -315,5 +409,55 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('주문 목록 조회 오류:', error);
     return NextResponse.json({ message: '서버 오류가 발생했습니다.' }, { status: 500 });
+  }
+}
+
+// 주문 삭제
+export async function DELETE(request: NextRequest) {
+  try {
+    const { orderId } = await request.json();
+
+    if (!orderId) {
+      return NextResponse.json(
+        { message: '주문 ID가 필요합니다.' },
+        { status: 400 }
+      );
+    }
+
+    // 주문 상품 삭제
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('order_id', orderId);
+
+    if (itemsError) {
+      console.error('주문 상품 삭제 오류:', itemsError);
+      return NextResponse.json(
+        { message: '주문 상품 삭제에 실패했습니다.' },
+        { status: 500 }
+      );
+    }
+
+    // 주문 삭제
+    const { error: orderError } = await supabase
+      .from('orders')
+      .delete()
+      .eq('id', orderId);
+
+    if (orderError) {
+      console.error('주문 삭제 오류:', orderError);
+      return NextResponse.json(
+        { message: '주문 삭제에 실패했습니다.' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ message: '주문이 성공적으로 삭제되었습니다.' });
+  } catch (error) {
+    console.error('주문 삭제 중 오류:', error);
+    return NextResponse.json(
+      { message: '주문 삭제 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 } 

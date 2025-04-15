@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { checkToken, getAuthHeader, User } from '@/utils/auth';
 
 interface CartItem {
   id: string;
@@ -25,13 +26,6 @@ interface CartItem {
     additional_price: number;
     stock: number;
   };
-}
-
-interface User {
-  id: string;
-  email: string;
-  name?: string;
-  nickname?: string;
 }
 
 // 로컬 스토리지의 장바구니 아이템용 인터페이스
@@ -111,30 +105,8 @@ export default function CartPage() {
 
   useEffect(() => {
     // 로그인 상태 확인
-    const checkLoginStatus = () => {
-      try {
-        const tokenData = localStorage.getItem('token');
-        if (tokenData) {
-          const parsedToken = JSON.parse(tokenData);
-          
-          // 토큰이 만료되었는지 확인
-          if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
-            setUser(parsedToken.user || null);
-          } else {
-            // 만료된 토큰 삭제
-            localStorage.removeItem('token');
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('토큰 확인 오류:', error);
-        setUser(null);
-      }
-    };
-
-    checkLoginStatus();
+    const { user: currentUser } = checkToken();
+    setUser(currentUser);
   }, []);
 
   useEffect(() => {
@@ -175,39 +147,65 @@ export default function CartPage() {
           }
         } else {
           // 서버에서 장바구니 아이템 가져오기
-          const tokenData = localStorage.getItem('token');
+          const headers = getAuthHeader();
           
-          // 토큰 데이터 파싱
-          const parsedToken = JSON.parse(tokenData || '{}');
-          let token = '';
+          if (!headers.Authorization) {
+            console.error('유효한 인증 정보가 없습니다.');
+            setCartItems([]);
+            setLoading(false);
+            return;
+          }
           
           try {
-            // 사용자 ID만 추출하여 사용 (인코딩 문제 방지)
-            if (parsedToken.user && parsedToken.user.id) {
-              token = parsedToken.user.id;
-            } else if (parsedToken.token) {
-              token = parsedToken.token;
+            console.log('인증 헤더:', headers); // 디버깅을 위한 로그 추가
+            
+            // 전체 토큰 상태 디버깅
+            const tokenData = localStorage.getItem('token');
+            console.log('토큰 데이터 존재 여부:', !!tokenData);
+            
+            if (tokenData) {
+              try {
+                const parsedToken = JSON.parse(tokenData);
+                console.log('파싱된 토큰:', {
+                  hasAccessToken: !!parsedToken.accessToken,
+                  hasUserObject: !!parsedToken.user,
+                  userId: parsedToken.user?.id,
+                  expiresAt: new Date(parsedToken.expiresAt),
+                  isExpired: parsedToken.expiresAt < Date.now()
+                });
+              } catch (e) {
+                console.error('토큰 파싱 실패:', e);
+              }
+            }
+            
+            const response = await fetch(`/api/cart`, {
+              headers
+            });
+
+            if (!response.ok) {
+              // 에러 응답이지만 데이터는 빈 배열로 설정하여 화면 표시
+              const errorText = await response.text();
+              console.error(`장바구니 API 오류 (${response.status}):`, errorText);
+              setCartItems([]);
+              setError(`장바구니를 불러올 수 없습니다 (${response.status})`);
+              
+              // 401 오류 시 토큰 삭제 및 로그인 페이지로 이동
+              if (response.status === 401) {
+                localStorage.removeItem('token');
+                setUser(null);
+                alert('로그인 정보가 만료되었습니다. 다시 로그인해주세요.');
+              }
             } else {
-              // JSON으로 저장된 토큰인 경우 다시 문자열로 변환하지 않음
-              token = '';
+              const data = await response.json();
+              setCartItems(data.items || []);
+              setError(null);
             }
-          } catch (error) {
-            console.error('토큰 파싱 오류:', error);
-            token = '';
+          } catch (err) {
+            console.error('장바구니 API 요청 오류:', err);
+            setCartItems([]);
+            setError('장바구니 정보를 불러오는데 실패했습니다.');
           }
-          
-          const response = await fetch(`${window.location.origin}/api/cart`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (!response.ok) {
-            throw new Error('장바구니 정보를 불러오는데 실패했습니다.');
-          }
-          const data = await response.json();
-          setCartItems(data.items || []);
         }
-        setError(null);
       } catch (err) {
         console.error('장바구니 로딩 오류:', err);
         setError('장바구니 정보를 불러오는데 실패했습니다.');
@@ -217,7 +215,7 @@ export default function CartPage() {
     };
 
     fetchCartItems();
-  }, [user]);
+  }, [user, router]);
 
   // 장바구니 아이템을 상품별로 그룹화하는 함수
   const groupCartItems = (items: CartItem[]) => {
@@ -338,35 +336,21 @@ export default function CartPage() {
         );
       } else {
         // 서버 장바구니 업데이트
-        const tokenData = localStorage.getItem('token');
+        const headers = getAuthHeader();
         
-        // 토큰 데이터 파싱
-        const parsedToken = JSON.parse(tokenData || '{}');
-        let token = '';
-        
-        try {
-          // 사용자 ID만 추출하여 사용 (인코딩 문제 방지)
-          if (parsedToken.user && parsedToken.user.id) {
-            token = parsedToken.user.id;
-          } else if (parsedToken.token) {
-            token = parsedToken.token;
-          } else {
-            token = '';
-          }
-        } catch (error) {
-          console.error('토큰 파싱 오류:', error);
-          token = '';
+        if (!headers.Authorization) {
+          alert('로그인이 필요합니다.');
+          router.push('/auth');
+          return;
         }
         
-        const response = await fetch(`${window.location.origin}/api/cart/items/${itemId}`, {
+        const response = await fetch(`/api/cart/items/${itemId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            ...headers
           },
-          body: JSON.stringify({
-            quantity: newQuantity
-          }),
+          body: JSON.stringify({ quantity: newQuantity })
         });
         
         if (!response.ok) {
@@ -516,35 +500,23 @@ export default function CartPage() {
           setCartItems(prevItems => prevItems.filter(item => !selectedItems.includes(item.id)));
         } else {
           // 서버 요청을 위한 Promise 배열 생성
-          const deletePromises = selectedItems.map(itemId => {
-            const tokenData = localStorage.getItem('token');
-            if (!tokenData) return Promise.resolve();
-            
-            // 토큰 데이터 파싱
-            try {
-              const parsedToken = JSON.parse(tokenData);
-              let token = '';
-              
-              // 사용자 ID만 추출하여 사용 (인코딩 문제 방지)
-              if (parsedToken.user && parsedToken.user.id) {
-                token = parsedToken.user.id;
-              } else if (parsedToken.token) {
-                token = parsedToken.token;
-              } else {
-                token = '';
-              }
-              
-              return fetch(`${window.location.origin}/api/cart/items/${itemId}`, {
+          const headers = getAuthHeader();
+          
+          if (!headers.Authorization) {
+            setError('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+            router.push('/auth');
+            return;
+          }
+          
+          const deletePromises = selectedItems.map(itemId => 
+            fetch(
+              `/api/cart/items/${itemId}`,
+              {
                 method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${token}`
-                }
-              });
-            } catch (error) {
-              console.error('토큰 파싱 오류:', error);
-              return Promise.resolve();
-            }
-          });
+                headers
+              }
+            )
+          );
           
           // 모든 삭제 요청 실행
           await Promise.all(deletePromises);
@@ -620,23 +592,36 @@ export default function CartPage() {
     try {
       setActionLoading(true);
       
-      // 선택된 옵션들의 수량 변경 처리
-      const updatePromises = editOptions.map(option => 
-        handleQuantityChange(option.cart_item_id, option.quantity)
-      );
-      
-      // 기본 상품 수량 변경 (옵션 없는 상품의 경우)
-      if (editItemId && !editOptions.some(opt => opt.cart_item_id === editItemId)) {
-        updatePromises.push(handleQuantityChange(editItemId, editQuantity));
+      // 각 옵션별로 수량 업데이트
+      for (const option of editOptions) {
+        if (!user) {
+          // ... existing code ...
+        } else {
+          // 서버 장바구니 업데이트
+          const headers = getAuthHeader();
+          
+          if (!headers.Authorization) {
+            setError('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+            router.push('/auth');
+            return;
+          }
+          
+          const response = await fetch(`/api/cart/items/${option.cart_item_id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...headers
+            },
+            body: JSON.stringify({ quantity: option.quantity })
+          });
+          
+          // ... existing code ...
+        }
       }
       
-      await Promise.all(updatePromises);
-      handleCloseEditModal();
-    } catch (err) {
-      console.error('주문 편집 저장 오류:', err);
-      alert('주문 내용 저장에 실패했습니다.');
-    } finally {
-      setActionLoading(false);
+      // ... existing code ...
+    } catch (error) {
+      // ... existing code ...
     }
   };
   

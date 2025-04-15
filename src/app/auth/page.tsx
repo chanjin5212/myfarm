@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LOGIN_STATUS_CHANGE } from '@/components/Header';
+import { triggerLoginEvent } from '@/utils/auth';
 import { Button, Input } from '@/components/ui/CommonStyles';
 
 export default function AuthPage() {
@@ -43,13 +43,14 @@ export default function AuthPage() {
         user: data.user, // 서버에서 받은 사용자 정보
         expiresAt: Date.now() + 3600000 // 1시간 후 만료
       };
+      
+      // 토큰 정보 로깅 추가
+      console.log('일반 로그인 토큰 정보:', token);
+      
       localStorage.setItem('token', JSON.stringify(token));
       
-      // 사용자 ID 저장 (API 호출을 위한 간편한 방법)
-      localStorage.setItem('userId', data.user.id);
-      
       // 로그인 상태 변경 이벤트 발생
-      window.dispatchEvent(new Event(LOGIN_STATUS_CHANGE));
+      triggerLoginEvent();
       
       alert('로그인에 성공했습니다!');
       router.push('/');
