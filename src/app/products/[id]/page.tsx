@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getAuthHeader, checkToken } from '@/utils/auth';
 
 interface ProductDetail {
   id: string;
@@ -21,6 +22,7 @@ interface ProductDetail {
   is_organic?: boolean;
   created_at: string;
   updated_at: string;
+  images?: ProductImage[];
 }
 
 interface ProductImage {
@@ -132,43 +134,34 @@ export default function ProductDetailPage() {
       return;
     }
     
+    // 선택한 옵션 찾기
+    const option = selectedOptions.find(opt => opt.optionId === optionId);
+    if (!option) return;
+    
+    // 재고 확인
+    if (newQuantity > option.stock) {
+      alert(`최대 ${option.stock}개까지 구매 가능합니다.`);
+      return;
+    }
+    
     // 수량 변경 로딩 상태 시작
     setChangingOptionId(optionId);
     
-    try {
-      // 선택한 옵션 찾기
-      const option = selectedOptions.find(opt => opt.optionId === optionId);
-      if (!option) return;
-      
-      // 재고 확인
-      if (newQuantity > option.stock) {
-        alert(`최대 ${option.stock}개까지 구매 가능합니다.`);
-        return;
-      }
-      
-      // 수량 업데이트
-      setSelectedOptions(
-        selectedOptions.map(opt => 
-          opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
-        )
-      );
-    } finally {
-      // 수량 변경 로딩 상태 종료
-      setTimeout(() => {
-        setChangingOptionId(null);
-      }, 300);
-    }
+    // 수량 업데이트
+    setSelectedOptions(
+      selectedOptions.map(opt => 
+        opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
+      )
+    );
+    
+    // 로딩 상태 즉시 해제
+    setChangingOptionId(null);
   };
 
   const handleRemoveOption = (optionId: string) => {
     setRemovingOptionId(optionId);
-    try {
-      setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
-    } finally {
-      setTimeout(() => {
-        setRemovingOptionId(null);
-      }, 300);
-    }
+    setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
+    setRemovingOptionId(null);
   };
 
   const handleBaseQuantityChange = (newQuantity: number) => {
@@ -177,19 +170,14 @@ export default function ProductDetailPage() {
       return;
     }
     
-    setChangingBaseQuantity(true);
-    
-    try {
-      if (productDetails && productDetails.stock && newQuantity > productDetails.stock) {
-        alert(`최대 ${productDetails.stock}개까지 구매 가능합니다.`);
-        return;
-      }
-      setQuantity(newQuantity);
-    } finally {
-      setTimeout(() => {
-        setChangingBaseQuantity(false);
-      }, 300);
+    if (productDetails && productDetails.stock && newQuantity > productDetails.stock) {
+      alert(`최대 ${productDetails.stock}개까지 구매 가능합니다.`);
+      return;
     }
+    
+    setChangingBaseQuantity(true);
+    setQuantity(newQuantity);
+    setChangingBaseQuantity(false);
   };
 
   const handleOptionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -258,15 +246,14 @@ export default function ProductDetailPage() {
       // 로딩 상태 시작
       setIsAddingToCart(true);
       
-      // 로그인 여부 확인 (로컬스토리지에서 토큰 가져오기)
-      const tokenData = localStorage.getItem('token');
-      const isLoggedIn = tokenData !== null;
+      // 로그인 여부 확인
+      const { isLoggedIn } = checkToken();
       
       if (isLoggedIn) {
         // 로그인 상태라면 서버 API 호출
         try {
-          // 토큰 전체를 인코딩하여 전송
-          const token = encodeURIComponent(tokenData);
+          // 인증 헤더 가져오기
+          const authHeader = getAuthHeader();
           
           if (selectedOptions.length > 0) {
             // 옵션 있는 상품
@@ -278,7 +265,7 @@ export default function ProductDetailPage() {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
+                  ...authHeader
                 },
                 body: JSON.stringify({
                   product_id: productDetails.id,
@@ -295,7 +282,7 @@ export default function ProductDetailPage() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                ...authHeader
               },
               body: JSON.stringify({
                 product_id: productDetails.id,
@@ -387,21 +374,79 @@ export default function ProductDetailPage() {
       return;
     }
     
+    if (!productDetails) {
+      alert('상품 정보를 찾을 수 없습니다.');
+      return;
+    }
+    
     setIsBuyingNow(true);
     
-    // 장바구니에 추가 후 checkout 페이지로 이동
-    handleAddToCart()
-      .then(() => {
-        // 성공 팝업 닫기
-        setCartSuccessPopup(false);
-        router.push('/checkout');
-      })
-      .catch((error) => {
-        console.error('즉시 구매 실패:', error);
-      })
-      .finally(() => {
-        setIsBuyingNow(false);
-      });
+    try {
+      // 바로 구매 상품 정보 생성
+      let checkoutItems = [];
+      
+      if (options.length > 0) {
+        // 옵션이 있는 상품
+        checkoutItems = selectedOptions.map(option => {
+          const basePrice = productDetails.discount_price || productDetails.price;
+          const totalPrice = basePrice + option.additionalPrice;
+          
+          return {
+            product_id: productDetails.id,
+            product_option_id: option.optionId,
+            quantity: option.quantity,
+            product: {
+              id: productDetails.id,
+              name: productDetails.name,
+              price: productDetails.price,
+              discount_price: productDetails.discount_price,
+              thumbnail_url: images.length > 0 ? images[0].image_url : productDetails.thumbnail_url,
+              stock: productDetails.stock
+            },
+            product_option: {
+              id: option.optionId,
+              option_name: option.optionName,
+              option_value: option.optionValue,
+              additional_price: option.additionalPrice,
+              stock: option.stock
+            },
+            total_price: totalPrice * option.quantity, // 옵션 가격을 포함한 총 금액
+            option_price: totalPrice // 단일 옵션 가격 (할인가 + 추가가격)
+          };
+        });
+      } else {
+        // 옵션이 없는 상품
+        const unitPrice = productDetails.discount_price || productDetails.price;
+        
+        checkoutItems = [{
+          product_id: productDetails.id,
+          product_option_id: null,
+          quantity: quantity,
+          product: {
+            id: productDetails.id,
+            name: productDetails.name,
+            price: productDetails.price,
+            discount_price: productDetails.discount_price,
+            thumbnail_url: images.length > 0 ? images[0].image_url : productDetails.thumbnail_url,
+            stock: productDetails.stock
+          },
+          product_option: null,
+          total_price: unitPrice * quantity, // 총 금액
+          option_price: unitPrice // 단일 상품 가격 (할인가)
+        }];
+      }
+      
+      // 로컬 스토리지에 체크아웃 상품 정보 저장
+      localStorage.setItem('directCheckoutItems', JSON.stringify(checkoutItems));
+      
+      // 체크아웃 페이지로 이동
+      router.push('/checkout?direct=true');
+    } catch (error) {
+      console.error('바로 구매하기 실패:', error);
+      alert('주문 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsBuyingNow(false);
+    }
   };
 
   // 장바구니로 이동 함수
@@ -608,13 +653,21 @@ export default function ProductDetailPage() {
                 disabled={isAddingToCart || isBuyingNow}
               >
                 <option value="">옵션을 선택하세요</option>
-                {options.map((option) => (
-                  <option key={option.id} value={option.id} disabled={option.stock < 1 || isAddingToCart || isBuyingNow}>
-                    {option.option_name}: {option.option_value} 
-                    {option.additional_price > 0 ? ` (+${option.additional_price.toLocaleString()}원)` : ''} 
-                    {option.stock < 1 ? ' (품절)' : ` (재고: ${option.stock}개)`}
-                  </option>
-                ))}
+                {options.map((option) => {
+                  const basePrice = productDetails ? (productDetails.discount_price || productDetails.price) : 0;
+                  const totalOptionPrice = basePrice + option.additional_price;
+                  
+                  return (
+                    <option key={option.id} value={option.id} disabled={option.stock < 1 || isAddingToCart || isBuyingNow}>
+                      {option.option_name}: {option.option_value} 
+                      {option.additional_price > 0 
+                        ? ` (${totalOptionPrice.toLocaleString()}원 = 기본가 + ${option.additional_price.toLocaleString()}원)` 
+                        : ` (${totalOptionPrice.toLocaleString()}원)`
+                      } 
+                      {option.stock < 1 ? ' (품절)' : ` (재고: ${option.stock}개)`}
+                    </option>
+                  );
+                })}
               </select>
               
               {/* 선택된 옵션 목록 */}
@@ -622,15 +675,28 @@ export default function ProductDetailPage() {
                 <div className="mt-5 border-t pt-4">
                   <h3 className="text-lg font-medium mb-3">선택된 옵션</h3>
                   {selectedOptions.map((option) => (
-                    <div key={option.optionId} className="flex items-center justify-between border p-3 mb-2 rounded bg-gray-50">
-                      <div>
-                        <p className="font-medium">{option.optionName}: {option.optionValue}</p>
-                        <p className="text-sm text-gray-600">
-                          {(option.price + option.additionalPrice).toLocaleString()}원
-                        </p>
+                    <div key={option.optionId} className="flex flex-col border p-3 mb-2 rounded bg-gray-50">
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <p className="font-medium">{option.optionName}: {option.optionValue}</p>
+                          <p className="text-sm text-gray-600">
+                            {(option.price + option.additionalPrice).toLocaleString()}원 
+                            {option.additionalPrice > 0 ? ` (기본가 + ${option.additionalPrice.toLocaleString()}원)` : ''}
+                          </p>
+                        </div>
+                        <button
+                          className="text-gray-500 hover:text-red-500 p-1 bg-gray-200 hover:bg-gray-300 rounded-full h-6 w-6 flex items-center justify-center disabled:opacity-50"
+                          onClick={() => handleRemoveOption(option.optionId)}
+                          disabled={removingOptionId === option.optionId || isAddingToCart || isBuyingNow}
+                          aria-label="옵션 삭제"
+                        >
+                          {removingOptionId === option.optionId ? (
+                            <span className="inline-block w-3 h-3 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                          ) : 'X'}
+                        </button>
                       </div>
-                      <div className="flex items-center">
-                        <div className="flex items-center border rounded mr-2">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center border rounded">
                           <button
                             className="px-2 py-1 hover:bg-gray-200 disabled:opacity-50"
                             onClick={() => handleQuantityChange(option.optionId, option.quantity - 1)}
@@ -659,16 +725,9 @@ export default function ProductDetailPage() {
                             ) : '+'}
                           </button>
                         </div>
-                        <button
-                          className="text-gray-500 hover:text-red-500 p-1 bg-gray-200 hover:bg-gray-300 rounded-full h-6 w-6 flex items-center justify-center disabled:opacity-50"
-                          onClick={() => handleRemoveOption(option.optionId)}
-                          disabled={removingOptionId === option.optionId || isAddingToCart || isBuyingNow}
-                          aria-label="옵션 삭제"
-                        >
-                          {removingOptionId === option.optionId ? (
-                            <span className="inline-block w-3 h-3 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
-                          ) : 'X'}
-                        </button>
+                        <div className="text-green-600 font-semibold">
+                          {((option.price + option.additionalPrice) * option.quantity).toLocaleString()}원
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -686,7 +745,7 @@ export default function ProductDetailPage() {
               <label htmlFor="quantity" className="block font-semibold mb-2">
                 수량
               </label>
-              <div className="flex">
+              <div className="flex items-center">
                 <button
                   className="px-3 py-2 border border-gray-300 rounded-l-md hover:bg-gray-100 disabled:opacity-50"
                   onClick={() => handleBaseQuantityChange(quantity - 1)}
@@ -715,6 +774,9 @@ export default function ProductDetailPage() {
                     <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
                   ) : '+'}
                 </button>
+                <span className="ml-4 text-green-600 font-semibold">
+                  {((productDetails.discount_price || productDetails.price) * quantity).toLocaleString()}원
+                </span>
               </div>
             </div>
           )}

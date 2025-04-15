@@ -68,19 +68,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 먼저 사용자의 장바구니 ID 가져오기
+    // 먼저 사용자의 장바구니 ID 가져오기 (여러 장바구니가 있을 수 있으므로 maybeSingle 대신 first() 사용)
     const { data: cartData, error: cartError } = await supabaseClient
       .from('carts')
       .select('id')
       .eq('user_id', userId)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (cartError) throw cartError;
 
     // 장바구니가 없으면 빈 배열 반환
-    if (!cartData) {
+    if (!cartData || cartData.length === 0) {
       return NextResponse.json({ items: [] });
     }
+
+    const cartId = cartData[0].id;
 
     // 장바구니 아이템 가져오기
     const { data: cartItems, error: itemsError } = await supabaseClient
@@ -106,7 +109,7 @@ export async function GET(request: NextRequest) {
           stock
         )
       `)
-      .eq('cart_id', cartData.id);
+      .eq('cart_id', cartId);
 
     if (itemsError) throw itemsError;
 
@@ -137,18 +140,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { product_id, product_option_id, quantity } = body;
 
-    // 사용자의 장바구니 가져오기
+    // 사용자의 장바구니 가져오기 (여러 장바구니가 있을 수 있으므로 maybeSingle 대신 first() 사용)
     let cartId;
     const { data: cartData, error: cartError } = await supabaseClient
       .from('carts')
       .select('id')
       .eq('user_id', userId)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (cartError) throw cartError;
 
     // 장바구니가 없으면 새로 생성
-    if (!cartData) {
+    if (!cartData || cartData.length === 0) {
       const { data: newCart, error: createCartError } = await supabaseClient
         .from('carts')
         .insert([{ user_id: userId }])
@@ -158,24 +162,24 @@ export async function POST(request: NextRequest) {
       if (createCartError) throw createCartError;
       cartId = newCart.id;
     } else {
-      cartId = cartData.id;
+      cartId = cartData[0].id;
     }
 
     // 중복된 상품이 있는지 확인
-    const { data: existingItem, error: checkError } = await supabaseClient
+    const { data: existingItems, error: checkError } = await supabaseClient
       .from('cart_items')
       .select('id, quantity')
       .eq('cart_id', cartId)
       .eq('product_id', product_id)
-      .eq('product_option_id', product_option_id || null)
-      .maybeSingle();
+      .eq('product_option_id', product_option_id || null);
 
     if (checkError) throw checkError;
 
     let resultData;
     
-    if (existingItem) {
+    if (existingItems && existingItems.length > 0) {
       // 이미 있는 상품이면 수량 업데이트
+      const existingItem = existingItems[0];
       const { data: updatedItem, error: updateError } = await supabaseClient
         .from('cart_items')
         .update({ quantity: existingItem.quantity + quantity })

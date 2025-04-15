@@ -32,8 +32,12 @@ interface CartItem {
   option?: {
     name: string;
     value: string;
+    additional_price: number;
   };
   shippingFee: number;
+  originalPrice: number;
+  additionalPrice: number;
+  totalPrice: number;
 }
 
 interface ShippingAddress {
@@ -414,25 +418,78 @@ export default function CheckoutPage() {
   const loadCheckoutItems = async () => {
     setLoading(true);
     try {
-      // 로컬 스토리지에서 체크아웃 아이템 가져오기
-      const checkoutItems = localStorage.getItem('checkoutItems');
-      if (!checkoutItems) {
-        router.push('/cart');
-        return;
-      }
-
-      try {
-        const parsedItems = JSON.parse(checkoutItems);
-        // 데이터 유효성 검사
-        if (Array.isArray(parsedItems)) {
-          setItems(parsedItems);
-        } else {
-          throw new Error('유효하지 않은 체크아웃 아이템 형식');
+      // URL 쿼리에서 direct 파라미터 확인
+      const urlParams = new URLSearchParams(window.location.search);
+      const isDirect = urlParams.get('direct') === 'true';
+      
+      if (isDirect) {
+        // 바로 구매 아이템 가져오기
+        const directItems = localStorage.getItem('directCheckoutItems');
+        if (!directItems) {
+          setError('바로 구매 정보를 찾을 수 없습니다.');
+          router.push('/products');
+          return;
         }
-      } catch (parseError) {
-        console.error('체크아웃 아이템 파싱 오류:', parseError);
-        setError('체크아웃 아이템 형식이 올바르지 않습니다.');
-        router.push('/cart');
+        
+        try {
+          const parsedItems = JSON.parse(directItems);
+          if (Array.isArray(parsedItems)) {
+            // directCheckoutItems의 형식을 기존 체크아웃 아이템 형식으로 변환
+            const formattedItems = parsedItems.map(item => {
+              // 상품 가격 - 옵션 추가 가격이 포함된 가격 사용
+              const itemPrice = item.option_price || (item.product.discount_price || item.product.price);
+              // 옵션 추가 가격이 있는 경우
+              const additionalPrice = item.product_option ? item.product_option.additional_price : 0;
+              
+              return {
+                id: `direct_${item.product_id}${item.product_option_id ? '_' + item.product_option_id : ''}`,
+                productId: item.product_id,
+                name: item.product.name,
+                price: itemPrice, // 옵션 가격을 포함한 단일 가격
+                originalPrice: item.product.discount_price || item.product.price, // 원래 상품 가격
+                additionalPrice: additionalPrice, // 옵션 추가 가격
+                quantity: item.quantity,
+                image: item.product.thumbnail_url || '/images/default-product.png',
+                option: item.product_option ? {
+                  name: item.product_option.option_name,
+                  value: item.product_option.option_value,
+                  additional_price: additionalPrice
+                } : undefined,
+                totalPrice: item.total_price || (itemPrice * item.quantity), // 총 가격
+                shippingFee: calculateShippingFeeByPrice(itemPrice, item.quantity)
+              };
+            });
+            
+            setItems(formattedItems);
+          } else {
+            throw new Error('유효하지 않은 바로 구매 아이템 형식');
+          }
+        } catch (parseError) {
+          console.error('바로 구매 아이템 파싱 오류:', parseError);
+          setError('바로 구매 아이템 형식이 올바르지 않습니다.');
+          router.push('/products');
+        }
+      } else {
+        // 기존 장바구니 체크아웃 아이템 가져오기
+        const checkoutItems = localStorage.getItem('checkoutItems');
+        if (!checkoutItems) {
+          router.push('/cart');
+          return;
+        }
+
+        try {
+          const parsedItems = JSON.parse(checkoutItems);
+          // 데이터 유효성 검사
+          if (Array.isArray(parsedItems)) {
+            setItems(parsedItems);
+          } else {
+            throw new Error('유효하지 않은 체크아웃 아이템 형식');
+          }
+        } catch (parseError) {
+          console.error('체크아웃 아이템 파싱 오류:', parseError);
+          setError('체크아웃 아이템 형식이 올바르지 않습니다.');
+          router.push('/cart');
+        }
       }
     } catch (error) {
       console.error('체크아웃 아이템 로드 오류:', error);
@@ -440,6 +497,12 @@ export default function CheckoutPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 가격에 따른 배송비 계산 함수
+  const calculateShippingFeeByPrice = (price: number, quantity: number) => {
+    const totalPrice = price * quantity;
+    return totalPrice >= 30000 ? 0 : 3000; // 3만원 이상 구매시 무료배송
   };
 
   // 사용자의 배송지 목록 로드
@@ -637,11 +700,15 @@ export default function CheckoutPage() {
           productId: item.productId,
           name: safeString(item.name),
           price: item.price,
+          originalPrice: item.originalPrice || item.price,
+          additionalPrice: item.additionalPrice || 0,
+          totalPrice: item.totalPrice || (item.price * item.quantity),
           quantity: item.quantity,
           image: item.image,
           selectedOptions: item.option ? { 
             name: safeString(item.option.name), 
-            value: safeString(item.option.value) 
+            value: safeString(item.option.value),
+            additional_price: item.option.additional_price || 0
           } : null
         })),
         shipping: {
@@ -906,14 +973,22 @@ export default function CheckoutPage() {
                   {item.option && (
                     <p className="text-sm text-gray-600">
                       옵션: {item.option.name} - {item.option.value}
+                      {item.option.additional_price > 0 && (
+                        <span className="ml-1">(+{item.option.additional_price.toLocaleString()}원)</span>
+                      )}
                     </p>
                   )}
                   <div className="flex justify-between mt-2">
                     <p className="text-sm">
                       {item.quantity}개 × {item.price.toLocaleString()}원
+                      {item.additionalPrice > 0 && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          (기본가 {item.originalPrice.toLocaleString()}원 + 옵션 {item.additionalPrice.toLocaleString()}원)
+                        </span>
+                      )}
                     </p>
                     <p className="font-medium">
-                      {(item.price * item.quantity).toLocaleString()}원
+                      {(item.totalPrice || (item.price * item.quantity)).toLocaleString()}원
                     </p>
                   </div>
                   <p className="text-sm text-gray-600">
