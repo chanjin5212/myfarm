@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { LOGIN_STATUS_CHANGE } from '@/components/Header';
+import { LOGIN_STATUS_CHANGE } from '@/utils/auth';
 
 interface GoogleUserInfo {
   id: string;
