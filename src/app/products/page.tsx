@@ -31,9 +31,37 @@ function ProductsContent() {
   const [sortOption, setSortOption] = useState<string>('newest');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
+  // 이미지 URL 유효성 캐시
+  const [validImageUrls, setValidImageUrls] = useState<Record<string, boolean>>({});
 
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // 이미지 URL이 유효한지 확인하는 함수
+  const checkImageUrlExists = async (url: string, productId: string) => {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      // 응답이 성공적이면 이미지가 존재함
+      setValidImageUrls(prev => ({ ...prev, [productId]: response.ok }));
+      return response.ok;
+    } catch (error) {
+      // 네트워크 오류나 CORS 오류 등이 발생하면 실패로 간주
+      setValidImageUrls(prev => ({ ...prev, [productId]: false }));
+      return false;
+    }
+  };
+
+  // 제품 데이터가 로드된 후 이미지 URL 확인
+  useEffect(() => {
+    if (products.length > 0) {
+      products.forEach(product => {
+        const imageUrl = product.thumbnail_url || product.image_url;
+        if (imageUrl) {
+          checkImageUrlExists(imageUrl, product.id);
+        }
+      });
+    }
+  }, [products]);
 
   useEffect(() => {
     // 상품 로드
@@ -110,38 +138,6 @@ function ProductsContent() {
     setCurrentPage(page);
   };
 
-  const handleAddToCart = async (productId: string) => {
-    try {
-      const userId = localStorage.getItem('userId');
-      if (!userId) {
-        alert('로그인이 필요합니다.');
-        router.push('/auth');
-        return;
-      }
-
-      const response = await fetch('/api/cart', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          productId,
-          quantity: 1,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('장바구니에 추가하지 못했습니다.');
-      }
-
-      alert('상품이 장바구니에 추가되었습니다.');
-    } catch (error) {
-      console.error('장바구니 추가 오류:', error);
-      alert('장바구니에 추가하는 중 오류가 발생했습니다.');
-    }
-  };
-
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">상품 목록</h1>
@@ -195,12 +191,30 @@ function ProductsContent() {
                 <Card key={product.id} className="transition-transform hover:shadow-lg hover:scale-105">
                   <Link href={`/products/${product.id}`} className="block">
                     <div className="relative w-full h-48 mb-4">
-                      <Image
-                        src={product.image_url || '/images/default-product.png'}
-                        alt={product.name}
-                        fill
-                        className="object-cover rounded-t-lg"
-                      />
+                      {(product.thumbnail_url || product.image_url) && validImageUrls[product.id] !== false ? (
+                        <Image
+                          src={product.thumbnail_url || product.image_url || ''}
+                          alt={product.name}
+                          fill
+                          className="object-cover rounded-t-lg"
+                          unoptimized={true}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.onerror = null;
+                            target.src = '/images/default-product.png';
+                            // 캐시 업데이트
+                            setValidImageUrls(prev => ({ ...prev, [product.id]: false }));
+                          }}
+                        />
+                      ) : (
+                        <Image
+                          src="/images/default-product.png"
+                          alt={product.name}
+                          fill
+                          className="object-cover rounded-t-lg"
+                          priority
+                        />
+                      )}
                     </div>
                     <div className="p-4">
                       <h2 className="text-lg font-medium mb-2 truncate">{product.name}</h2>
@@ -208,15 +222,6 @@ function ProductsContent() {
                       <p className="text-lg font-bold text-green-600">{product.price.toLocaleString()} 원</p>
                     </div>
                   </Link>
-                  <div className="px-4 pb-4">
-                    <Button
-                      onClick={() => handleAddToCart(product.id)}
-                      variant="outline"
-                      fullWidth
-                    >
-                      장바구니에 추가
-                    </Button>
-                  </div>
                 </Card>
               ))}
             </div>

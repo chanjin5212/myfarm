@@ -54,6 +54,7 @@ interface ShippingAddress {
 export default function CheckoutPage() {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[]>([]);
+  const [groupedItems, setGroupedItems] = useState<any[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,7 +65,6 @@ export default function CheckoutPage() {
     detailAddress: '',
     memo: '',
   });
-  const [paymentMethod, setPaymentMethod] = useState('card');
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [addresses, setAddresses] = useState<ShippingAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -73,278 +73,73 @@ export default function CheckoutPage() {
   const [orderProcessing, setOrderProcessing] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [kakaoPayPopup, setKakaoPayPopup] = useState<Window | null>(null);
+  
+  // 계산된 가격 정보
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(0);
 
   useEffect(() => {
     checkLoginStatus();
     loadCheckoutItems();
-
-    // 결제 완료 메시지 수신을 위한 이벤트 리스너 등록
-    const handlePaymentMessage = async (event: MessageEvent) => {
-      // 메시지 타입 확인
-      if (!event.data?.type) return;
-      
-      console.log('결제 관련 메시지 수신:', event.data);
-      const { type, orderId, data, error } = event.data;
-      
-      // 주문 ID가 일치하는지 확인
-      const currentOrderId = localStorage.getItem('currentOrderId');
-      console.log('메시지 수신 - 주문 ID 비교:', { 
-        receivedOrderId: orderId, 
-        currentOrderId, 
-        isSame: currentOrderId === orderId 
-      });
-      
-      if (currentOrderId !== orderId) return;
-      
-      // 메시지 타입에 따른 처리
-      switch (type) {
-        case 'PAYMENT_APPROVAL_NEEDED':
-          // 결제 승인 요청 처리
-          console.log('결제 승인 요청 메시지 처리 시작');
-          setMessage('결제 승인 중입니다...');
-          
-          try {
-            const authHeader = getAuthHeader();
-            if (!authHeader.Authorization) {
-              throw new Error('로그인이 필요합니다.');
-            }
-            
-            // 결제 승인 API 호출
-            const approveResponse = await fetch(`/api/payments/kakao/approve`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...authHeader
-              },
-              body: JSON.stringify({
-                pg_token: data.pg_token,
-                orderId: orderId
-              })
-            });
-            
-            if (!approveResponse.ok) {
-              const errorData = await approveResponse.json();
-              throw new Error(errorData.error || '결제 승인 중 오류가 발생했습니다.');
-            }
-            
-            // 결제 승인 성공
-            console.log('결제 승인 완료');
-            
-            // 결제 완료 처리
-            setOrderProcessing(false);
-            setMessage('');
-            localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
-            localStorage.removeItem('currentOrderId');
-            localStorage.removeItem('paymentPending'); // 결제 진행 중 상태 제거
-            setKakaoPayPopup(null); // 팝업 참조 제거
-            
-            // 장바구니 비우기
-            try {
-              await fetch(`/api/cart/clear`, {
-                method: 'DELETE',
-                headers: { ...authHeader }
-              });
-            } catch (e) {
-              console.error('장바구니 비우기 실패:', e);
-            }
-            
-            // 리다이렉트 경로가 있으면 해당 경로로, 없으면 주문 상세 페이지로 이동
-            const redirectPath = data.redirectTo || `/orders/${orderId}/detail`;
-            console.log(`결제 완료 페이지로 이동: ${redirectPath}`);
-            
-            // 약간의 지연 후 페이지 이동 (상태 업데이트 보장)
-            setTimeout(() => {
-              router.push(redirectPath);
-            }, 100);
-          } catch (error) {
-            console.error('결제 승인 처리 오류:', error);
-            setOrderProcessing(false);
-            setMessage('');
-            setKakaoPayPopup(null);
-            localStorage.removeItem('currentOrderId');
-            localStorage.removeItem('paymentPending');
-            setOrderError(error instanceof Error ? error.message : '결제 승인 중 오류가 발생했습니다.');
-          }
-          break;
-          
-        case 'PAYMENT_COMPLETE':
-          // 결제 완료 처리
-          console.log('결제 완료 메시지 처리 시작');
-          setOrderProcessing(false);
-          setMessage('');
-          localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
-          localStorage.removeItem('currentOrderId');
-          localStorage.removeItem('paymentPending'); // 결제 진행 중 상태 제거
-          setKakaoPayPopup(null); // 팝업 참조 제거
-          
-          // 리다이렉트 경로가 있으면 해당 경로로, 없으면 주문 상세 페이지로 이동
-          const successRedirectPath = data?.redirectTo || `/orders/${orderId}/detail`;
-          console.log(`결제 완료 페이지로 이동: ${successRedirectPath}`);
-          
-          // 약간의 지연 후 페이지 이동 (상태 업데이트 보장)
-          setTimeout(() => {
-            router.push(successRedirectPath);
-          }, 100);
-          break;
-          
-        case 'PAYMENT_CANCELLED':
-          // 결제 취소 처리
-          setOrderProcessing(false);
-          setMessage('');
-          setKakaoPayPopup(null);
-          localStorage.removeItem('currentOrderId');
-          localStorage.removeItem('paymentPending');
-          
-          // 취소 메시지 표시
-          const cancelReason = data?.reason || '사용자에 의해 취소됨';
-          setOrderError(`결제가 취소되었습니다. (${cancelReason})`);
-          
-          // 취소 후 리다이렉트가 필요한 경우
-          if (data?.redirectTo && data.redirectTo !== '/checkout') {
-            setTimeout(() => {
-              router.push(data.redirectTo);
-            }, 1000);
-          }
-          break;
-          
-        case 'PAYMENT_FAILED':
-          // 결제 실패 처리
-          setOrderProcessing(false);
-          setMessage('');
-          setKakaoPayPopup(null);
-          localStorage.removeItem('currentOrderId');
-          localStorage.removeItem('paymentPending');
-          
-          // 오류 메시지 표시
-          setOrderError(data?.reason || error || '결제 처리 중 오류가 발생했습니다.');
-          
-          // 실패 후 리다이렉트가 필요한 경우
-          if (data?.redirectTo && data.redirectTo !== '/checkout') {
-            setTimeout(() => {
-              router.push(data.redirectTo);
-            }, 1000);
-          }
-          break;
-          
-        case 'PAYMENT_ERROR':
-          // 기타 오류 처리
-          setOrderProcessing(false);
-          setMessage('');
-          setKakaoPayPopup(null);
-          localStorage.removeItem('currentOrderId');
-          localStorage.removeItem('paymentPending');
-          
-          // 오류 메시지 표시
-          setOrderError(data?.reason || '결제 중 오류가 발생했습니다.');
-          
-          // 오류 후 리다이렉트가 필요한 경우
-          if (data?.redirectTo && data.redirectTo !== '/checkout') {
-            setTimeout(() => {
-              router.push(data.redirectTo);
-            }, 1000);
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('message', handlePaymentMessage);
-    
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
-    return () => {
-      window.removeEventListener('message', handlePaymentMessage);
-    };
   }, [router]);
-
-  // 카카오페이 팝업 모니터링
-  useEffect(() => {
-    let popupCheckInterval: NodeJS.Timeout | null = null;
-    let paymentCompleted = false;  // 결제 완료 여부를 추적하는 플래그 추가
-    
-    // 메시지 이벤트 핸들러 추가 - 결제 완료 메시지를 감지
-    const handlePaymentComplete = (event: MessageEvent) => {
-      if (event.data?.type === 'PAYMENT_APPROVAL_NEEDED' || event.data?.type === 'PAYMENT_COMPLETE') {
-        const currentOrderId = localStorage.getItem('currentOrderId');
-        if (currentOrderId === event.data?.orderId) {
-          paymentCompleted = true;
-          console.log('결제 완료 메시지 감지 - 자동 취소 방지');
-        }
-      }
-    };
-    
-    window.addEventListener('message', handlePaymentComplete);
-    
-    // 카카오페이 팝업이 있고 주문 처리 중인 경우에만 모니터링
-    if (kakaoPayPopup && orderProcessing) {
-      popupCheckInterval = setInterval(() => {
-        // 팝업이 닫혔는지 확인
-        if (kakaoPayPopup.closed) {
-          clearInterval(popupCheckInterval!);
-          console.log('사용자가 카카오페이 팝업을 닫았습니다.');
-          
-          // 결제가 완료된 경우에는 취소 처리하지 않음
-          if (paymentCompleted) {
-            console.log('결제가 이미 완료되어 취소 처리하지 않음');
-            return;
-          }
-          
-          // 결제 완료 메시지를 받지 않았을 때만 취소 처리
-          const currentOrderId = localStorage.getItem('currentOrderId');
-          if (currentOrderId && orderProcessing) {
-            console.log('결제 팝업 닫힘 감지 - 주문 취소 처리:', currentOrderId);
-            setOrderProcessing(false);
-            setOrderError('결제가 취소되었습니다. (사용자가 창을 닫음)');
-            setKakaoPayPopup(null);
-            
-            // 주문 취소 API 호출
-            const cancelOrder = async () => {
-              try {
-                const authHeader = getAuthHeader();
-                if (!authHeader.Authorization) return;
-                
-                const response = await fetch(`/api/orders/cancel`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...authHeader
-                  },
-                  body: JSON.stringify({ orderId: currentOrderId })
-                });
-                
-                if (response.ok) {
-                  console.log('주문 자동 취소 완료:', currentOrderId);
-                  localStorage.removeItem('currentOrderId');
-                  localStorage.removeItem('paymentPending');
-                } else {
-                  console.error('주문 자동 취소 실패 - 응답 오류:', await response.text());
-                }
-              } catch (err) {
-                console.error('주문 자동 취소 실패:', err);
-              }
-            };
-            
-            cancelOrder();
-          }
-        }
-      }, 300); // 300ms로 더 빠르게 체크
-    }
-    
-    // 컴포넌트 언마운트 또는 의존성 변경 시 인터벌 제거 및 이벤트 리스너 제거
-    return () => {
-      if (popupCheckInterval) {
-        clearInterval(popupCheckInterval);
-      }
-      window.removeEventListener('message', handlePaymentComplete);
-    };
-  }, [kakaoPayPopup, orderProcessing]);
 
   // 사용자 정보가 로드된 후 배송지 목록 로드 시도
   useEffect(() => {
     if (user) {
       console.log('사용자 정보가 로드되어 배송지 목록 로드 시도');
-        loadShippingAddresses();
+      loadShippingAddresses();
     }
   }, [user]);
+
+  // 컴포넌트 언마운트 시 또는 페이지 언로드 시 결제 취소 처리
+  useEffect(() => {
+    // 페이지 언로드 이벤트에 결제 취소 처리 추가
+    const handleBeforeUnload = () => {
+      const currentOrderId = localStorage.getItem('currentOrderId');
+      if (currentOrderId && orderProcessing) {
+        console.log('페이지 언로드 시 주문 취소 처리:', currentOrderId);
+        
+        // 동기적 API 호출 (페이지 종료 시 비동기 호출은 보장되지 않음)
+        try {
+          const authHeader = getAuthHeader();
+          if (authHeader.Authorization) {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `/api/orders/cancel`, false); // 동기적 호출
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Authorization', authHeader.Authorization);
+            xhr.send(JSON.stringify({ orderId: currentOrderId }));
+          }
+        } catch (e) {
+          console.error('페이지 언로드 시 주문 취소 실패:', e);
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거 및 미완료 주문 취소
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // 컴포넌트 언마운트 시에도 미완료 주문 취소
+      const currentOrderId = localStorage.getItem('currentOrderId');
+      if (currentOrderId && orderProcessing) {
+        console.log('컴포넌트 언마운트 시 주문 취소 처리:', currentOrderId);
+        const authHeader = getAuthHeader();
+        if (authHeader.Authorization) {
+          fetch(`/api/orders/cancel`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeader
+            },
+            body: JSON.stringify({ orderId: currentOrderId })
+          }).catch(err => console.error('컴포넌트 언마운트 시 주문 취소 실패:', err));
+        }
+      }
+    };
+  }, [orderProcessing]);
 
   const checkLoginStatus = async () => {
     try {
@@ -440,6 +235,7 @@ export default function CheckoutPage() {
               const itemPrice = item.option_price || (item.product.discount_price || item.product.price);
               // 옵션 추가 가격이 있는 경우
               const additionalPrice = item.product_option ? item.product_option.additional_price : 0;
+              const totalItemPrice = itemPrice * item.quantity;
               
               return {
                 id: `direct_${item.product_id}${item.product_option_id ? '_' + item.product_option_id : ''}`,
@@ -455,8 +251,9 @@ export default function CheckoutPage() {
                   value: item.product_option.option_value,
                   additional_price: additionalPrice
                 } : undefined,
-                totalPrice: item.total_price || (itemPrice * item.quantity), // 총 가격
-                shippingFee: calculateShippingFeeByPrice(itemPrice, item.quantity)
+                totalPrice: totalItemPrice, // 총 가격
+                // 배송비는 그룹화 단계에서 계산됨
+                shippingFee: 0
               };
             });
             
@@ -471,24 +268,29 @@ export default function CheckoutPage() {
         }
       } else {
         // 기존 장바구니 체크아웃 아이템 가져오기
-      const checkoutItems = localStorage.getItem('checkoutItems');
-      if (!checkoutItems) {
-        router.push('/cart');
-        return;
-      }
-
-      try {
-        const parsedItems = JSON.parse(checkoutItems);
-        // 데이터 유효성 검사
-        if (Array.isArray(parsedItems)) {
-          setItems(parsedItems);
-        } else {
-          throw new Error('유효하지 않은 체크아웃 아이템 형식');
+        const checkoutItems = localStorage.getItem('checkoutItems');
+        if (!checkoutItems) {
+          router.push('/cart');
+          return;
         }
-      } catch (parseError) {
-        console.error('체크아웃 아이템 파싱 오류:', parseError);
-        setError('체크아웃 아이템 형식이 올바르지 않습니다.');
-        router.push('/cart');
+
+        try {
+          const parsedItems = JSON.parse(checkoutItems);
+          // 데이터 유효성 검사
+          if (Array.isArray(parsedItems)) {
+            // 배송비는 groupItemsByProduct 함수에서 재계산되므로 0으로 설정
+            const formattedItems = parsedItems.map(item => ({
+              ...item,
+              shippingFee: 0 // 그룹화 과정에서 재계산
+            }));
+            setItems(formattedItems);
+          } else {
+            throw new Error('유효하지 않은 체크아웃 아이템 형식');
+          }
+        } catch (parseError) {
+          console.error('체크아웃 아이템 파싱 오류:', parseError);
+          setError('체크아웃 아이템 형식이 올바르지 않습니다.');
+          router.push('/cart');
         }
       }
     } catch (error) {
@@ -499,11 +301,73 @@ export default function CheckoutPage() {
     }
   };
 
+  // 아이템을 productId 기준으로 그룹화하는 함수
+  const groupItemsByProduct = (items: CartItem[]) => {
+    const grouped: any[] = [];
+    
+    // 아이템들을 productId 기준으로 그룹화
+    items.forEach(item => {
+      const existingGroup = grouped.find(group => group.productId === item.productId);
+      
+      if (existingGroup) {
+        // 이미 해당 상품 그룹이 있는 경우
+        existingGroup.items.push(item);
+        existingGroup.totalQuantity += item.quantity;
+        existingGroup.totalPrice += item.price * item.quantity;
+      } else {
+        // 새 상품 그룹 생성
+        grouped.push({
+          productId: item.productId,
+          name: item.name,
+          image: item.image,
+          items: [item],
+          totalQuantity: item.quantity,
+          totalPrice: item.price * item.quantity
+        });
+      }
+    });
+    
+    // 각 그룹별 배송비 계산
+    grouped.forEach(group => {
+      // 3만원 이상 구매 시 무료배송
+      group.shippingFee = group.totalPrice >= 30000 ? 0 : 3000;
+    });
+    
+    return grouped;
+  };
+  
   // 가격에 따른 배송비 계산 함수
   const calculateShippingFeeByPrice = (price: number, quantity: number) => {
     const totalPrice = price * quantity;
     return totalPrice >= 30000 ? 0 : 3000; // 3만원 이상 구매시 무료배송
   };
+  
+  // 총 상품 금액 계산 (상품 가격 * 수량의 합)
+  const calculateItemsTotalPrice = (items: CartItem[]) => {
+    return items.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+  
+  // 총 배송비 계산 (상품별로 중복 없이 계산)
+  const calculateTotalShippingFee = (groupedItems: any[]) => {
+    return groupedItems.reduce((total, group) => total + group.shippingFee, 0);
+  };
+  
+  // 상품이 로드되면 그룹화 및 가격 계산
+  useEffect(() => {
+    if (items.length > 0) {
+      // 상품 그룹화
+      const grouped = groupItemsByProduct(items);
+      setGroupedItems(grouped);
+      
+      // 가격 계산
+      const itemsTotal = calculateItemsTotalPrice(items);
+      const shippingTotal = calculateTotalShippingFee(grouped);
+      
+      setTotalPrice(itemsTotal);
+      setShippingFee(shippingTotal);
+      setFinalPrice(itemsTotal + shippingTotal);
+    }
+  }, [items]);
 
   // 사용자의 배송지 목록 로드
   const loadShippingAddresses = async () => {
@@ -636,28 +500,6 @@ export default function CheckoutPage() {
     }));
   };
 
-  const handlePaymentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPaymentMethod(e.target.value);
-  };
-
-  const calculateTotalPrice = () => {
-    return items.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  const calculateTotalShippingFee = () => {
-    // 배송비 계산 로직 (중복되는 판매자의 배송비는 한 번만 계산)
-    const sellerShippingMap = new Map();
-    
-    items.forEach(item => {
-      const sellerId = item.productId.split('-')[0]; // 가정: productId의 첫 부분이 판매자 ID
-      if (!sellerShippingMap.has(sellerId) || item.shippingFee > sellerShippingMap.get(sellerId)) {
-        sellerShippingMap.set(sellerId, item.shippingFee);
-      }
-    });
-    
-    return Array.from(sellerShippingMap.values()).reduce((total, fee) => total + fee, 0);
-  };
-
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -719,8 +561,8 @@ export default function CheckoutPage() {
           memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
         },
         payment: {
-          method: paymentMethod,
-          totalAmount: calculateTotalPrice() + calculateTotalShippingFee()
+          method: 'direct',
+          totalAmount: totalPrice + shippingFee
         }
       };
       
@@ -750,80 +592,16 @@ export default function CheckoutPage() {
       
       const orderResult = await orderResponse.json();
       console.log('주문 생성 결과:', orderResult);
+
+      // 주문 완료 후 처리
+      localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
+      router.push(`/orders/${orderResult.orderId}/complete`);
       
-      // 결제 방법에 따른 처리
-      if (paymentMethod === 'kakao') {
-        console.log('카카오페이 결제 시작');
-        // 카카오페이 결제 프로세스
-        const kakaoPayData = {
-          orderId: orderResult.orderId,
-          totalAmount: calculateTotalPrice() + calculateTotalShippingFee(),
-          productName: items.length > 1 
-            ? safeString(`${items[0].name} 외 ${items.length - 1}건`)
-            : safeString(items[0].name)
-        };
-        
-        console.log('카카오페이 요청 데이터:', kakaoPayData);
-        
-        const kakaoResponse = await fetch('/api/payments/kakao/ready', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeader
-          },
-          body: JSON.stringify(kakaoPayData)
-        });
-        
-        console.log('카카오페이 API 응답 상태:', kakaoResponse.status);
-        
-        if (!kakaoResponse.ok) {
-          const errorData = await kakaoResponse.json();
-          console.error('카카오페이 API 에러 응답:', errorData);
-          throw new Error(errorData.error || errorData.message || '카카오페이 결제 요청에 실패했습니다.');
-        }
-        
-        const kakaoResult = await kakaoResponse.json();
-        console.log('카카오페이 요청 결과:', kakaoResult);
-        
-        // 체크아웃 정보 저장 (결제 성공 후 처리를 위함)
-        localStorage.setItem('currentOrderId', orderResult.orderId);
-        
-        // 카카오페이 결제 페이지를 팝업으로 열기
-        const width = 450;
-        const height = 650;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-        
-        const popup = window.open(
-          kakaoResult.next_redirect_pc_url,
-          'kakaopayPopup',
-          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
-        );
-        
-        // 카카오페이 팝업 참조 저장
-        setKakaoPayPopup(popup);
-        
-        // 결제 진행 중 표시 저장
-        localStorage.setItem('paymentPending', 'true');
-        
-        // 현재 페이지는 그대로 유지하면서 결제 진행 상태 메시지 표시
-        setOrderProcessing(true);
-        setMessage('카카오페이 결제가 진행 중입니다. 팝업 창을 확인해주세요.');
-      } else {
-        // 다른 결제 방식 처리
-        console.log('다른 결제 방식 처리');
-        localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
-        router.push(`/orders/${orderResult.orderId}/complete`);
-      }
     } catch (error) {
       console.error('주문 처리 오류:', error);
       setOrderError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
     } finally {
-      // paymentMethod가 kakao가 아닐 때만 orderProcessing을 false로 설정
-      // kakao 결제의 경우 메시지 이벤트에서 처리
-      if (paymentMethod !== 'kakao') {
       setOrderProcessing(false);
-      }
     }
   };
 
@@ -835,55 +613,6 @@ export default function CheckoutPage() {
     }
     return true;
   };
-
-  // 컴포넌트 언마운트 시 또는 페이지 언로드 시 결제 취소 처리
-  useEffect(() => {
-    // 페이지 언로드 이벤트에 결제 취소 처리 추가
-    const handleBeforeUnload = () => {
-      const currentOrderId = localStorage.getItem('currentOrderId');
-      if (currentOrderId && orderProcessing) {
-        console.log('페이지 언로드 시 주문 취소 처리:', currentOrderId);
-        
-        // 동기적 API 호출 (페이지 종료 시 비동기 호출은 보장되지 않음)
-        try {
-          const authHeader = getAuthHeader();
-          if (authHeader.Authorization) {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', `/api/orders/cancel`, false); // 동기적 호출
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('Authorization', authHeader.Authorization);
-            xhr.send(JSON.stringify({ orderId: currentOrderId }));
-          }
-        } catch (e) {
-          console.error('페이지 언로드 시 주문 취소 실패:', e);
-        }
-      }
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거 및 미완료 주문 취소
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      
-      // 컴포넌트 언마운트 시에도 미완료 주문 취소
-      const currentOrderId = localStorage.getItem('currentOrderId');
-      if (currentOrderId && orderProcessing) {
-        console.log('컴포넌트 언마운트 시 주문 취소 처리:', currentOrderId);
-        const authHeader = getAuthHeader();
-        if (authHeader.Authorization) {
-          fetch(`/api/orders/cancel`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...authHeader
-            },
-            body: JSON.stringify({ orderId: currentOrderId })
-          }).catch(err => console.error('컴포넌트 언마운트 시 주문 취소 실패:', err));
-        }
-      }
-    };
-  }, [orderProcessing]);
 
   if (loading) {
     return (
@@ -913,38 +642,16 @@ export default function CheckoutPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-center mb-6">결제 진행 중</h2>
+          <h2 className="text-2xl font-bold text-center mb-6">주문 처리 중</h2>
           <div className="flex justify-center mb-6">
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
           </div>
           <p className="text-center text-gray-700 mb-4">{message}</p>
           <div className="mb-4 bg-yellow-50 border border-yellow-200 p-4 rounded-md">
             <p className="text-center text-sm text-yellow-800 mb-2">
-              <strong>주의:</strong> 결제가 완료될 때까지 이 페이지를 닫지 마세요.
-            </p>
-            <p className="text-center text-sm text-yellow-700">
-              팝업 창이 보이지 않는 경우, 브라우저의 팝업 차단 설정을 확인하거나 아래 버튼을 클릭하세요.
+              <strong>주의:</strong> 주문 처리가 완료될 때까지 이 페이지를 닫지 마세요.
             </p>
           </div>
-          {paymentMethod === 'kakao' && (
-            <div className="text-center">
-              <button 
-                className="bg-yellow-400 hover:bg-yellow-500 text-black py-2 px-4 rounded" 
-                onClick={() => {
-                  // 로컬 스토리지에서 현재 주문 ID 확인
-                  const currentOrderId = localStorage.getItem('currentOrderId');
-                  if (currentOrderId) {
-                    alert('카카오페이 결제 진행 중입니다. 결제를 완료해주세요.');
-                  } else {
-                    setOrderProcessing(false);
-                    setMessage('');
-                  }
-                }}
-              >
-                결제 진행 확인
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -958,50 +665,68 @@ export default function CheckoutPage() {
         <div className="lg:col-span-2">
           {/* 주문 상품 정보 */}
           <Card title="주문 상품 정보" className="mb-6">
-            {items.map((item) => (
-              <div key={item.id} className="flex items-center border-b py-4">
-                <div className="w-20 h-20 relative flex-shrink-0">
-                  <Image
-                    src={item.image || '/images/default-product.png'}
-                    alt={item.name}
-                    fill
-                    className="object-cover rounded"
-                  />
-                </div>
-                <div className="ml-4 flex-grow">
-                  <h3 className="font-medium">{item.name}</h3>
-                  {item.option && (
-                    <p className="text-sm text-gray-600">
-                      옵션: {item.option.name} - {item.option.value}
-                      {item.option.additional_price > 0 && (
-                        <span className="ml-1">(+{item.option.additional_price.toLocaleString()}원)</span>
-                      )}
-                    </p>
-                  )}
-                  <div className="flex justify-between mt-2">
-                    <p className="text-sm">
-                      {item.quantity}개 × {item.price.toLocaleString()}원
-                      {item.additionalPrice > 0 && (
-                        <span className="text-xs text-gray-500 ml-1">
-                          (기본가 {item.originalPrice.toLocaleString()}원 + 옵션 {item.additionalPrice.toLocaleString()}원)
-                        </span>
-                      )}
-                    </p>
-                    <p className="font-medium">
-                      {(item.totalPrice || (item.price * item.quantity)).toLocaleString()}원
-                    </p>
+            {groupedItems.map((group) => (
+              <div key={group.productId} className="mb-6 border-b pb-4">
+                <div className="flex items-start">
+                  <div className="w-20 h-20 relative flex-shrink-0">
+                    <Image
+                      src={group.image || '/images/default-product.png'}
+                      alt={group.name}
+                      fill
+                      className="object-cover rounded"
+                    />
                   </div>
-                  <p className="text-sm text-gray-600">
-                    배송비: {item.shippingFee > 0 ? `${item.shippingFee.toLocaleString()}원` : '무료'}
-                  </p>
+                  <div className="ml-4 flex-grow">
+                    <h3 className="font-medium text-lg">{group.name}</h3>
+                    <p className="text-sm text-gray-600">
+                      총 수량: {group.totalQuantity}개
+                    </p>
+                    <div className="flex justify-between mt-2">
+                      <p className="text-sm text-gray-600">
+                        배송비: {group.shippingFee > 0 ? `${group.shippingFee.toLocaleString()}원` : '무료'}
+                        {group.shippingFee > 0 && (
+                          <span className="text-xs ml-1">(3만원 이상 구매 시 무료)</span>
+                        )}
+                      </p>
+                      <p className="font-semibold">
+                        {group.totalPrice.toLocaleString()}원
+                      </p>
+                    </div>
+                  </div>
                 </div>
+                
+                {/* 상품 내 옵션 목록 */}
+                {group.items.length > 0 && (
+                  <div className="mt-4 pl-8">
+                    {group.items.map((item: CartItem) => (
+                      <div key={item.id} className="flex justify-between text-sm py-2 border-t">
+                        <div>
+                          {item.option ? (
+                            <span>
+                              옵션: {item.option.name} - {item.option.value}
+                              {item.option.additional_price > 0 && (
+                                <span className="ml-1 text-gray-500">(+{item.option.additional_price.toLocaleString()}원)</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span>기본 상품</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{(item.price * item.quantity).toLocaleString()}원</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
+            
             <div className="mt-4 text-right">
-              <p className="text-gray-600">상품 금액: {calculateTotalPrice().toLocaleString()}원</p>
-              <p className="text-gray-600">배송비: {calculateTotalShippingFee().toLocaleString()}원</p>
+              <p className="text-gray-600">상품 금액: {totalPrice.toLocaleString()}원</p>
+              <p className="text-gray-600">배송비: {shippingFee.toLocaleString()}원</p>
               <p className="text-lg font-semibold">
-                결제 예정 금액: {(calculateTotalPrice() + calculateTotalShippingFee()).toLocaleString()}원
+                결제 예정 금액: {finalPrice.toLocaleString()}원
               </p>
             </div>
           </Card>
@@ -1051,33 +776,6 @@ export default function CheckoutPage() {
               </div>
             </div>
           </Card>
-          
-          {/* 결제 수단 */}
-          <Card title="결제 수단" className="mb-6">
-            <div className="space-y-2">
-              <Radio
-                label="신용/체크카드"
-                name="paymentMethod"
-                value="card"
-                checked={paymentMethod === 'card'}
-                onChange={handlePaymentChange}
-              />
-              <Radio
-                label="카카오페이"
-                name="paymentMethod"
-                value="kakao"
-                checked={paymentMethod === 'kakao'}
-                onChange={handlePaymentChange}
-              />
-              <Radio
-                label="토스"
-                name="paymentMethod"
-                value="toss"
-                checked={paymentMethod === 'toss'}
-                onChange={handlePaymentChange}
-              />
-            </div>
-          </Card>
         </div>
         
         <div className="lg:col-span-1">
@@ -1086,17 +784,17 @@ export default function CheckoutPage() {
             <div className="space-y-2 border-b pb-4">
               <div className="flex justify-between">
                 <span className="text-gray-600">상품 금액</span>
-                <span>{calculateTotalPrice().toLocaleString()}원</span>
+                <span>{totalPrice.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">배송비</span>
-                <span>{calculateTotalShippingFee().toLocaleString()}원</span>
+                <span>{shippingFee.toLocaleString()}원</span>
               </div>
             </div>
             <div className="flex justify-between items-center pt-4 font-semibold">
               <span>총 결제 금액</span>
               <span className="text-xl text-green-600">
-                {(calculateTotalPrice() + calculateTotalShippingFee()).toLocaleString()}원
+                {finalPrice.toLocaleString()}원
               </span>
             </div>
             
@@ -1115,7 +813,7 @@ export default function CheckoutPage() {
                 fullWidth
                 className="mt-4"
               >
-                {loading ? '처리 중...' : '결제하기'}
+                {loading ? '처리 중...' : '주문하기'}
               </Button>
             </div>
             

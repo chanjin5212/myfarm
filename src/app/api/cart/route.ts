@@ -61,6 +61,17 @@ function isValidUUID(id: string | null | undefined): boolean {
   return pattern.test(id);
 }
 
+// 필요시 함수 생성 (주석 해제)
+// createRpcFunctions();
+
+// 디버깅 함수 - 출력 전 특수한 값 처리 
+function debugValue(value: any): string {
+  if (value === null) return 'null (실제 null)';
+  if (value === undefined) return 'undefined (실제 undefined)';
+  if (value === 'null') return '"null" (문자열)';
+  return String(value);
+}
+
 export async function GET(request: NextRequest) {
   const userId = await getUserId(request);
   if (!userId) {
@@ -138,9 +149,33 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { product_id, product_option_id, quantity } = body;
+    const { product_id, quantity } = body;
+    let { product_option_id } = body;
+    
+    // product_option_id 명시적 처리 - 문자열 "null"을 실제 null로 변환
+    if (product_option_id === 'null' || product_option_id === '') {
+      product_option_id = null;
+    }
+    
+    // 디버깅 로그 추가
+    console.log('[장바구니 API] 원본 요청 데이터:', { 
+      product_id: debugValue(product_id), 
+      product_option_id: debugValue(product_option_id),
+      quantity,
+      product_option_id_type: typeof product_option_id
+    });
+    
+    // UUID 유효성 검사
+    if (!isValidUUID(product_id)) {
+      return NextResponse.json({ error: '유효하지 않은 product_id 형식' }, { status: 400 });
+    }
+    
+    // product_option_id 있는 경우만 UUID 검증
+    if (product_option_id !== null && product_option_id !== undefined && !isValidUUID(product_option_id)) {
+      return NextResponse.json({ error: '유효하지 않은 product_option_id 형식' }, { status: 400 });
+    }
 
-    // 사용자의 장바구니 가져오기 (여러 장바구니가 있을 수 있으므로 maybeSingle 대신 first() 사용)
+    // 사용자의 장바구니 가져오기
     let cartId;
     const { data: cartData, error: cartError } = await supabaseClient
       .from('carts')
@@ -166,50 +201,101 @@ export async function POST(request: NextRequest) {
     }
 
     // 중복된 상품이 있는지 확인
-    const { data: existingItems, error: checkError } = await supabaseClient
-      .from('cart_items')
-      .select('id, quantity')
-      .eq('cart_id', cartId)
-      .eq('product_id', product_id)
-      .eq('product_option_id', product_option_id || null);
-
-    if (checkError) throw checkError;
+    let existingItems;
+    
+    try {
+      // product_option_id가 null이면 IS NULL 조건으로 쿼리
+      if (product_option_id === null) {
+        const { data, error } = await supabaseClient
+          .from('cart_items')
+          .select('id, quantity')
+          .eq('cart_id', cartId)
+          .eq('product_id', product_id)
+          .is('product_option_id', null);
+          
+        if (error) throw error;
+        existingItems = data;
+        console.log('[장바구니 API] 옵션 없는 상품 확인 결과:', existingItems);
+      } else {
+        // 옵션이 있는 경우 일반 쿼리
+        const { data, error } = await supabaseClient
+          .from('cart_items')
+          .select('id, quantity')
+          .eq('cart_id', cartId)
+          .eq('product_id', product_id)
+          .eq('product_option_id', product_option_id);
+          
+        if (error) throw error;
+        existingItems = data;
+        console.log('[장바구니 API] 옵션 있는 상품 확인 결과:', existingItems);
+      }
+    } catch (error) {
+      console.error('장바구니 아이템 확인 오류:', error);
+      throw error;
+    }
 
     let resultData;
     
     if (existingItems && existingItems.length > 0) {
       // 이미 있는 상품이면 수량 업데이트
       const existingItem = existingItems[0];
-      const { data: updatedItem, error: updateError } = await supabaseClient
-        .from('cart_items')
-        .update({ quantity: existingItem.quantity + quantity })
-        .eq('id', existingItem.id)
-        .select()
-        .single();
+      
+      try {
+        const { data: updatedItem, error: updateError } = await supabaseClient
+          .from('cart_items')
+          .update({ quantity: existingItem.quantity + quantity })
+          .eq('id', existingItem.id)
+          .select()
+          .single();
 
-      if (updateError) throw updateError;
-      resultData = updatedItem;
+        if (updateError) throw updateError;
+        resultData = updatedItem;
+      } catch (error) {
+        console.error('장바구니 아이템 업데이트 오류:', error);
+        throw error;
+      }
     } else {
       // 새 상품이면 추가
-      const { data: newItem, error: insertError } = await supabaseClient
-        .from('cart_items')
-        .insert([{
+      try {
+        console.log('[장바구니 API] 새 상품 추가 시도, product_option_id:', debugValue(product_option_id));
+        
+        // 삽입할 데이터 객체 생성
+        const insertData: {
+          cart_id: string;
+          product_id: string;
+          quantity: number;
+          product_option_id?: string;
+        } = {
           cart_id: cartId,
           product_id,
-          product_option_id,
           quantity
-        }])
-        .select()
-        .single();
+        };
+        
+        // product_option_id가 null이 아닐 때만 필드 추가
+        if (product_option_id !== null) {
+          insertData.product_option_id = product_option_id;
+        }
+        
+        console.log('[장바구니 API] 최종 삽입 데이터:', JSON.stringify(insertData));
+        
+        const { data: newItem, error: insertError } = await supabaseClient
+          .from('cart_items')
+          .insert([insertData])
+          .select()
+          .single();
 
-      if (insertError) throw insertError;
-      resultData = newItem;
+        if (insertError) throw insertError;
+        resultData = newItem;
+      } catch (error) {
+        console.error('장바구니 아이템 추가 오류:', error);
+        throw error;
+      }
     }
 
     return NextResponse.json(resultData);
   } catch (error) {
     console.error('장바구니 추가 오류:', error);
-    return NextResponse.json({ error: '장바구니 추가 실패' }, { status: 500 });
+    return NextResponse.json({ error: '장바구니 추가 실패', details: error }, { status: 500 });
   }
 }
 

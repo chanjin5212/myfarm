@@ -98,17 +98,33 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     const fetchProductDetails = async () => {
+      console.log('fetchProductDetails 함수 실행됨');
       setLoading(true);
       try {
         // 상품 상세 정보 가져오기
-        const response = await fetch(`/api/products/${params.id}`);
+        const apiUrl = `/api/products/${params.id}`;
+        console.log('API 요청 URL:', apiUrl);
+        
+        const response = await fetch(apiUrl);
         if (!response.ok) {
           throw new Error('상품 정보를 불러오는데 실패했습니다.');
         }
+        console.log('API 응답 성공');
+        
         const data = await response.json();
+        console.log('API 응답 데이터:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
+        
         setProductDetails(data.product);
         setImages(data.images || []);
         setOptions(data.options || []);
+        
+        // 디버깅: 받아온 상품 데이터 로깅
+        console.log('상품 데이터:', data.product);
+        console.log('이미지 데이터:', data.images);
+        console.log('이미지 URL 존재 여부:', {
+          'product.thumbnail_url': !!data.product?.thumbnail_url,
+          'images[0]?.image_url': !!(data.images && data.images.length > 0 && data.images[0]?.image_url)
+        });
         
         // 대표 이미지 설정
         if (data.images && data.images.length > 0) {
@@ -282,18 +298,22 @@ export default function ProductDetailPage() {
             
             await Promise.all(addPromises);
           } else {
-            // 옵션 없는 상품 (product_option_id를 명시적으로 null로 전달)
+            // 옵션 없는 상품 - 명시적으로 product_option_id를 null로 전달
+            const requestBody = {
+              product_id: productDetails.id,
+              product_option_id: null,
+              quantity: quantity
+            };
+            
+            console.log('옵션 없는 상품 장바구니 추가 요청:', requestBody);
+            
             await fetch(`${window.location.origin}/api/cart`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 ...authHeader
               },
-              body: JSON.stringify({
-                product_id: productDetails.id,
-                product_option_id: null,
-                quantity: quantity
-              }),
+              body: JSON.stringify(requestBody),
             });
           }
           
@@ -338,22 +358,26 @@ export default function ProductDetailPage() {
             }
           }
         } else {
-          // 옵션이 없는 경우, 기본 상품을 로컬 장바구니에 추가 (옵션 없는 경우 product_option_id는 null)
+          // 옵션이 없는 경우
+          // 옵션이 없는 상품을 찾는 방법 수정: product_option_id가 명시적으로 null 또는 없는 경우
           const existingItemIndex = localCart.findIndex((item: LocalCartItem) => 
-            item.product_id === productDetails.id && !item.product_option_id
+            item.product_id === productDetails.id && 
+            (item.product_option_id === null || item.product_option_id === undefined || typeof item.product_option_id === 'undefined')
           );
           
           if (existingItemIndex >= 0) {
             // 기존 아이템의 수량 업데이트
             localCart[existingItemIndex].quantity += quantity;
           } else {
-            // 새 아이템 추가 (옵션 없는 경우 product_option_id는 null)
-            localCart.push({
+            // 새 아이템 추가 - product_option_id는 명시적으로 null 설정
+            const newItem: LocalCartItem = {
               id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
               product_id: productDetails.id,
               product_option_id: null,
               quantity: quantity
-            });
+            };
+            
+            localCart.push(newItem);
           }
         }
         
@@ -423,9 +447,9 @@ export default function ProductDetailPage() {
         // 옵션이 없는 상품
         const unitPrice = productDetails.discount_price || productDetails.price;
         
-        checkoutItems = [{
+        // product_option_id 필드 자체를 생략하여 SQL NULL로 처리
+        const checkoutItem = {
           product_id: productDetails.id,
-          product_option_id: null,
           quantity: quantity,
           product: {
             id: productDetails.id,
@@ -435,10 +459,12 @@ export default function ProductDetailPage() {
             thumbnail_url: images.length > 0 ? images[0].image_url : productDetails.thumbnail_url,
             stock: productDetails.stock
           },
-          product_option: null,
+          product_option: null, // 옵션 정보 없음
           total_price: unitPrice * quantity, // 총 금액
           option_price: unitPrice // 단일 상품 가격 (할인가)
-        }];
+        };
+        
+        checkoutItems = [checkoutItem];
       }
       
       // 로컬 스토리지에 체크아웃 상품 정보 저장
@@ -464,8 +490,19 @@ export default function ProductDetailPage() {
     setCartSuccessPopup(false);
   };
 
-  // 실제 데이터만 사용
-  const displaySelectedImage = selectedImage || (images[0]?.image_url || 'https://via.placeholder.com/500');
+  // 디버깅: DB에 저장된 thumbnail_url 직접 로깅
+  useEffect(() => {
+    if (productDetails?.thumbnail_url) {
+      console.log('디버그: DB에 저장된 thumbnail_url:', productDetails?.thumbnail_url);
+    }
+  }, [productDetails]);
+
+  // 실제 데이터만 사용 - thumbnail_url 우선 적용
+  const displaySelectedImage = 
+    productDetails?.thumbnail_url || 
+    selectedImage || 
+    (images.length > 0 && images[0]?.image_url) || 
+    'https://via.placeholder.com/500';
 
   // 총 상품 금액 계산
   const calculateTotalPrice = () => {
@@ -565,6 +602,10 @@ export default function ProductDetailPage() {
               sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
               priority
+              onError={(e) => {
+                // 이미지 로드 실패 시 기본 이미지로 대체
+                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/500?text=이미지+없음';
+              }}
             />
           </div>
           <div className="flex gap-2 overflow-x-auto">

@@ -87,7 +87,7 @@ export default function OrderDetailPage() {
       
       if (!authHeader.Authorization) {
         setError('로그인이 필요합니다.');
-        router.push('/login');
+        router.push('/auth');
         return;
       }
 

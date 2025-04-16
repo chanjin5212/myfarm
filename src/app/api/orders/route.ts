@@ -154,6 +154,7 @@ export async function POST(request: NextRequest) {
       order_id: order.id,
       product_id: item.productId,
       quantity: item.quantity,
+      product_option_id: item.productOptionId || null,
       price: item.price,
       options: item.selectedOptions ? item.selectedOptions : null
     }));

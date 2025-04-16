@@ -365,29 +365,9 @@ CREATE TABLE order_items (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 결제 세션 정보를 저장하는 테이블 생성
-CREATE TABLE payment_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
-  payment_method VARCHAR(20) NOT NULL,
-  tid VARCHAR(100) NOT NULL,  -- 카카오페이 결제 고유 ID
-  status VARCHAR(20) NOT NULL, -- ready, completed, canceled, failed 등의 상태
-  amount INTEGER NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  completed_at TIMESTAMP WITH TIME ZONE,
-  canceled_at TIMESTAMP WITH TIME ZONE
-);
-
--- 인덱스 생성
-CREATE INDEX idx_payment_sessions_order_id ON payment_sessions(order_id);
-CREATE INDEX idx_payment_sessions_user_id ON payment_sessions(user_id);
-CREATE INDEX idx_payment_sessions_tid ON payment_sessions(tid);
-
 -- RLS 정책 설정
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payment_sessions ENABLE ROW LEVEL SECURITY;
 
 -- 사용자는 자신의 주문만 확인 가능
 CREATE POLICY orders_select_policy ON orders
@@ -407,15 +387,6 @@ CREATE POLICY order_items_select_policy ON order_items
 
 CREATE POLICY order_items_insert_policy ON order_items
   FOR INSERT WITH CHECK (true);  -- 모든 사용자가 주문 상품을 추가할 수 있도록 임시로 변경
-
-CREATE POLICY payment_sessions_select_policy ON payment_sessions
-  FOR SELECT USING (true);  -- 모든 사용자가 모든 결제 세션을 볼 수 있도록 임시로 변경
-
-CREATE POLICY payment_sessions_insert_policy ON payment_sessions
-  FOR INSERT WITH CHECK (true);  -- 모든 사용자가 결제 세션을 추가할 수 있도록 임시로 변경
-
-CREATE POLICY payment_sessions_update_policy ON payment_sessions
-  FOR UPDATE USING (true);  -- 모든 사용자가 결제 세션을 수정할 수 있도록 임시로 변경
 
 -- 누락된 인덱스 추가
 CREATE INDEX idx_orders_user_id ON orders(user_id);
@@ -472,3 +443,37 @@ BEFORE INSERT ON orders
 FOR EACH ROW
 WHEN (NEW.order_number IS NULL)
 EXECUTE FUNCTION generate_order_number();
+
+
+-- payments 테이블 - 결제 정보 저장용
+CREATE TABLE IF NOT EXISTS payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  payment_key VARCHAR(100) NOT NULL,
+  payment_method VARCHAR(50) NOT NULL,
+  payment_provider VARCHAR(50) NOT NULL,
+  amount INTEGER NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  payment_details JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_key ON payments(payment_key);
+
+-- RLS 정책 설정
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+
+-- 모든 사용자가 결제 정보를 조회할 수 있도록 설정 (임시)
+CREATE POLICY payments_select_policy ON payments
+  FOR SELECT USING (true);
+
+-- 모든 사용자가 결제 정보를 추가할 수 있도록 설정 (임시)
+CREATE POLICY payments_insert_policy ON payments
+  FOR INSERT WITH CHECK (true);
+
+-- 모든 사용자가 결제 정보를 수정할 수 있도록 설정 (임시)
+CREATE POLICY payments_update_policy ON payments
+  FOR UPDATE USING (true); 

@@ -51,34 +51,43 @@ export function getAuthHeader(): { Authorization?: string } {
     const tokenData = localStorage.getItem('token');
     if (!tokenData) return {};
     
-    let parsedToken;
+    let userId = '';
+    
     try {
-      parsedToken = JSON.parse(tokenData);
+      const parsedToken = JSON.parse(tokenData);
+      
+      // 사용자 정보가 객체이고 ID가 있는 경우
+      if (parsedToken.user && typeof parsedToken.user === 'object' && parsedToken.user.id) {
+        userId = parsedToken.user.id;
+        console.log('사용자 ID 추출: 사용자 객체에서', userId);
+      } 
+      // access_token이 있는 경우 (OAuth 로그인 등)
+      else if (parsedToken.access_token) {
+        // access_token을 사용하는 경우 ID 서버에서 확인 필요
+        // 이 프로젝트에서는 사용자 ID를 직접 사용하는 방식이므로
+        // 로컬스토리지에 저장된 userId 사용
+        userId = localStorage.getItem('userId') || '';
+        console.log('사용자 ID 추출: 로컬스토리지에서', userId);
+      }
     } catch (error) {
-      // JSON 파싱에 실패하면 tokenData 자체를 토큰으로 사용
-      console.warn('토큰 데이터가 JSON 형식이 아닙니다. 원본 값을 사용합니다.');
-      return { Authorization: `Bearer ${encodeURIComponent(tokenData)}` };
+      // JSON 파싱 실패 시 토큰 그대로 사용
+      console.warn('토큰 파싱 실패, 원본 값 사용');
+      userId = tokenData;
     }
     
-    // 토큰이 만료되었는지 확인
-    if (parsedToken.expiresAt && parsedToken.expiresAt > Date.now()) {
-      // 사용자 정보가 있으면 해당 ID를 인증 토큰으로 전달
-      if (parsedToken.user && parsedToken.user.id) {
-        return { Authorization: `Bearer ${encodeURIComponent(parsedToken.user.id)}` };
-      }
-      
-      // access_token이 있는 경우 (OAuth 로그인 등)
-      if (parsedToken.access_token) {
-        return { Authorization: `Bearer ${encodeURIComponent(parsedToken.access_token)}` };
-      }
-    } else {
-      // 만료된 토큰 삭제
-      localStorage.removeItem('token');
+    // 추출된 사용자 ID 확인
+    if (!userId) {
+      // 로컬스토리지에서 userId를 직접 사용
+      userId = localStorage.getItem('userId') || '';
+      console.log('사용자 ID 로컬스토리지에서 직접 가져옴:', userId);
+    }
+    
+    if (userId) {
+      // URL 인코딩하여 전송 (특수문자나 한글이 있을 수 있음)
+      return { Authorization: `Bearer ${encodeURIComponent(userId)}` };
     }
   } catch (error) {
     console.error('인증 헤더 생성 오류:', error);
-    // 오류 발생 시 토큰 삭제
-    localStorage.removeItem('token');
   }
   
   return {};
