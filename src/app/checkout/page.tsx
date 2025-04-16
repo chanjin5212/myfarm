@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button, Textarea, Radio, Checkbox, Card } from '@/components/ui/CommonStyles';
 import ShippingAddressModal from './ShippingAddressModal';
 import { getAuthHeader } from '@/utils/auth';
+import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
 
 interface User {
   id: string;
@@ -25,6 +26,7 @@ interface User {
 interface CartItem {
   id: string;
   productId: string;
+  productOptionId?: string | null;
   name: string;
   price: number;
   quantity: number;
@@ -78,11 +80,20 @@ export default function CheckoutPage() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [shippingFee, setShippingFee] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
+  
+  // 토스 페이먼츠 위젯 관련 상태
+  const [widgets, setWidgets] = useState<any>(null);
+  const [ready, setReady] = useState(false);
+  
+  // 결제 UI 컨테이너 참조
+  const paymentMethodRef = useRef<HTMLDivElement>(null);
+  const agreementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     checkLoginStatus();
     loadCheckoutItems();
-  }, [router]);
+    initTossPayments();
+  }, []);
 
   // 사용자 정보가 로드된 후 배송지 목록 로드 시도
   useEffect(() => {
@@ -91,6 +102,94 @@ export default function CheckoutPage() {
       loadShippingAddresses();
     }
   }, [user]);
+  
+  // 토스 페이먼츠 위젯 초기화
+  const initTossPayments = async () => {
+    try {
+      const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
+      console.log('토스 페이먼츠 초기화 시작, 클라이언트 키:', clientKey);
+      
+      const userId = user?.id || localStorage.getItem('userId') || 'ANONYMOUS';
+      console.log('사용자 ID (customerKey):', userId);
+      
+      // 결제위젯 초기화
+      const tossPayments = await loadTossPayments(clientKey);
+      const widgetsInstance = tossPayments.widgets({ 
+        customerKey: userId 
+      });
+      
+      setWidgets(widgetsInstance);
+      console.log('토스 페이먼츠 위젯 초기화 완료');
+    } catch (error) {
+      console.error('토스 페이먼츠 초기화 오류:', error);
+    }
+  };
+  
+  // 위젯을 렌더링하는 함수를 별도로 분리
+  const renderWidgets = async () => {
+    if (!widgets || !paymentMethodRef.current || !agreementRef.current) {
+      console.log('위젯 렌더링 조건이 충족되지 않음');
+      return;
+    }
+    
+    try {
+      console.log('위젯 렌더링 시작');
+      // 최소 1000원 이상으로 금액 설정 (토스페이먼츠 요구사항)
+      const amountToSet = Math.max(finalPrice, 1000);
+      
+      await widgets.setAmount({
+        currency: 'KRW',
+        value: amountToSet,
+      });
+      console.log('위젯 금액 설정:', amountToSet);
+      
+      // 결제 수단 먼저 렌더링
+      await widgets.renderPaymentMethods({
+        selector: "#payment-method",
+        variantKey: "DEFAULT",
+      });
+      console.log('결제 수단 위젯 렌더링 완료');
+      
+      // 약관 위젯 렌더링
+      await widgets.renderAgreement({
+        selector: "#agreement",
+        variantKey: "AGREEMENT",
+      });
+      console.log('이용약관 위젯 렌더링 완료');
+      
+      setReady(true);
+    } catch (error) {
+      console.error('위젯 렌더링 실패:', error);
+    }
+  };
+  
+  // 위젯과 DOM이 준비되면 렌더링
+  useEffect(() => {
+    if (widgets && paymentMethodRef.current && agreementRef.current && finalPrice > 0) {
+      console.log('위젯 렌더링 조건 충족됨');
+      renderWidgets();
+    }
+  }, [widgets, finalPrice, paymentMethodRef.current, agreementRef.current]);
+  
+  // 금액 변경 시 위젯 업데이트
+  useEffect(() => {
+    if (!widgets || !ready) return;
+    
+    const updateAmount = async () => {
+      try {
+        const amountToSet = Math.max(finalPrice, 1000);
+        await widgets.setAmount({
+          currency: 'KRW',
+          value: amountToSet,
+        });
+        console.log('결제 금액 업데이트:', amountToSet);
+      } catch (error) {
+        console.error('결제 금액 업데이트 실패:', error);
+      }
+    };
+    
+    updateAmount();
+  }, [widgets, finalPrice, ready]);
 
   // 컴포넌트 언마운트 시 또는 페이지 언로드 시 결제 취소 처리
   useEffect(() => {
@@ -240,6 +339,7 @@ export default function CheckoutPage() {
               return {
                 id: `direct_${item.product_id}${item.product_option_id ? '_' + item.product_option_id : ''}`,
                 productId: item.product_id,
+                productOptionId: item.product_option_id || null,
                 name: item.product.name,
                 price: itemPrice, // 옵션 가격을 포함한 단일 가격
                 originalPrice: item.product.discount_price || item.product.price, // 원래 상품 가격
@@ -279,10 +379,18 @@ export default function CheckoutPage() {
           // 데이터 유효성 검사
           if (Array.isArray(parsedItems)) {
             // 배송비는 groupItemsByProduct 함수에서 재계산되므로 0으로 설정
-            const formattedItems = parsedItems.map(item => ({
-              ...item,
-              shippingFee: 0 // 그룹화 과정에서 재계산
-            }));
+            const formattedItems = parsedItems.map(item => {
+              // 옵션 ID가 있는지 확인하여 추가
+              const productOptionId = item.option ? 
+                (item.productOptionId || null) : 
+                null;
+                
+              return {
+                ...item,
+                productOptionId,
+                shippingFee: 0 // 그룹화 과정에서 재계산
+              };
+            });
             setItems(formattedItems);
           } else {
             throw new Error('유효하지 않은 체크아웃 아이템 형식');
@@ -512,6 +620,12 @@ export default function CheckoutPage() {
       return;
     }
     
+    if (!widgets || !ready) {
+      alert('결제 모듈이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      initTossPayments(); // 다시 초기화 시도
+      return;
+    }
+    
     setOrderProcessing(true);
     setOrderError(null);
     
@@ -540,6 +654,7 @@ export default function CheckoutPage() {
         userId: userId,
         items: items.map(item => ({
           productId: item.productId,
+          productOptionId: item.productOptionId || null,
           name: safeString(item.name),
           price: item.price,
           originalPrice: item.originalPrice || item.price,
@@ -561,8 +676,8 @@ export default function CheckoutPage() {
           memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
         },
         payment: {
-          method: 'direct',
-          totalAmount: totalPrice + shippingFee
+          method: 'toss',  // 토스 페이먼츠로 변경
+          totalAmount: finalPrice
         }
       };
       
@@ -592,15 +707,62 @@ export default function CheckoutPage() {
       
       const orderResult = await orderResponse.json();
       console.log('주문 생성 결과:', orderResult);
-
-      // 주문 완료 후 처리
-      localStorage.removeItem('checkoutItems'); // 체크아웃 아이템 삭제
-      router.push(`/orders/${orderResult.orderId}/complete`);
       
+      // orderId 저장
+      localStorage.setItem('currentOrderId', orderResult.orderId);
+      
+      // 토스 페이먼츠 위젯으로 결제 요청
+      try {
+        console.log('토스 페이먼츠 결제 요청');
+        
+        await widgets.requestPayment({
+          orderId: orderResult.orderId,
+          orderName: `마이팜 상품 ${items.length > 1 ? `외 ${items.length - 1}건` : ''}`,
+          customerName: shippingInfo.name,
+          customerEmail: user?.email || '',
+          successUrl: `${window.location.origin}/checkout/success`,
+          failUrl: `${window.location.origin}/checkout/fail?orderId=${orderResult.orderId}`,
+        });
+        
+        console.log('토스 페이먼츠 결제 요청 완료');
+      } catch (paymentError: any) {
+        console.error('결제 요청 오류:', paymentError);
+        
+        // 결제 취소 처리 (사용자가 결제창을 닫은 경우 포함)
+        if (paymentError.message === '취소되었습니다.' || 
+            paymentError.message.includes('cancel') || 
+            paymentError.message.includes('취소')) {
+          console.log('사용자가 결제를 취소했습니다.');
+          
+          // 주문 취소 API 호출
+          try {
+            const cancelResponse = await fetch(`/api/orders/cancel`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...authHeader
+              },
+              body: JSON.stringify({ orderId: orderResult.orderId })
+            });
+            
+            if (cancelResponse.ok) {
+              console.log('주문이 정상적으로 취소되었습니다.');
+            }
+          } catch (cancelError) {
+            console.error('주문 취소 API 호출 실패:', cancelError);
+          }
+          
+          // 사용자에게 취소 메시지 표시 (중복 메시지 제거)
+          setOrderError('결제가 취소되었습니다. 결제를 다시 시도하려면 아래 버튼을 클릭해주세요.');
+          setOrderProcessing(false); // 결제 취소 시 주문 처리 상태 해제
+        } else {
+          // 기타 결제 오류
+          throw new Error(paymentError.message || '결제 요청에 실패했습니다.');
+        }
+      }
     } catch (error) {
       console.error('주문 처리 오류:', error);
       setOrderError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
-    } finally {
       setOrderProcessing(false);
     }
   };
@@ -776,6 +938,13 @@ export default function CheckoutPage() {
               </div>
             </div>
           </Card>
+          
+          {/* 결제 수단 선택 */}
+          <Card title="결제 수단" className="mb-6">
+            <div id="payment-method" ref={paymentMethodRef} className="mt-4"></div>
+            {/* 이용약관 UI */}
+            <div id="agreement" ref={agreementRef} className="mt-6"></div>
+          </Card>
         </div>
         
         <div className="lg:col-span-1">
@@ -807,14 +976,26 @@ export default function CheckoutPage() {
               
               <Button
                 onClick={handleSubmitOrder}
-                disabled={loading || !agreeToTerms}
+                disabled={loading || !agreeToTerms || orderProcessing || !ready}
                 variant="primary"
                 size="lg"
                 fullWidth
                 className="mt-4"
               >
-                {loading ? '처리 중...' : '주문하기'}
+                {orderProcessing ? '처리 중...' : '결제하기'}
               </Button>
+              
+              {!ready && (
+                <p className="text-yellow-600 text-sm mt-2 text-center">
+                  결제 모듈을 불러오는 중입니다...
+                </p>
+              )}
+              
+              {orderError && (
+                <div className="mt-4 p-3 bg-red-100 text-red-700 rounded">
+                  <p className="text-sm">{orderError}</p>
+                </div>
+              )}
             </div>
             
             <div className="mt-4 text-center">
