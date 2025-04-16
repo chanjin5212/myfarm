@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -120,7 +120,7 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-export default function MyPage() {
+function MyPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -333,191 +333,205 @@ export default function MyPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-green-500"></div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-center mb-10">마이페이지</h1>
-        
-        {user && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            {/* 프로필 헤더 */}
-            <div className="bg-blue-600 p-6 text-white">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  {user.avatar_url ? (
-                    <Image
-                      src={user.avatar_url}
-                      alt="프로필 이미지"
-                      width={80}
-                      height={80}
-                      className="h-20 w-20 rounded-full border-4 border-white"
-                    />
-                  ) : (
-                    <div className="h-20 w-20 rounded-full bg-blue-300 flex items-center justify-center text-blue-800 text-2xl font-bold border-4 border-white">
-                      {user.nickname?.charAt(0) || user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <div className="ml-6">
-                  <h2 className="text-2xl font-bold">{user.nickname || user.name || '회원'}</h2>
-                  <p className="text-blue-100">{user.email}</p>
-                  <p className="text-blue-100 text-sm mt-1">
-                    가입일: {user.created_at ? formatDate(user.created_at) : '정보 없음'}
-                  </p>
-                </div>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-center mb-10">마이페이지</h1>
+      
+      {user && (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {/* 프로필 헤더 */}
+          <div className="bg-blue-600 p-6 text-white">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                {user.avatar_url ? (
+                  <Image
+                    src={user.avatar_url}
+                    alt="프로필 이미지"
+                    width={80}
+                    height={80}
+                    className="h-20 w-20 rounded-full border-4 border-white"
+                  />
+                ) : (
+                  <div className="h-20 w-20 rounded-full bg-blue-300 flex items-center justify-center text-blue-800 text-2xl font-bold border-4 border-white">
+                    {user.nickname?.charAt(0) || user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="ml-6">
+                <h2 className="text-2xl font-bold">{user.nickname || user.name || '회원'}</h2>
+                <p className="text-blue-100">{user.email}</p>
+                <p className="text-blue-100 text-sm mt-1">
+                  가입일: {user.created_at ? formatDate(user.created_at) : '정보 없음'}
+                </p>
               </div>
             </div>
-            
-            {/* 탭 메뉴 */}
-            <div className="border-b">
-              <nav className="flex -mb-px">
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className={`py-4 px-6 font-medium text-sm border-b-2 focus:outline-none ${
-                    activeTab === 'profile'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  내 정보
-                </button>
-                <button
-                  onClick={() => setActiveTab('orders')}
-                  className={`py-4 px-6 font-medium text-sm border-b-2 focus:outline-none ${
-                    activeTab === 'orders'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  주문 내역
-                </button>
-              </nav>
-            </div>
-            
-            {/* 컨텐츠 영역 */}
-            <div className="p-6">
-              {/* 프로필 탭 */}
-              {activeTab === 'profile' && (
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">회원 정보</h3>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <p className="text-sm text-gray-500">이메일</p>
-                        <p className="font-medium">{user.email}</p>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <p className="text-sm text-gray-500">이름</p>
-                        <p className="font-medium">{user.name || '정보 없음'}</p>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <p className="text-sm text-gray-500">닉네임</p>
-                        <p className="font-medium">{user.nickname || '정보 없음'}</p>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <p className="text-sm text-gray-500">휴대폰 번호</p>
-                        <p className="font-medium">{formatPhoneNumber(user.phone_number)}</p>
-                      </div>
+          </div>
+          
+          {/* 탭 메뉴 */}
+          <div className="border-b">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('profile')}
+                className={`py-4 px-6 font-medium text-sm border-b-2 focus:outline-none ${
+                  activeTab === 'profile'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                내 정보
+              </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`py-4 px-6 font-medium text-sm border-b-2 focus:outline-none ${
+                  activeTab === 'orders'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                주문 내역
+              </button>
+            </nav>
+          </div>
+          
+          {/* 컨텐츠 영역 */}
+          <div className="p-6">
+            {/* 프로필 탭 */}
+            {activeTab === 'profile' && (
+              <div>
+                <h3 className="text-xl font-semibold mb-4">회원 정보</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-500">이메일</p>
+                      <p className="font-medium">{user.email}</p>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-500">주소</p>
-                      {user.address ? (
-                        <div>
-                          <p className="font-medium">[{user.postcode}] {user.address}</p>
-                          <p className="font-medium">{user.detail_address}</p>
-                        </div>
-                      ) : (
-                        <p className="font-medium">등록된 주소가 없습니다.</p>
-                      )}
+                      <p className="text-sm text-gray-500">이름</p>
+                      <p className="font-medium">{user.name || '정보 없음'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-500">닉네임</p>
+                      <p className="font-medium">{user.nickname || '정보 없음'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-500">휴대폰 번호</p>
+                      <p className="font-medium">{formatPhoneNumber(user.phone_number)}</p>
                     </div>
                   </div>
-                  
-                  <h3 className="text-xl font-semibold mt-8 mb-4">바로가기</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <MenuItem 
-                      href="/mypage/edit-profile"
-                      title="개인정보 수정"
-                      icon={
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                        </svg>
-                      }
-                    />
-                    {user?.login_id && (
-                      <MenuItem 
-                        href="/mypage/change-password"
-                        title="비밀번호 변경"
-                        icon={
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                          </svg>
-                        }
-                      />
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-500">주소</p>
+                    {user.address ? (
+                      <div>
+                        <p className="font-medium">[{user.postcode}] {user.address}</p>
+                        <p className="font-medium">{user.detail_address}</p>
+                      </div>
+                    ) : (
+                      <p className="font-medium">등록된 주소가 없습니다.</p>
                     )}
-                    <div
-                      className="flex items-center p-4 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm cursor-pointer"
-                      onClick={handleAddressModalOpen}
-                    >
-                      <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-base font-medium text-gray-800">배송지 관리</p>
-                      </div>
-                    </div>
-                    <MenuItem 
-                      href="#"
-                      title="로그아웃"
-                      icon={
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5-5H3zm6.293 11.293a1 1 0 001.414 1.414l4-4a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 1.414L11.586 10l-2.293 2.293z" clipRule="evenodd" />
-                        </svg>
-                      }
-                      onClick={handleLogout}
-                    />
                   </div>
                 </div>
-              )}
-              
-              {/* 주문 내역 탭 */}
-              {activeTab === 'orders' && (
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">주문 내역</h3>
-                  <OrderHistoryTab />
+                
+                <h3 className="text-xl font-semibold mt-8 mb-4">바로가기</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  <MenuItem 
+                    href="/mypage/edit-profile"
+                    title="개인정보 수정"
+                    icon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                    }
+                  />
+                  {user?.login_id && (
+                    <MenuItem 
+                      href="/mypage/change-password"
+                      title="비밀번호 변경"
+                      icon={
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                      }
+                    />
+                  )}
+                  <div
+                    className="flex items-center p-4 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm cursor-pointer"
+                    onClick={handleAddressModalOpen}
+                  >
+                    <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-base font-medium text-gray-800">배송지 관리</p>
+                    </div>
+                  </div>
+                  <MenuItem 
+                    href="#"
+                    title="로그아웃"
+                    icon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5-5H3zm6.293 11.293a1 1 0 001.414 1.414l4-4a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 1.414L11.586 10l-2.293 2.293z" clipRule="evenodd" />
+                      </svg>
+                    }
+                    onClick={handleLogout}
+                  />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+            
+            {/* 주문 내역 탭 */}
+            {activeTab === 'orders' && (
+              <div>
+                <h3 className="text-xl font-semibold mb-4">주문 내역</h3>
+                <OrderHistoryTab />
+              </div>
+            )}
           </div>
-        )}
-        
-        {/* 배송지 관리 모달 */}
-        {user && (
-          <ShippingAddressModal 
-            isOpen={isAddressModalOpen}
-            onClose={handleAddressModalClose}
-            userId={user.id}
-            onAddressUpdate={handleAddressUpdate}
-          />
-        )}
+        </div>
+      )}
+      
+      {/* 배송지 관리 모달 */}
+      {user && (
+        <ShippingAddressModal 
+          isOpen={isAddressModalOpen}
+          onClose={handleAddressModalClose}
+          userId={user.id}
+          onAddressUpdate={handleAddressUpdate}
+        />
+      )}
 
-        {/* 리뷰 작성 모달 */}
-        {selectedOrderForReview && (
-          <ReviewModal
-            isOpen={isReviewModalOpen}
-            onClose={handleCloseReviewModal}
-            orderId={selectedOrderForReview.id}
-            productName={selectedOrderForReview.productName}
-          />
-        )}
-      </div>
+      {/* 리뷰 작성 모달 */}
+      {selectedOrderForReview && (
+        <ReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={handleCloseReviewModal}
+          orderId={selectedOrderForReview.id}
+          productName={selectedOrderForReview.productName}
+        />
+      )}
     </div>
+  );
+}
+
+export default function MyPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-green-500"></div>
+        </div>
+      </div>
+    }>
+      <MyPageContent />
+    </Suspense>
   );
 } 
