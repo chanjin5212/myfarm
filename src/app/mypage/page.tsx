@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/CommonStyles';
 import { checkToken, getAuthHeader, logout } from '@/utils/auth';
 import toast from 'react-hot-toast';
 import ShippingAddressModal from './ShippingAddressModal';
+import ReviewModal from './ReviewModal';
 
 interface User {
   id: string;
@@ -120,6 +121,9 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
 };
 
 export default function MyPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
@@ -127,7 +131,16 @@ export default function MyPage() {
   const [error, setError] = useState<string | null>(null);
   const [isShippingPopupOpen, setIsShippingPopupOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
-  const router = useRouter();
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [selectedOrderForReview, setSelectedOrderForReview] = useState<{ id: string, productName: string } | null>(null);
+
+  // URL 파라미터에서 탭 정보 가져오기
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'orders') {
+      setActiveTab('orders');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -237,6 +250,85 @@ export default function MyPage() {
   
   const handleAddressUpdate = () => {
     toast.success('배송지 정보가 업데이트되었습니다.');
+  };
+
+  const handleReviewClick = (orderId: string, productName: string) => {
+    setSelectedOrderForReview({ id: orderId, productName });
+    setIsReviewModalOpen(true);
+  };
+
+  const handleCloseReviewModal = () => {
+    setIsReviewModalOpen(false);
+    setSelectedOrderForReview(null);
+  };
+
+  // 주문 내역 탭
+  const OrderHistoryTab = () => {
+    if (orderHistory.length === 0) {
+      return (
+        <div className="p-8 text-center bg-white rounded-lg shadow-sm">
+          <div className="mb-4">
+            <Image src="/assets/icons/order-empty.svg" alt="No orders" width={80} height={80} className="mx-auto" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-700 mb-2">주문 내역이 없습니다</h3>
+          <p className="text-gray-500 mb-6">아직 주문한 상품이 없습니다. 신선한 농산물을 지금 구매해보세요!</p>
+          <Link href="/products">
+            <Button className="px-8 py-2 border-2 border-green-600 text-green-600 font-medium rounded-md hover:bg-green-600 hover:text-white transition-colors inline-block">
+              쇼핑하러 가기
+            </Button>
+          </Link>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm">
+        <ul className="divide-y divide-gray-200">
+          {orderHistory.map((order) => (
+            <li key={order.id} className="p-6 hover:bg-gray-50 transition-colors">
+              <div className="flex flex-col sm:flex-row justify-between mb-4">
+                <div>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="text-sm text-gray-500">{new Date(order.created_at).toLocaleDateString('ko-KR')}</span>
+                    <span className="text-gray-400">|</span>
+                    <span className="text-sm text-gray-500">주문번호: {order.order_number}</span>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-800">
+                    {order.items.length > 0 
+                      ? `${order.items[0].product_name} ${order.items.length > 1 ? `외 ${order.items.length - 1}건` : ''}`
+                      : '주문 상품 정보 없음'
+                    }
+                  </h3>
+                </div>
+                <div className="mt-2 sm:mt-0">
+                  <OrderStatusBadge status={order.status} />
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0">
+                <p className="text-lg font-bold text-gray-900">{order.total_amount.toLocaleString()}원</p>
+                <div className="flex space-x-2">
+                  <Link href={`/orders/${order.id}/detail`}>
+                    <button className="px-4 py-2 border border-green-600 text-green-600 font-medium rounded-md hover:bg-green-50 transition-colors text-sm">
+                      주문 상세보기
+                    </button>
+                  </Link>
+                  {/* 배송완료된 주문에만 리뷰쓰기 버튼 표시 */}
+                  {order.status === 'delivered' && (
+                    <button 
+                      onClick={() => handleReviewClick(order.id, order.items[0]?.product_name || '상품')}
+                      className="px-4 py-2 border border-blue-500 text-blue-500 font-medium rounded-md hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      리뷰쓰기
+                    </button>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -358,17 +450,15 @@ export default function MyPage() {
                       }
                     />
                     {user?.login_id && (
-                      <Link 
-                        href="/mypage/change-password" 
-                        className="flex items-center p-3 text-base font-medium text-gray-800 rounded-lg hover:bg-gray-100 group hover:shadow"
-                      >
-                        <span className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-gray-500 transition duration-75 group-hover:text-gray-900">
+                      <MenuItem 
+                        href="/mypage/change-password"
+                        title="비밀번호 변경"
+                        icon={
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                           </svg>
-                        </span>
-                        <span className="ml-3">비밀번호 변경</span>
-                      </Link>
+                        }
+                      />
                     )}
                     <div
                       className="flex items-center p-4 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 shadow-sm cursor-pointer"
@@ -401,52 +491,7 @@ export default function MyPage() {
               {activeTab === 'orders' && (
                 <div>
                   <h3 className="text-xl font-semibold mb-4">주문 내역</h3>
-                  {orderHistory.length > 0 ? (
-                    <div className="space-y-6">
-                      {orderHistory.map((order) => (
-                        <div key={order.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                          <Link href={`/orders/${order.id}/detail`}>
-                            <div className="bg-gray-50 p-4 flex justify-between items-center">
-                              <div>
-                                <p className="font-medium">{order.order_number}</p>
-                                <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
-                              </div>
-                              <div>
-                                <OrderStatusBadge status={order.status} />
-                              </div>
-                            </div>
-                            <div className="p-4">
-                              <div className="space-y-2">
-                                {order.items.map((item, index) => (
-                                  <div key={index} className="flex justify-between">
-                                    <div className="flex-1">
-                                      <p className="font-medium">{item.product_name}</p>
-                                      <p className="text-sm text-gray-500">{item.quantity}개</p>
-                                    </div>
-                                    <p className="text-right">{item.price.toLocaleString()}원</p>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="mt-4 pt-4 border-t flex justify-between items-center">
-                                <p className="font-semibold">총 금액</p>
-                                <p className="font-bold text-lg">{order.total_amount.toLocaleString()}원</p>
-                              </div>
-                              <div className="mt-4 text-right">
-                                <span className="text-blue-600 text-sm font-medium">주문 상세보기 &rarr;</span>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10">
-                      <p className="text-gray-500 mb-4">주문 내역이 없습니다.</p>
-                      <Link href="/products" className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                        상품 보러가기
-                      </Link>
-                    </div>
-                  )}
+                  <OrderHistoryTab />
                 </div>
               )}
             </div>
@@ -460,6 +505,16 @@ export default function MyPage() {
             onClose={handleAddressModalClose}
             userId={user.id}
             onAddressUpdate={handleAddressUpdate}
+          />
+        )}
+
+        {/* 리뷰 작성 모달 */}
+        {selectedOrderForReview && (
+          <ReviewModal
+            isOpen={isReviewModalOpen}
+            onClose={handleCloseReviewModal}
+            orderId={selectedOrderForReview.id}
+            productName={selectedOrderForReview.productName}
           />
         )}
       </div>

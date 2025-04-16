@@ -53,69 +53,82 @@ export async function GET(request: NextRequest) {
     }
     
     // 안전하게 배열 확인
-    let addressList = addresses || [];
+    const addressList = addresses || [];
     console.log('기존 배송지 목록:', addressList.length);
     
-    // 사용자 기본 주소 확인을 위한 변수
-    let userBasicAddressExists = false;
+    // 모든 배송지에 default_address 필드 추가 (기본값: false)
+    const addressesWithFlags = addressList.map(addr => ({
+      ...addr,
+      default_address: false
+    }));
     
-    // 각 배송지에 default_user_address 가상 필드 추가 (API 응답용)
-    if (addressList.length > 0) {
-      // 사용자 정보와 일치하는 주소가 있는지 확인
-      userBasicAddressExists = addressList.some(addr => 
+    // 최종 결과 배열 준비
+    let result = [...addressesWithFlags];
+    
+    // 사용자 기본 주소가 있으면 목록 맨 앞에 추가 (가상 객체로, 저장하지 않음)
+    if (userData && userData.address) {
+      // 이미 같은 주소가 배송지 목록에 있는지 확인
+      const userBasicAddressExists = addressList.some(addr => 
         addr.address === userData.address && 
         addr.detail_address === userData.detail_address
       );
       
-      // 각 주소에 default_user_address 가상 필드 추가
-      addressList = addressList.map(addr => ({
-        ...addr,
-        default_user_address: addr.address === userData.address && 
-                              addr.detail_address === userData.detail_address
-      }));
-    }
-    
-    // 사용자 기본 주소가 배송지 목록에 없고, users 테이블에 주소 정보가 있는 경우
-    if (!userBasicAddressExists && userData && userData.address) {
-      console.log('사용자 기본 주소 추가 시도:', userData.address);
-      
-      try {
-        // 사용자 기본 주소 추가
-        const { data: newAddress, error: insertError } = await supabase
-          .from('shipping_addresses')
-          .insert({
-            user_id: userId,
-            recipient_name: userData.name || '사용자',
-            phone: userData.phone_number || '',
-            address: userData.address,
-            detail_address: userData.detail_address || '',
-            is_default: addressList.length === 0, // 첫 배송지라면 기본 배송지로 설정
-            memo: '기본 주소'
-          })
-          .select()
-          .single();
-          
-        if (insertError) {
-          console.error('기본 주소 추가 오류:', insertError);
-        } else if (newAddress) {
-          console.log('새 기본 주소 추가됨:', newAddress.id);
-          // 새로 추가된 주소에 default_user_address 가상 필드 추가
-          addressList.unshift({
-            ...newAddress,
-            default_user_address: true
-          });
-        }
-      } catch (insertError) {
-        console.error('기본 주소 추가 예외:', insertError);
+      if (!userBasicAddressExists) {
+        // 사용자 기본 주소를 가상 객체로 목록에 추가
+        const userDefaultAddress = {
+          id: `user-default-${userId}`, // 가상 ID
+          user_id: userId,
+          recipient_name: userData.name || '사용자',
+          phone: userData.phone_number || '',
+          address: userData.address,
+          detail_address: userData.detail_address || '',
+          postcode: userData.postcode || '',
+          is_default: true, // 기본 배송지로 표시
+          memo: '내 기본 주소',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          default_address: true, // users 테이블에서 가져온 주소임을 표시
+          is_editable: false, // 수정 불가능
+          is_deletable: false, // 삭제 불가능
+          note: "*마이페이지에서 수정 가능합니다", // 추가 설명
+          type: "user_default_address", // 주소 유형 (사용자 기본 주소)
+          display_name: userData.name || '사용자' // 화면에 표시할 이름을 사용자의 실제 이름으로 설정
+        };
+        
+        // 결과 배열 맨 앞에 추가
+        result.unshift(userDefaultAddress);
+        console.log('사용자 기본 주소를 가상 객체로 추가함');
+      } else {
+        // 기존 주소 중 사용자 기본 주소와 일치하는 주소가 있을 경우
+        console.log('사용자 기본 주소가 배송지 목록에 존재함');
+        
+        // 모든 주소에 default_address 플래그 추가 (사용자 기본 주소인 경우만 true)
+        result = result.map(addr => {
+          const isUserDefault = addr.address === userData.address && 
+                               addr.detail_address === userData.detail_address;
+          return {
+            ...addr,
+            default_address: isUserDefault, // users 테이블 주소와 일치하는 경우만 true
+            // 사용자 기본 주소와 일치하면 display_name 추가
+            display_name: isUserDefault ? userData.name || '사용자' : addr.display_name,
+            // 기본 배송지로 표시
+            is_default: isUserDefault ? true : addr.is_default,
+            // 사용자 기본 주소인 경우 추가 플래그
+            is_editable: isUserDefault ? false : true,
+            is_deletable: isUserDefault ? false : true,
+            note: isUserDefault ? "*마이페이지에서 수정 가능합니다" : "",
+            type: isUserDefault ? "user_default_address" : "shipping_address"
+          };
+        });
       }
     } else {
-      console.log('사용자 기본 주소 이미 있거나 주소 정보가 없음:', userBasicAddressExists ? '있음' : '없음');
+      console.log('사용자에게 주소 정보가 없음');
     }
     
     // 최종 배송지 목록 출력
-    console.log('최종 반환 배송지 수:', addressList.length);
+    console.log('최종 반환 배송지 수:', result.length);
     
-    return NextResponse.json({ addresses: addressList });
+    return NextResponse.json({ addresses: result });
     
   } catch (error) {
     console.error('배송지 목록 조회 처리 오류:', error);
@@ -161,6 +174,23 @@ export async function POST(request: NextRequest) {
         
       if (updateError) {
         console.error('기존 기본 배송지 해제 오류:', updateError);
+      }
+    }
+    
+    // 사용자 기본 주소 업데이트 (사용자가 명시적으로 기본 주소로 설정했을 경우)
+    if (is_default) {
+      // 사용자 테이블의 주소 정보도 업데이트
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update({
+          address: address,
+          detail_address: detail_address || '',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+        
+      if (userUpdateError) {
+        console.error('사용자 기본 주소 업데이트 오류:', userUpdateError);
       }
     }
     

@@ -12,6 +12,9 @@ interface ShippingAddress {
   is_default: boolean;
   memo?: string;
   default_user_address?: boolean;
+  default_address?: boolean;
+  note?: string;
+  display_name?: string;
 }
 
 interface ShippingAddressModalProps {
@@ -43,7 +46,8 @@ export default function ShippingAddressModal({
     address: '',
     detail_address: '',
     is_default: false,
-    memo: ''
+    memo: '',
+    default_user_address: false
   });
 
   useEffect(() => {
@@ -51,6 +55,15 @@ export default function ShippingAddressModal({
       loadAddresses();
     }
   }, [isOpen, userId]);
+
+  // 모달이 닫힐 때 모든 상태 초기화
+  const handleClose = () => {
+    setShowAddForm(false);
+    setShowEditForm(false);
+    setCurrentEditId(null);
+    resetAddressForm();
+    onClose();
+  };
 
   // 배송지 목록 로드
   const loadAddresses = async () => {
@@ -88,6 +101,15 @@ export default function ShippingAddressModal({
 
   // 배송지 삭제
   const handleDeleteAddress = async (addressId: string) => {
+    // 삭제하려는 주소 정보 찾기
+    const addressToDelete = addresses.find(addr => addr.id === addressId);
+    
+    // 기본 주소인 경우 삭제 방지
+    if (addressToDelete?.default_address) {
+      alert('기본 주소는 삭제할 수 없습니다. 마이페이지의 개인정보 수정에서 주소를 변경해주세요.');
+      return;
+    }
+    
     if (!confirm('정말로 이 배송지를 삭제하시겠습니까?')) {
       return;
     }
@@ -115,13 +137,20 @@ export default function ShippingAddressModal({
 
   // 배송지 수정 시작
   const handleStartEdit = (address: ShippingAddress) => {
+    // 기본 주소인 경우 수정 방지
+    if (address.default_address) {
+      alert('기본 주소는 수정할 수 없습니다. 마이페이지의 개인정보 수정에서 주소를 변경해주세요.');
+      return;
+    }
+    
     setNewAddress({
       recipient_name: address.recipient_name,
       phone: address.phone,
       address: address.address,
       detail_address: address.detail_address || '',
       is_default: address.is_default,
-      memo: address.memo || ''
+      memo: address.memo || '',
+      default_user_address: address.default_user_address || false
     });
     setCurrentEditId(address.id);
     setShowEditForm(true);
@@ -219,7 +248,8 @@ export default function ShippingAddressModal({
       address: '',
       detail_address: '',
       is_default: false,
-      memo: ''
+      memo: '',
+      default_user_address: false
     });
   };
 
@@ -271,6 +301,32 @@ export default function ShippingAddressModal({
     }
   };
 
+  // 전화번호 포맷팅 (자동 하이픈 추가)
+  const formatPhoneNumber = (phone: string) => {
+    // 숫자만 추출
+    const numbers = phone.replace(/[^0-9]/g, '');
+    
+    // 11자리(휴대폰) 또는 10자리(일반전화) 형식으로 변환
+    if (numbers.length === 11) {
+      return `${numbers.substring(0, 3)}-${numbers.substring(3, 7)}-${numbers.substring(7)}`;
+    } else if (numbers.length === 10) {
+      // 지역번호가 2자리인 경우 (02-xxxx-xxxx)
+      if (numbers.startsWith('02')) {
+        return `${numbers.substring(0, 2)}-${numbers.substring(2, 6)}-${numbers.substring(6)}`;
+      }
+      // 지역번호가 3자리인 경우 (0xx-xxx-xxxx)
+      return `${numbers.substring(0, 3)}-${numbers.substring(3, 6)}-${numbers.substring(6)}`;
+    }
+    
+    return numbers; // 그 외의 경우는 그대로 반환
+  };
+  
+  // 전화번호 입력 처리
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedPhone = formatPhoneNumber(e.target.value);
+    setNewAddress({...newAddress, phone: formattedPhone});
+  };
+
   // 배송지 폼 공통 렌더링
   const renderAddressForm = (isEdit: boolean, handleSubmit: (e: React.FormEvent) => Promise<void>, handleCancel: () => void) => (
     <div className="border rounded-lg p-4">
@@ -289,7 +345,7 @@ export default function ShippingAddressModal({
             label="연락처 *"
             type="text"
             value={newAddress.phone}
-            onChange={(e) => setNewAddress({...newAddress, phone: e.target.value})}
+            onChange={handlePhoneChange}
             required
           />
           
@@ -360,7 +416,7 @@ export default function ShippingAddressModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title="배송지 관리"
       size="lg"
     >
@@ -388,19 +444,21 @@ export default function ShippingAddressModal({
                         key={address.id}
                         className={`border rounded-lg p-4 ${
                           address.is_default ? 'bg-green-50 border-green-500' : ''
+                        } ${
+                          address.default_user_address ? 'bg-blue-50 border-blue-500' : ''
                         }`}
                       >
                         <div className="flex justify-between">
                           <div>
-                            <p className="font-medium">{address.recipient_name}</p>
+                            <p className="font-medium">{address.display_name || address.memo || address.recipient_name}</p>
                             <p className="text-sm text-gray-600">{address.phone}</p>
                           </div>
                           <div className="flex space-x-2">
                             {address.is_default && (
                               <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">기본 배송지</span>
                             )}
-                            {address.default_user_address && (
-                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">내 기본 주소</span>
+                            {address.default_address && (
+                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-bold">내 기본 주소</span>
                             )}
                           </div>
                         </div>
@@ -408,8 +466,16 @@ export default function ShippingAddressModal({
                         {address.detail_address && (
                           <p className="text-sm text-gray-500">{address.detail_address}</p>
                         )}
-                        {address.memo && (
+                        {address.memo && address.memo !== '내 기본 주소' && (
                           <p className="text-xs text-gray-500 mt-1">메모: {address.memo}</p>
+                        )}
+                        {address.note && (
+                          <p className="text-xs text-red-500 mt-1 italic">{address.note}</p>
+                        )}
+                        {address.default_address && !address.note && (
+                          <p className="text-xs text-red-500 mt-1 italic">
+                            * 기본 주소는 마이페이지의 <strong>개인정보 수정</strong> 메뉴에서만 변경할 수 있습니다.
+                          </p>
                         )}
                         <div className="flex justify-end mt-2 space-x-2">
                           {onAddressSelect && (
@@ -422,22 +488,26 @@ export default function ShippingAddressModal({
                               선택
                             </Button>
                           )}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStartEdit(address)}
-                          >
-                            수정
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteAddress(address.id)}
-                          >
-                            삭제
-                          </Button>
+                          {!address.default_address && (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleStartEdit(address)}
+                              >
+                                수정
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteAddress(address.id)}
+                              >
+                                삭제
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -461,7 +531,7 @@ export default function ShippingAddressModal({
           )}
           
           {/* 배송지 추가 폼 */}
-          {showAddForm && renderAddressForm(false, handleAddAddress, () => setShowAddForm(false))}
+          {showAddForm && renderAddressForm(false, handleAddAddress, handleClose)}
           
           {/* 배송지 수정 폼 */}
           {showEditForm && renderAddressForm(true, handleUpdateAddress, handleCancelEdit)}

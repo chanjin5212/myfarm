@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@sendgrid/mail": "^8.1.5",
     "@supabase/supabase-js": "^2.49.4",
     "@types/bcrypt": "^5.0.2",
@@ -20,6 +21,7 @@
     "bcryptjs": "^3.0.2",
     "crypto-js": "^4.2.0",
     "next": "15.3.0",
+    "next-auth": "^4.24.11",
     "nodemailer": "^6.10.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

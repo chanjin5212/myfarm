@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getAuthHeader, checkToken } from '@/utils/auth';
+import ProductInfoTab from './components/ProductInfoTab';
+import ReviewTab from './components/ReviewTab';
 
 interface ProductDetail {
   id: string;
@@ -72,6 +74,9 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isAddingToCart, setIsAddingToCart] = useState<boolean>(false);
   const [cartSuccessPopup, setCartSuccessPopup] = useState<boolean>(false);
+  
+  // 탭 상태 추가
+  const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
   
   // 버튼별 로딩 상태 추가
   const [changingOptionId, setChangingOptionId] = useState<string | null>(null);
@@ -821,27 +826,47 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* 상품 상세 설명 */}
+      {/* 탭 섹션 */}
       <div className="mt-16">
-        <h2 className="text-2xl font-bold mb-6 pb-2 border-b">상품 상세 정보</h2>
-        <div className="prose max-w-none">
-          <p className="whitespace-pre-line">{productDetails.description}</p>
-          {/* 추가 상품 이미지 및 설명 */}
-          {images.map((image, index) => (
-            !image.is_thumbnail && (
-              <div key={image.id} className="my-8">
-                <div className="relative w-full h-96">
-                  <Image
-                    src={image.image_url}
-                    alt={`${productDetails.name} 이미지 ${index + 1}`}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                    className="object-cover"
-                  />
-                </div>
-              </div>
-            )
-          ))}
+        <div className="border-b mb-6">
+          <div className="flex">
+            <button
+              className={`px-6 py-3 font-semibold ${
+                activeTab === 'info'
+                  ? 'text-green-600 border-b-2 border-green-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              onClick={() => setActiveTab('info')}
+            >
+              상품 상세정보
+            </button>
+            <button
+              className={`px-6 py-3 font-semibold ${
+                activeTab === 'review'
+                  ? 'text-green-600 border-b-2 border-green-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              onClick={() => setActiveTab('review')}
+            >
+              상품 후기
+            </button>
+          </div>
+        </div>
+
+        {/* 탭 컨텐츠 */}
+        <div>
+          {activeTab === 'info' && (
+            <ProductInfoTab
+              description={productDetails.description}
+              origin={productDetails.origin}
+              harvestDate={productDetails.harvest_date}
+              storageMethod={productDetails.storage_method}
+              isOrganic={productDetails.is_organic}
+            />
+          )}
+          {activeTab === 'review' && (
+            <ReviewTab productId={Number(productDetails.id)} />
+          )}
         </div>
       </div>
     </div>

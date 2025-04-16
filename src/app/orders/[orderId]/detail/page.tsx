@@ -349,7 +349,7 @@ export default function OrderDetailPage() {
 
         {/* 하단 버튼 */}
         <div className="p-6 flex justify-between">
-          <Link href="/mypage/orders" className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded">
+          <Link href="/mypage?tab=orders" className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded">
             주문 목록으로
           </Link>
           {(paymentInfo.status === 'pending' || paymentInfo.status === 'processing') && (

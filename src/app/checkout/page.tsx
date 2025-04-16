@@ -342,7 +342,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (user) {
       console.log('사용자 정보가 로드되어 배송지 목록 로드 시도');
-      loadShippingAddresses();
+        loadShippingAddresses();
     }
   }, [user]);
 
@@ -363,11 +363,11 @@ export default function CheckoutPage() {
             // id가 존재하는지 확인
             if (userData.id) {
               userInfo = userData;
-              setUser(userInfo);
+            setUser(userInfo);
               
               // 사용자 정보를 사용하여 배송지 정보 설정
-              setShippingInfo(prev => ({
-                ...prev,
+            setShippingInfo(prev => ({
+              ...prev,
                 name: userData.name || '',
                 phone: userData.phone_number || '',
                 address: userData.address || '',
@@ -471,24 +471,24 @@ export default function CheckoutPage() {
         }
       } else {
         // 기존 장바구니 체크아웃 아이템 가져오기
-        const checkoutItems = localStorage.getItem('checkoutItems');
-        if (!checkoutItems) {
-          router.push('/cart');
-          return;
-        }
+      const checkoutItems = localStorage.getItem('checkoutItems');
+      if (!checkoutItems) {
+        router.push('/cart');
+        return;
+      }
 
-        try {
-          const parsedItems = JSON.parse(checkoutItems);
-          // 데이터 유효성 검사
-          if (Array.isArray(parsedItems)) {
-            setItems(parsedItems);
-          } else {
-            throw new Error('유효하지 않은 체크아웃 아이템 형식');
-          }
-        } catch (parseError) {
-          console.error('체크아웃 아이템 파싱 오류:', parseError);
-          setError('체크아웃 아이템 형식이 올바르지 않습니다.');
-          router.push('/cart');
+      try {
+        const parsedItems = JSON.parse(checkoutItems);
+        // 데이터 유효성 검사
+        if (Array.isArray(parsedItems)) {
+          setItems(parsedItems);
+        } else {
+          throw new Error('유효하지 않은 체크아웃 아이템 형식');
+        }
+      } catch (parseError) {
+        console.error('체크아웃 아이템 파싱 오류:', parseError);
+        setError('체크아웃 아이템 형식이 올바르지 않습니다.');
+        router.push('/cart');
         }
       }
     } catch (error) {
@@ -573,10 +573,10 @@ export default function CheckoutPage() {
           }
           
           // 3. 첫 번째 배송지
-          console.log('첫 번째 배송지 선택:', data.addresses[0].id);
-          setSelectedAddressId(data.addresses[0].id);
-          updateShippingInfo(data.addresses[0]);
-          return;
+            console.log('첫 번째 배송지 선택:', data.addresses[0].id);
+            setSelectedAddressId(data.addresses[0].id);
+            updateShippingInfo(data.addresses[0]);
+            return;
         } else {
           console.log('배송지 목록이 비어있습니다.');
           setAddresses([]);
@@ -822,7 +822,7 @@ export default function CheckoutPage() {
       // paymentMethod가 kakao가 아닐 때만 orderProcessing을 false로 설정
       // kakao 결제의 경우 메시지 이벤트에서 처리
       if (paymentMethod !== 'kakao') {
-        setOrderProcessing(false);
+      setOrderProcessing(false);
       }
     }
   };

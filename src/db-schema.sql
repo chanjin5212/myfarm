@@ -197,18 +197,53 @@ CREATE TABLE product_options (
 
 CREATE TABLE product_reviews (
 	id uuid DEFAULT uuid_generate_v4() NOT NULL,
-	product_id uuid NULL,
-	user_id uuid NULL,
+	product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+	user_id uuid NOT NULL REFERENCES users(id),
+	order_item_id uuid REFERENCES order_items(id),
 	rating int4 NOT NULL,
+	title varchar(200) NULL,
 	"content" text NULL,
 	images _text NULL,
+	status varchar(20) DEFAULT 'active'::character varying,
+	helpful_count int4 DEFAULT 0,
 	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
 	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
 	CONSTRAINT product_reviews_pkey PRIMARY KEY (id),
-	CONSTRAINT product_reviews_rating_check CHECK (((rating >= 1) AND (rating <= 5))),
-	CONSTRAINT product_reviews_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-	CONSTRAINT product_reviews_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id)
+	CONSTRAINT product_reviews_rating_check CHECK (((rating >= 1) AND (rating <= 5)))
 );
+
+-- 리뷰 인덱스 생성
+CREATE INDEX idx_product_reviews_product_id ON product_reviews(product_id);
+CREATE INDEX idx_product_reviews_user_id ON product_reviews(user_id);
+CREATE INDEX idx_product_reviews_order_item_id ON product_reviews(order_item_id);
+
+-- 리뷰 답변 테이블 생성
+CREATE TABLE review_replies (
+	id uuid DEFAULT uuid_generate_v4() NOT NULL,
+	review_id uuid NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
+	user_id uuid NOT NULL REFERENCES users(id),
+	"content" text NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
+	CONSTRAINT review_replies_pkey PRIMARY KEY (id)
+);
+
+-- 답변 인덱스 생성
+CREATE INDEX idx_review_replies_review_id ON review_replies(review_id);
+
+-- 리뷰 도움이 됨 표시 테이블 생성
+CREATE TABLE review_helpfulness (
+	id uuid DEFAULT uuid_generate_v4() NOT NULL,
+	review_id uuid NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
+	user_id uuid NOT NULL REFERENCES users(id),
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
+	CONSTRAINT review_helpfulness_pkey PRIMARY KEY (id),
+	CONSTRAINT review_helpfulness_review_id_user_id_key UNIQUE (review_id, user_id)
+);
+
+-- 도움이 됨 인덱스 생성
+CREATE INDEX idx_review_helpfulness_review_id ON review_helpfulness(review_id);
+CREATE INDEX idx_review_helpfulness_user_id ON review_helpfulness(user_id);
 
 
 -- public.product_tags definition

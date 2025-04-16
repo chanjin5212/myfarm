@@ -60,6 +60,18 @@ export async function PUT(
       return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
     }
     
+    // 사용자 정보 조회 (기본 주소 확인용)
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, phone_number, address, detail_address')
+      .eq('id', userId)
+      .single();
+      
+    if (userError) {
+      console.error('사용자 정보 조회 오류:', userError);
+      return NextResponse.json({ error: '사용자 정보를 불러올 수 없습니다.' }, { status: 500 });
+    }
+    
     // 배송지 존재 여부 확인
     const { data: existingAddress, error: getError } = await supabase
       .from('shipping_addresses')
@@ -77,10 +89,15 @@ export async function PUT(
       return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
     }
     
-    // 사용자의 기본 주소인 경우 수정 불가
-    if (existingAddress.default_user_address) {
+    // 사용자의 기본 주소인 경우 수정 불가 (users 테이블의 주소와 직접 비교)
+    const isUserDefaultAddress = 
+      userData?.address && 
+      existingAddress.address === userData.address && 
+      existingAddress.detail_address === userData.detail_address;
+    
+    if (isUserDefaultAddress) {
       return NextResponse.json({ 
-        error: '사용자의 기본 주소는 마이페이지에서만 수정할 수 있습니다.' 
+        error: '사용자의 기본 주소는 마이페이지의 개인정보 수정에서만 변경할 수 있습니다.' 
       }, { status: 403 });
     }
     
@@ -159,6 +176,18 @@ export async function DELETE(
       return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
     }
     
+    // 사용자 정보 조회 (기본 주소 확인용)
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, phone_number, address, detail_address')
+      .eq('id', userId)
+      .single();
+      
+    if (userError) {
+      console.error('사용자 정보 조회 오류:', userError);
+      return NextResponse.json({ error: '사용자 정보를 불러올 수 없습니다.' }, { status: 500 });
+    }
+    
     // 배송지 존재 여부 확인
     const { data: existingAddress, error: getError } = await supabase
       .from('shipping_addresses')
@@ -176,10 +205,15 @@ export async function DELETE(
       return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
     }
     
-    // 사용자의 기본 주소인 경우 삭제 불가
-    if (existingAddress.default_user_address) {
+    // 사용자의 기본 주소인 경우 삭제 불가 (users 테이블의 주소와 직접 비교)
+    const isUserDefaultAddress = 
+      userData?.address && 
+      existingAddress.address === userData.address && 
+      existingAddress.detail_address === userData.detail_address;
+    
+    if (isUserDefaultAddress) {
       return NextResponse.json({ 
-        error: '사용자의 기본 주소는 삭제할 수 없습니다.' 
+        error: '사용자의 기본 주소는 삭제할 수 없습니다. 마이페이지의 개인정보 수정에서 주소를 변경해주세요.' 
       }, { status: 403 });
     }
     
@@ -192,23 +226,6 @@ export async function DELETE(
     if (error) {
       console.error('배송지 삭제 오류:', error);
       return NextResponse.json({ error: '배송지를 삭제할 수 없습니다.' }, { status: 500 });
-    }
-    
-    // 삭제한 배송지가 기본 배송지였다면 가장 최근에 추가된 배송지를 기본 배송지로 설정
-    if (existingAddress.is_default) {
-      const { data: addresses, error: listError } = await supabase
-        .from('shipping_addresses')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-        
-      if (!listError && addresses && addresses.length > 0) {
-        await supabase
-          .from('shipping_addresses')
-          .update({ is_default: true })
-          .eq('id', addresses[0].id);
-      }
     }
     
     return NextResponse.json({ 
