@@ -27,8 +27,21 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
+      <head>
+        <style 
+          dangerouslySetInnerHTML={{ 
+            __html: `
+              /* 모바일 페이지 스타일링 */
+              body.mobile-layout header:not(.bg-white) {
+                display: none !important;
+              }
+            ` 
+          }} 
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans bg-gray-50`}
+        suppressHydrationWarning={true}
       >
         <Providers>
           <AuthProvider>

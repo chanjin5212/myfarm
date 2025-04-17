@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Spinner } from '@/components/ui/CommonStyles';
 
 // 메인 컨텐츠 컴포넌트 - useSearchParams을 사용
 function ApprovalContent() {
@@ -183,7 +184,9 @@ function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mx-auto mb-4"></div>
+        <div className="mx-auto mb-4">
+          <Spinner size="md" className="mx-auto" />
+        </div>
         <h1 className="text-xl font-semibold text-gray-800 mb-2">페이지를 로드하는 중...</h1>
         <p className="text-gray-600 text-sm">잠시만 기다려주세요.</p>
       </div>

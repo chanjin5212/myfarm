@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Button } from '@/components/ui/CommonStyles';
+import { Button, Spinner } from '@/components/ui/CommonStyles';
 import { checkToken, getAuthHeader, logout } from '@/utils/auth';
 import toast from 'react-hot-toast';
 import ShippingAddressModal from './ShippingAddressModal';
@@ -320,7 +320,7 @@ function MyPageContent() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -513,7 +513,7 @@ export default function MyPage() {
     <Suspense fallback={
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
+          <Spinner size="lg" />
         </div>
       </div>
     }>

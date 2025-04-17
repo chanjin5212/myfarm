@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import { getVerificationEmailTemplate, getVerificationEmailSubject } from '@/utils/emailTemplates';
 
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -83,20 +84,8 @@ export async function POST(request: Request) {
     const mailOptions = {
       from: `"숙경팜" <${process.env.EMAIL_FROM}>`,
       to: email,
-      subject: '숙경팜 - 비밀번호 재설정 인증 코드',
-      text: `안녕하세요 ${user.name}님,\n\n비밀번호 재설정을 위한 인증 코드는 ${verificationCode}입니다.\n이 코드는 30분 동안 유효합니다.\n\n숙경팜 드림`,
-      html: `
-        <div style="font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #336633; margin-bottom: 20px;">숙경팜 비밀번호 재설정</h2>
-          <p>안녕하세요 <strong>${user.name}</strong>님,</p>
-          <p>비밀번호 재설정을 위한 인증 코드는 다음과 같습니다:</p>
-          <div style="background-color: #f8f9fa; padding: 15px; font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 5px; margin: 20px 0;">
-            ${verificationCode}
-          </div>
-          <p>이 코드는 발급 후 <strong>30분</strong> 동안 유효합니다.</p>
-          <p>감사합니다.<br>숙경팜 드림</p>
-        </div>
-      `
+      subject: getVerificationEmailSubject('resetPassword'),
+      html: getVerificationEmailTemplate(user.name, verificationCode, 'resetPassword')
     };
     
     try {

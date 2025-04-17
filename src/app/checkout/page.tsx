@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Button, Textarea, Radio, Checkbox, Card } from '@/components/ui/CommonStyles';
+import { Button, Textarea, Radio, Checkbox, Card, Spinner } from '@/components/ui/CommonStyles';
 import ShippingAddressModal from './ShippingAddressModal';
 import { getAuthHeader } from '@/utils/auth';
 import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
@@ -779,7 +779,7 @@ export default function CheckoutPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-green-500"></div>
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -806,7 +806,7 @@ export default function CheckoutPage() {
         <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
           <h2 className="text-2xl font-bold text-center mb-6">주문 처리 중</h2>
           <div className="flex justify-center mb-6">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
+            <Spinner size="lg" />
           </div>
           <p className="text-center text-gray-700 mb-4">{message}</p>
           <div className="mb-4 bg-yellow-50 border border-yellow-200 p-4 rounded-md">

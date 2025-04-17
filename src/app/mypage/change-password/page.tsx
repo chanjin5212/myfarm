@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast, Toaster } from 'react-hot-toast';
 import { checkToken, getAuthHeader } from '@/utils/auth';
+import { Spinner } from '@/components/ui/CommonStyles';
 
 // 비밀번호 유효성 검사 타입
 interface PasswordValidation {
@@ -331,7 +332,7 @@ export default function ChangePassword() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <Spinner size="lg" />
       </div>
     );
   }

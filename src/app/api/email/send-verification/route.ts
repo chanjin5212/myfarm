@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
+import { getVerificationEmailTemplate, getVerificationEmailSubject } from '@/utils/emailTemplates';
 
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -105,20 +106,8 @@ export async function POST(request: Request) {
     const mailOptions = {
       from: `"숙경팜" <${process.env.EMAIL_FROM}>`,
       to: email,
-      subject: '숙경팜 회원가입 이메일 인증',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-          <h2 style="color: #4a5568; text-align: center;">숙경팜 회원가입 이메일 인증</h2>
-          <p style="color: #4a5568; line-height: 1.5;">안녕하세요, 숙경팜을 이용해 주셔서 감사합니다.</p>
-          <p style="color: #4a5568; line-height: 1.5;">회원가입을 완료하기 위해 아래의 인증 코드를 입력해주세요.</p>
-          <div style="background-color: #f7fafc; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
-            <h3 style="color: #2b6cb0; margin: 0; font-size: 24px;">${verificationCode}</h3>
-          </div>
-          <p style="color: #4a5568; line-height: 1.5;">이 인증 코드는 10분 동안 유효합니다.</p>
-          <p style="color: #4a5568; line-height: 1.5;">본인이 요청하지 않은 경우 이 이메일을 무시하셔도 됩니다.</p>
-          <p style="color: #718096; font-size: 14px; margin-top: 30px; text-align: center;">© ${new Date().getFullYear()} 숙경팜. All rights reserved.</p>
-        </div>
-      `,
+      subject: getVerificationEmailSubject('register'),
+      html: getVerificationEmailTemplate('고객', verificationCode, 'register'),
       text: `숙경팜 회원가입 이메일 인증\n\n안녕하세요, 숙경팜을 이용해 주셔서 감사합니다.\n회원가입을 완료하기 위해 아래의 인증 코드를 입력해주세요.\n\n인증 코드: ${verificationCode}\n\n이 인증 코드는 10분 동안 유효합니다.\n본인이 요청하지 않은 경우 이 이메일을 무시하셔도 됩니다.`
     };
 

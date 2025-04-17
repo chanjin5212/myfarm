@@ -98,9 +98,10 @@ function ProductsContent() {
       }
       
       const data = await response.json();
-      // API가 배열을 직접 반환하므로, data.products 대신 data를 사용
-      setProducts(Array.isArray(data) ? data : []);
-      console.log('로드된 상품 수:', Array.isArray(data) ? data.length : 0);
+      // 모바일과 동일하게 data.products 사용
+      setProducts(data.products || []);
+      setTotalPages(Math.ceil((data.total || 0) / 12)); // 페이지당 12개 상품 기준
+      console.log('로드된 상품 수:', data.products?.length || 0);
     } catch (err) {
       setError('상품을 불러오는 중 오류가 발생했습니다.');
       console.error('상품 로드 오류:', err);
@@ -116,9 +117,9 @@ function ProductsContent() {
         throw new Error('카테고리를 불러오는데 실패했습니다.');
       }
       const data = await response.json();
-      // API가 배열을 직접 반환하므로, data.categories 대신 data를 사용
-      setCategories(Array.isArray(data) ? data : []);
-      console.log('로드된 카테고리 수:', Array.isArray(data) ? data.length : 0);
+      // 모바일과 동일하게 data.categories 사용
+      setCategories(data.categories || []);
+      console.log('로드된 카테고리 수:', data.categories?.length || 0);
     } catch (err) {
       console.error('카테고리 로드 오류:', err);
     }

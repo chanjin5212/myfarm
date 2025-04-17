@@ -9,18 +9,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(request: Request) {
   try {
-    const { email, verificationCode, newPassword } = await request.json();
-    
-    // 필수 필드 검증
-    if (!email || !verificationCode || !newPassword) {
-      return NextResponse.json({
-        success: false,
-        error: '이메일, 인증 코드, 새 비밀번호는 모두 필수 항목입니다.'
-      }, { status: 400 });
-    }
+    const { email, code, password } = await request.json();
     
     // 비밀번호 길이 검증 (8~16자)
-    if (newPassword.length < 8 || newPassword.length > 16) {
+    if (password.length < 8 || password.length > 16) {
       return NextResponse.json({
         success: false,
         error: '비밀번호는 8자에서 16자 사이여야 합니다.'
@@ -28,7 +20,7 @@ export async function POST(request: Request) {
     }
     
     // 대문자 포함 여부 검증
-    if (!/[A-Z]/.test(newPassword)) {
+    if (!/[A-Z]/.test(password)) {
       return NextResponse.json({
         success: false,
         error: '비밀번호에는 최소 1개 이상의 영문 대문자가 포함되어야 합니다.'
@@ -36,7 +28,7 @@ export async function POST(request: Request) {
     }
     
     // 소문자 포함 여부 검증
-    if (!/[a-z]/.test(newPassword)) {
+    if (!/[a-z]/.test(password)) {
       return NextResponse.json({
         success: false,
         error: '비밀번호에는 최소 1개 이상의 영문 소문자가 포함되어야 합니다.'
@@ -44,7 +36,7 @@ export async function POST(request: Request) {
     }
     
     // 숫자 포함 여부 검증
-    if (!/[0-9]/.test(newPassword)) {
+    if (!/[0-9]/.test(password)) {
       return NextResponse.json({
         success: false,
         error: '비밀번호에는 최소 1개 이상의 숫자가 포함되어야 합니다.'
@@ -52,7 +44,7 @@ export async function POST(request: Request) {
     }
     
     // 특수 문자 포함 여부 검증
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
       return NextResponse.json({
         success: false,
         error: '비밀번호에는 최소 1개 이상의 특수 문자(!@#$%^&*(),.?":{}|<> 등)가 포함되어야 합니다.'
@@ -64,7 +56,7 @@ export async function POST(request: Request) {
       .from('email_verifications')
       .select('*')
       .eq('email', email)
-      .eq('code', verificationCode)
+      .eq('code', code)
       .eq('verified', true)
       .single();
     
@@ -91,7 +83,7 @@ export async function POST(request: Request) {
     
     // 비밀번호 해싱
     const salt = bcrypt.genSaltSync(12);
-    const hashedPassword = bcrypt.hashSync(newPassword, salt);
+    const hashedPassword = bcrypt.hashSync(password, salt);
     
     // 사용자 비밀번호 업데이트
     const { error: updateError } = await supabase

@@ -3,16 +3,23 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { checkToken, logout, LOGIN_STATUS_CHANGE, User } from '@/utils/auth';
 
 export default function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  
+  // 모바일 경로 확인
+  const isMobilePath = pathname?.startsWith('/m');
 
   useEffect(() => {
+    setIsMounted(true);
+    
     // 로그인 상태 확인 함수
     const checkLoginStatus = () => {
       const { user: currentUser, isLoggedIn: loggedIn } = checkToken();
@@ -29,11 +36,13 @@ export default function Header() {
       checkLoginStatus();
     };
     
-    window.addEventListener(LOGIN_STATUS_CHANGE, handleLoginStatusChange);
-    
-    return () => {
-      window.removeEventListener(LOGIN_STATUS_CHANGE, handleLoginStatusChange);
-    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener(LOGIN_STATUS_CHANGE, handleLoginStatusChange);
+      
+      return () => {
+        window.removeEventListener(LOGIN_STATUS_CHANGE, handleLoginStatusChange);
+      };
+    }
   }, []);
 
   const handleLogout = () => {
@@ -41,8 +50,17 @@ export default function Header() {
     router.push('/');
   };
 
+  // 모바일 경로에서 헤더를 표시하지 않음
+  if (!isMounted) {
+    return null; // 초기 마운트 전에는 아무것도 렌더링하지 않음
+  }
+  
+  if (isMobilePath) {
+    return null; // 모바일 경로에서는 헤더를 렌더링하지 않음
+  }
+
   return (
-    <header className="bg-white shadow-md py-4 px-6">
+    <header className="bg-white shadow-md py-4 px-6" suppressHydrationWarning={true}>
       <div className="container mx-auto">
         <div className="flex justify-between items-center">
           <Link href="/" className="flex items-center">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import { getVerificationEmailTemplate, getVerificationEmailSubject } from '@/utils/emailTemplates';
 
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -111,22 +112,8 @@ export async function POST(request: Request) {
     const mailOptions = {
       from: process.env.EMAIL_FROM || '"숙경팜" <admin@sukkyungfarm.com>',
       to: email,
-      subject: '[숙경팜] 아이디 찾기 인증 코드',
-      html: `
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif; color: #333;">
-          <h2 style="color: #336633; border-bottom: 2px solid #eee; padding-bottom: 10px;">아이디 찾기 인증 코드</h2>
-          <p>안녕하세요, <strong>${name}</strong>님!</p>
-          <p>아래 인증 코드를 입력하여 아이디 찾기를 완료해주세요:</p>
-          <div style="background-color: #f5f8f5; border-radius: 5px; padding: 15px; margin: 20px 0; text-align: center;">
-            <h3 style="font-size: 24px; letter-spacing: 5px; margin: 0; color: #336633;">${verificationCode}</h3>
-          </div>
-          <p style="font-size: 13px; color: #666;">인증 코드는 10분 후에 만료됩니다.</p>
-          <p style="font-size: 13px; color: #666;">만약 아이디 찾기를 요청하지 않으셨다면, 이 이메일을 무시하셔도 됩니다.</p>
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
-            &copy; ${new Date().getFullYear()} 숙경팜. All rights reserved.
-          </div>
-        </div>
-      `
+      subject: getVerificationEmailSubject('findId'),
+      html: getVerificationEmailTemplate(name, verificationCode, 'findId')
     };
     
     try {
