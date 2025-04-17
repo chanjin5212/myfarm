@@ -118,13 +118,13 @@ export default function MobileAuthPage() {
       </Suspense>
       
       {/* 헤더 */}
-      <div className="bg-white px-4 py-4 shadow-sm fixed top-12 left-0 right-0 z-10">
+      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-50">
         <div className="flex items-center">
           <h1 className="text-xl font-bold">로그인</h1>
         </div>
       </div>
       
-      <div className="pt-24 px-4">
+      <div className="pt-20 px-4">
         <div className="bg-white rounded-lg shadow p-5">
           {/* 성공 메시지 */}
           {successMessage && (
