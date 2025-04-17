@@ -335,12 +335,6 @@ export default function ReviewTab({ productId }: ReviewTabProps) {
           >
             별점 낮은순
           </button>
-          <button 
-            className={`px-3 py-1 rounded-full text-sm ${sortBy === 'helpful' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
-            onClick={() => handleSortChange('helpful')}
-          >
-            추천순
-          </button>
         </div>
       </div>
 
