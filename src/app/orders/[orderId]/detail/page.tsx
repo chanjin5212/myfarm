@@ -94,6 +94,7 @@ export default function OrderDetailPage() {
   const [selectedProduct, setSelectedProduct] = useState<{id: string, name: string} | null>(null);
   // 리뷰 작성 여부 확인을 위한 상태 추가
   const [reviewedProducts, setReviewedProducts] = useState<{[key: string]: boolean}>({});
+  const [loadingReviewStatus, setLoadingReviewStatus] = useState(true);
 
   useEffect(() => {
     // 주문 정보 가져오기
@@ -145,6 +146,7 @@ export default function OrderDetailPage() {
   // 리뷰 작성 여부를 확인하는 함수
   const checkReviewStatus = async (items: GroupedOrderItem[], orderId: string) => {
     try {
+      setLoadingReviewStatus(true);
       const authHeader = getAuthHeader();
       
       if (!authHeader.Authorization) {
@@ -154,7 +156,7 @@ export default function OrderDetailPage() {
       const reviewStatus: {[key: string]: boolean} = {};
       
       // 각 상품에 대한 리뷰 작성 여부 확인
-      for (const item of items) {
+      const reviewPromises = items.map(async (item) => {
         const response = await fetch(`/api/reviews/check?product_id=${item.product_id}&order_id=${orderId}`, {
           headers: {
             ...authHeader
@@ -165,11 +167,14 @@ export default function OrderDetailPage() {
           const data = await response.json();
           reviewStatus[item.product_id] = data.hasReview;
         }
-      }
+      });
       
+      await Promise.all(reviewPromises);
       setReviewedProducts(reviewStatus);
     } catch (error) {
       console.error('리뷰 상태 확인 오류:', error);
+    } finally {
+      setLoadingReviewStatus(false);
     }
   };
 
@@ -403,7 +408,12 @@ export default function OrderDetailPage() {
                   {/* 리뷰 작성 버튼 추가 - 리뷰 작성 여부에 따라 다른 버튼 표시 */}
                   {paymentInfo.status === 'delivered' && (
                     <>
-                      {reviewedProducts[group.product_id] ? (
+                      {loadingReviewStatus ? (
+                        <div className="text-sm text-gray-500 mt-2 md:mt-0">
+                          <Spinner size="sm" className="mr-2" />
+                          리뷰 상태 확인 중...
+                        </div>
+                      ) : reviewedProducts[group.product_id] ? (
                         <span className="text-sm text-green-600 font-medium mt-2 md:mt-0">
                           리뷰 작성 완료
                         </span>
