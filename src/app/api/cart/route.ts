@@ -18,6 +18,7 @@ async function getUserId(request: NextRequest) {
   }
   
   try {
+    console.log("여기는 탈까?");
     // Bearer 접두사 제거
     const token = authHeader.split(' ')[1].trim();
     console.log('[장바구니 API] 토큰 길이:', token.length);

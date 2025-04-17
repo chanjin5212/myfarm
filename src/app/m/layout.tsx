@@ -25,14 +25,12 @@ export default function MobileLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [isMounted, setIsMounted] = useState(false);
   const pathname = usePathname();
+  const [isMounted, setIsMounted] = useState(false);
   
-  // 현재 경로가 헤더를 숨길 경로인지 확인
-  const shouldHideHeader = HIDE_HEADER_PATHS.some(path => 
-    pathname === path || pathname.startsWith(`${path}/`)
-  );
-
+  // 상품 상세 페이지에서는 헤더 숨김
+  const shouldHideHeader = pathname?.startsWith('/m/products/') || pathname === '/m/checkout';
+  
   // 모바일 레이아웃 설정
   useEffect(() => {
     // 클라이언트 사이드에서만 실행
@@ -42,6 +40,9 @@ export default function MobileLayout({
       // body에 모바일 클래스 추가
       document.body.classList.add('mobile-layout');
       
+      // body 배경색을 하얀색으로 설정
+      document.body.style.backgroundColor = 'white';
+      
       // 다크 모드 사용자에게도 라이트 모드로 강제 적용
       document.documentElement.classList.add('light');
       document.documentElement.classList.remove('dark');
@@ -49,12 +50,18 @@ export default function MobileLayout({
       return () => {
         // 클린업: 모바일 클래스 제거
         document.body.classList.remove('mobile-layout');
+        // body 배경색 초기화
+        document.body.style.backgroundColor = '';
       };
     }
   }, []);
   
+  if (!isMounted) {
+    return null;
+  }
+  
   return (
-    <div className="mobile-layout bg-white text-black" suppressHydrationWarning={true}>
+    <div className="mobile-layout bg-white text-black min-h-screen" suppressHydrationWarning={true}>
       <Toaster
         position="top-center"
         toastOptions={{
@@ -66,9 +73,9 @@ export default function MobileLayout({
         }}
       />
       
-      {/* 모바일 헤더 - 특정 페이지에서는 숨김 */}
+      {/* 모바일 헤더 - 상품 상세 페이지에서는 숨김 */}
       {!shouldHideHeader && (
-        <header className="bg-white shadow-sm sticky top-0 z-10 border-b border-gray-200" suppressHydrationWarning={true}>
+        <header className="bg-white shadow-sm fixed top-0 left-0 right-0 z-50 border-b border-gray-200" suppressHydrationWarning={true}>
           <div className="container mx-auto py-3 px-4">
             <div className="flex items-center justify-between">
               <Link href="/m" className="font-bold text-xl text-[#e3c478]">숙경팜</Link>
@@ -95,7 +102,7 @@ export default function MobileLayout({
       )}
       
       {/* 메인 콘텐츠 */}
-      <div className={`bg-white text-black ${shouldHideHeader ? '' : 'pb-16'}`}>
+      <div className={`bg-white text-black min-h-screen ${shouldHideHeader ? '' : 'pt-14'}`}>
         <Suspense fallback={
           <div className="flex justify-center items-center min-h-[60vh] bg-white">
             <Spinner size="lg" />

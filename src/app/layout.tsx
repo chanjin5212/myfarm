@@ -35,19 +35,23 @@ export default function RootLayout({
               body.mobile-layout header:not(.bg-white) {
                 display: none !important;
               }
+              /* 전체 배경색 하얀색으로 설정 */
+              body {
+                background-color: white !important;
+              }
             ` 
           }} 
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans bg-gray-50`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans bg-white`}
         suppressHydrationWarning={true}
       >
         <Providers>
           <AuthProvider>
-            <div className="flex flex-col min-h-screen">
+            <div className="flex flex-col min-h-screen bg-white">
               <Header />
-              <main className="flex-grow">
+              <main className="flex-grow bg-white">
                 {children}
               </main>
             </div>
