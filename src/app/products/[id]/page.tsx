@@ -906,7 +906,7 @@ export default function ProductDetailPage() {
             />
           )}
           {activeTab === 'review' && (
-            <ReviewTab productId={Number(productDetails.id)} />
+            <ReviewTab productId={productDetails.id} />
           )}
         </div>
       </div>

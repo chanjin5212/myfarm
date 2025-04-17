@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
                 .from('cart_items')
                 .delete()
                 .in('id', itemsToDelete)
-                .select('count');
+                .select();
                 
               if (deleteError) {
                 console.error('장바구니 아이템 삭제 실패:', deleteError);

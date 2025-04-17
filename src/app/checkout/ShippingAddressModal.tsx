@@ -332,87 +332,87 @@ export default function ShippingAddressModal({
 
   // 배송지 폼 공통 렌더링
   const renderAddressForm = (isEdit: boolean, handleSubmit: (e: React.FormEvent) => Promise<void>, handleCancel: () => void) => (
-    <div className="border rounded-lg p-4">
+            <div className="border rounded-lg p-4">
       <h3 className="text-lg font-semibold mb-4">{isEdit ? '배송지 수정' : '새 배송지 추가'}</h3>
       <form onSubmit={handleSubmit}>
-        <div className="space-y-4 mb-4">
-          <Input
-            label="받는 사람 *"
-            type="text"
-            value={newAddress.recipient_name}
-            onChange={(e) => setNewAddress({...newAddress, recipient_name: e.target.value})}
-            required
-          />
-          
-          <Input
-            label="연락처 *"
-            type="text"
-            value={newAddress.phone}
+                <div className="space-y-4 mb-4">
+                  <Input
+                    label="받는 사람 *"
+                    type="text"
+                    value={newAddress.recipient_name}
+                    onChange={(e) => setNewAddress({...newAddress, recipient_name: e.target.value})}
+                    required
+                  />
+                  
+                  <Input
+                    label="연락처 *"
+                    type="text"
+                    value={newAddress.phone}
             onChange={handlePhoneChange}
-            required
-          />
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              주소 *
-            </label>
-            <div className="flex">
-              <input
-                type="text"
-                value={newAddress.address}
-                readOnly
-                className="w-full px-3 py-2 border rounded-md mr-2 border-gray-300"
-                required
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleSearchAddress}
-              >
-                주소 검색
-              </Button>
-            </div>
-          </div>
-          
-          <Input
-            label="상세 주소"
-            type="text"
-            value={newAddress.detail_address}
-            onChange={(e) => setNewAddress({...newAddress, detail_address: e.target.value})}
-          />
-          
-          <Input
-            label="배송 메모"
-            type="text"
-            value={newAddress.memo}
-            onChange={(e) => setNewAddress({...newAddress, memo: e.target.value})}
-          />
-          
-          <Checkbox
-            label="기본 배송지로 설정"
-            checked={newAddress.is_default}
-            onChange={(e) => setNewAddress({...newAddress, is_default: e.target.checked})}
-          />
-        </div>
-        
-        <div className="flex justify-end space-x-2">
-          <Button
-            type="button"
-            variant="outline"
+                    required
+                  />
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      주소 *
+                    </label>
+                    <div className="flex">
+                      <input
+                        type="text"
+                        value={newAddress.address}
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md mr-2 border-gray-300"
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleSearchAddress}
+                      >
+                        주소 검색
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <Input
+                    label="상세 주소"
+                    type="text"
+                    value={newAddress.detail_address}
+                    onChange={(e) => setNewAddress({...newAddress, detail_address: e.target.value})}
+                  />
+                  
+                  <Input
+                    label="배송 메모"
+                    type="text"
+                    value={newAddress.memo}
+                    onChange={(e) => setNewAddress({...newAddress, memo: e.target.value})}
+                  />
+                  
+                  <Checkbox
+                    label="기본 배송지로 설정"
+                    checked={newAddress.is_default}
+                    onChange={(e) => setNewAddress({...newAddress, is_default: e.target.checked})}
+                  />
+                </div>
+                
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
             onClick={handleCancel}
-            disabled={loading}
-          >
-            취소
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={loading}
-          >
+                    disabled={loading}
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={loading}
+                  >
             {loading ? (isEdit ? '수정 중...' : '저장 중...') : (isEdit ? '수정' : '저장')}
-          </Button>
-        </div>
-      </form>
+                  </Button>
+                </div>
+              </form>
     </div>
   );
 
@@ -514,21 +514,21 @@ export default function ShippingAddressModal({
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : (
+            </div>
+          ) : (
                 <div className="bg-gray-50 p-4 rounded-lg text-center mb-6">
                   <p className="text-gray-500">저장된 배송지가 없습니다.</p>
                 </div>
               )}
             
               {/* 새 배송지 추가 버튼 */}
-              <Button
-                onClick={() => setShowAddForm(true)}
-                variant="primary"
-                fullWidth
-              >
-                새 배송지 추가
-              </Button>
+            <Button
+              onClick={() => setShowAddForm(true)}
+              variant="primary"
+              fullWidth
+            >
+              새 배송지 추가
+            </Button>
             </>
           )}
           

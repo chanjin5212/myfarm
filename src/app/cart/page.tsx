@@ -370,11 +370,11 @@ export default function CartPage() {
       const itemsToCheckout = selectedItems.length > 0
         ? cartItems.filter(item => selectedItems.includes(item.id))
         : cartItems;
-      
       // 주문 정보 구성 - CartItem 형태로 변환
       const checkoutItems = itemsToCheckout.map(item => ({
         id: item.id,
         productId: item.product_id,
+        productOptionId: item.product_option_id || null,
         name: item.product.name,
         price: item.product_option 
           ? (item.product.discount_price || item.product.price) + (item.product_option.additional_price || 0)

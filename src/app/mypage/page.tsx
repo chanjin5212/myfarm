@@ -252,11 +252,6 @@ function MyPageContent() {
     toast.success('배송지 정보가 업데이트되었습니다.');
   };
 
-  const handleReviewClick = (orderId: string, productName: string) => {
-    setSelectedOrderForReview({ id: orderId, productName });
-    setIsReviewModalOpen(true);
-  };
-
   const handleCloseReviewModal = () => {
     setIsReviewModalOpen(false);
     setSelectedOrderForReview(null);
@@ -313,15 +308,6 @@ function MyPageContent() {
                       주문 상세보기
                     </button>
                   </Link>
-                  {/* 배송완료된 주문에만 리뷰쓰기 버튼 표시 */}
-                  {order.status === 'delivered' && (
-                    <button 
-                      onClick={() => handleReviewClick(order.id, order.items[0]?.product_name || '상품')}
-                      className="px-4 py-2 border border-blue-500 text-blue-500 font-medium rounded-md hover:bg-blue-50 transition-colors text-sm"
-                    >
-                      리뷰쓰기
-                    </button>
-                  )}
                 </div>
               </div>
             </li>

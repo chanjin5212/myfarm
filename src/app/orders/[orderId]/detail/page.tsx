@@ -5,6 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { getAuthHeader } from '@/utils/auth';
 import Image from 'next/image';
 import Link from 'next/link';
+import ReviewModal from '@/app/mypage/ReviewModal';
+import { Button, Spinner } from '@/components/ui/CommonStyles';
+import { formatPrice, formatDate } from '@/utils/format';
+import toast from 'react-hot-toast';
 
 // 주문 상태 표시 컴포넌트
 const OrderStatusBadge = ({ status }: { status: string }) => {
@@ -63,6 +67,15 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
   );
 };
 
+interface GroupedOrderItem {
+  product_id: string;
+  name: string;
+  image: string;
+  items: any[];
+  totalQuantity: number;
+  totalPrice: number;
+}
+
 // 주문 상세 페이지
 export default function OrderDetailPage() {
   const params = useParams();
@@ -72,13 +85,93 @@ export default function OrderDetailPage() {
   // 주문 관련 상태
   const [orderInfo, setOrderInfo] = useState<any>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [groupedOrderItems, setGroupedOrderItems] = useState<GroupedOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // 리뷰 모달 관련 상태
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<{id: string, name: string} | null>(null);
+  // 리뷰 작성 여부 확인을 위한 상태 추가
+  const [reviewedProducts, setReviewedProducts] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     // 주문 정보 가져오기
     fetchOrderDetails();
   }, [orderId]);
+
+  // 주문 아이템을 상품별로 그룹화하는 함수
+  const groupOrderItems = (items: any[]) => {
+    const grouped: GroupedOrderItem[] = [];
+    
+    items.forEach(item => {
+      const productId = item.product_id || item.productId;
+      const existingGroup = grouped.find(group => group.product_id === productId);
+      
+      if (existingGroup) {
+        // 이미 해당 상품 그룹이 있는 경우
+        existingGroup.items.push(item);
+        existingGroup.totalQuantity += item.quantity || 1;
+        existingGroup.totalPrice += (item.price || 0) * (item.quantity || 1);
+      } else {
+        // 새 상품 그룹 생성
+        grouped.push({
+          product_id: productId,
+          name: item.name || '상품명 없음',
+          image: item.image || '/images/default-product.png',
+          items: [item],
+          totalQuantity: item.quantity || 1,
+          totalPrice: (item.price || 0) * (item.quantity || 1)
+        });
+      }
+    });
+    
+    return grouped;
+  };
+
+  // 아이템이 변경될 때마다 그룹화 수행
+  useEffect(() => {
+    if (orderItems.length > 0) {
+      const grouped = groupOrderItems(orderItems);
+      setGroupedOrderItems(grouped);
+      
+      // 각 상품에 대한 리뷰 작성 여부 확인
+      if (orderInfo && orderInfo.status === 'delivered') {
+        checkReviewStatus(grouped, orderId);
+      }
+    }
+  }, [orderItems, orderInfo]);
+
+  // 리뷰 작성 여부를 확인하는 함수
+  const checkReviewStatus = async (items: GroupedOrderItem[], orderId: string) => {
+    try {
+      const authHeader = getAuthHeader();
+      
+      if (!authHeader.Authorization) {
+        return;
+      }
+      
+      const reviewStatus: {[key: string]: boolean} = {};
+      
+      // 각 상품에 대한 리뷰 작성 여부 확인
+      for (const item of items) {
+        const response = await fetch(`/api/reviews/check?product_id=${item.product_id}&order_id=${orderId}`, {
+          headers: {
+            ...authHeader
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          reviewStatus[item.product_id] = data.hasReview;
+        }
+      }
+      
+      setReviewedProducts(reviewStatus);
+    } catch (error) {
+      console.error('리뷰 상태 확인 오류:', error);
+    }
+  };
 
   const fetchOrderDetails = async () => {
     try {
@@ -149,12 +242,34 @@ export default function OrderDetailPage() {
       setLoading(false);
     }
   };
+  
+  // 리뷰 모달 열기 핸들러
+  const handleOpenReviewModal = (productId: string, productName: string) => {
+    setSelectedProduct({ id: productId, name: productName });
+    setReviewModalOpen(true);
+  };
+  
+  // 리뷰 모달 닫기 핸들러
+  const handleCloseReviewModal = () => {
+    setReviewModalOpen(false);
+    setSelectedProduct(null);
+    
+    // 리뷰 모달이 닫힐 때 리뷰 상태 다시 확인
+    if (orderInfo && orderInfo.status === 'delivered' && groupedOrderItems.length > 0) {
+      checkReviewStatus(groupedOrderItems, orderId);
+    }
+  };
+  
+  // 리뷰 작성 가능 여부 체크 (주문 상태가 배송 완료이면서 아직 리뷰를 작성하지 않은 경우)
+  const canWriteReview = (status: string, productId: string) => {
+    return status === 'delivered' && !reviewedProducts[productId];
+  };
 
   // 로딩 중 표시
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+        <Spinner size="lg" />
       </div>
     );
   }
@@ -162,14 +277,12 @@ export default function OrderDetailPage() {
   // 오류 표시
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-          <strong className="font-bold">오류:</strong>
-          <span className="block sm:inline"> {error}</span>
-        </div>
-        <Link href="/mypage/orders" className="text-blue-600 hover:underline">
+      <div className="text-center py-10">
+        <h2 className="text-2xl font-bold text-red-500 mb-4">오류 발생</h2>
+        <p>{error || '주문 정보를 불러올 수 없습니다.'}</p>
+        <Button className="mt-4" onClick={() => router.push('/orders')}>
           주문 목록으로 돌아가기
-        </Link>
+        </Button>
       </div>
     );
   }
@@ -223,150 +336,144 @@ export default function OrderDetailPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* 주문 헤더 */}
-        <div className="border-b p-6">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">주문 상세 내역</h1>
-              <p className="text-gray-600 mt-1">주문번호: {orderInfo.order_number || orderId}</p>
-              <p className="text-gray-600">주문일시: {orderDate}</p>
-            </div>
-            <div className="mt-4 md:mt-0">
+    <div className="container mx-auto py-8 px-4 max-w-4xl">
+      <h1 className="text-2xl font-bold mb-6">주문 상세 정보</h1>
+      
+      {/* 주문 기본 정보 */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">주문번호: {orderInfo.order_number || orderId}</h2>
+            <p className="text-gray-600">주문일: {orderDate}</p>
+          </div>
+          <div className="text-right">
+            <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
               <OrderStatusBadge status={paymentInfo.status} />
-            </div>
+            </span>
           </div>
         </div>
-
-        {/* 주문 상품 */}
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold mb-4">주문 상품</h2>
-          {orderItems.length > 0 ? (
-            <div className="space-y-4">
-              {orderItems.map((item, index) => (
-                <div key={item.id || index} className="flex items-center border-b pb-4">
-                  <div className="w-20 h-20 relative flex-shrink-0">
-                    <Image
-                      src={item.image || '/images/default-product.png'}
-                      alt={item.name || '상품명'}
-                      fill
-                      className="object-cover rounded"
-                    />
-                  </div>
-                  <div className="ml-4 flex-grow">
-                    <h3 className="font-medium">{item.name || '상품명 없음'}</h3>
-                    {item.options && (
-                      <p className="text-sm text-gray-600">
-                        옵션: {typeof item.options === 'object' && item.options.name ? 
-                          `${item.options.name} - ${item.options.value}` : 
-                          (typeof item.options === 'string' ? item.options : JSON.stringify(item.options))}
-                      </p>
+      </div>
+      
+      {/* 주문 상품 목록 */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">주문 상품</h2>
+        
+        {groupedOrderItems.map((group, groupIndex) => (
+          <div key={`group-${groupIndex}`} className="border-b border-gray-200 py-4 last:border-b-0">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+              <div className="relative w-20 h-20 flex-shrink-0">
+                <Image
+                  src={group.image}
+                  alt={group.name}
+                  fill
+                  sizes="80px"
+                  className="object-cover rounded-md"
+                />
+              </div>
+              
+              <div className="flex-grow">
+                <div className="flex flex-col md:flex-row md:justify-between">
+                  <div>
+                    <h3 className="font-medium">{group.name}</h3>
+                    <p className="text-sm text-gray-600">
+                      {group.totalQuantity}개 / {formatPrice(group.totalPrice)}
+                    </p>
+                    
+                    {group.items.length > 0 && (
+                      <div className="mt-1 text-sm text-gray-500">
+                        <span>옵션: </span>
+                        {group.items.map((item, itemIndex) => (
+                          <span key={`item-${itemIndex}`}>
+                            {item.options && (
+                              <span className="font-medium text-sm">
+                                {typeof item.options === 'object' && item.options.name ? 
+                                  `${item.options.name}: ${item.options.value}` : 
+                                  (typeof item.options === 'string' ? item.options : '기본 상품')}
+                              </span>
+                            )}
+                            {(!item.options || Object.keys(item.options).length === 0) && (
+                              <span className="text-sm text-gray-700">기본 상품</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    <div className="flex justify-between mt-2">
-                      <p className="text-sm">
-                        {item.quantity || 1}개 × {(item.price || 0).toLocaleString()}원
-                      </p>
-                      <p className="font-medium">
-                        {((item.price || 0) * (item.quantity || 1)).toLocaleString()}원
-                      </p>
-                    </div>
                   </div>
+                  
+                  {/* 리뷰 작성 버튼 추가 - 리뷰 작성 여부에 따라 다른 버튼 표시 */}
+                  {paymentInfo.status === 'delivered' && (
+                    <>
+                      {reviewedProducts[group.product_id] ? (
+                        <span className="text-sm text-green-600 font-medium mt-2 md:mt-0">
+                          리뷰 작성 완료
+                        </span>
+                      ) : (
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 md:mt-0"
+                          onClick={() => handleOpenReviewModal(group.product_id, group.name)}
+                        >
+                          리뷰 작성
+                        </Button>
+                      )}
+                    </>
+                  )}
                 </div>
-              ))}
+              </div>
             </div>
-          ) : (
-            <p className="text-gray-500">상품 정보를 불러올 수 없습니다.</p>
+          </div>
+        ))}
+        
+        <div className="mt-4 text-right">
+          <p className="text-lg font-bold">
+            총 주문금액: {formatPrice(paymentInfo.totalAmount)}
+          </p>
+        </div>
+      </div>
+      
+      {/* 배송 정보 */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">배송 정보</h2>
+        <div className="space-y-2">
+          <p><span className="font-medium">수령인:</span> {shippingInfo.name}</p>
+          <p><span className="font-medium">연락처:</span> {shippingInfo.phone}</p>
+          <p><span className="font-medium">주소:</span> {shippingInfo.address}</p>
+          {shippingInfo.detailAddress && (
+            <p><span className="font-medium">상세 주소:</span> {shippingInfo.detailAddress}</p>
           )}
-
-          <div className="mt-6 text-right">
-            <p className="text-lg font-semibold">
-              총 결제 금액: {paymentInfo.totalAmount.toLocaleString()}원
-            </p>
-          </div>
-        </div>
-
-        {/* 배송 정보 */}
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold mb-4">배송 정보</h2>
-          <div className="space-y-2">
-            <div className="flex">
-              <span className="w-28 text-gray-600">수령인:</span>
-              <span>{shippingInfo.name}</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-gray-600">연락처:</span>
-              <span>{shippingInfo.phone}</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-gray-600">주소:</span>
-              <div>
-                <p>{shippingInfo.address}</p>
-                {shippingInfo.detailAddress && <p>{shippingInfo.detailAddress}</p>}
-              </div>
-            </div>
-            {shippingInfo.memo && (
-              <div className="flex">
-                <span className="w-28 text-gray-600">배송 메모:</span>
-                <span>{shippingInfo.memo}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 결제 정보 */}
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold mb-4">결제 정보</h2>
-          <div className="space-y-2">
-            <div className="flex">
-              <span className="w-28 text-gray-600">결제 수단:</span>
-              <span>
-                {paymentInfo.method === 'kakao' 
-                  ? '카카오페이' 
-                  : paymentInfo.method === 'card'
-                  ? '신용카드'
-                  : paymentInfo.method === 'bank'
-                  ? '무통장입금'
-                  : paymentInfo.method}
-              </span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-gray-600">결제 상태:</span>
-              <span>
-                <OrderStatusBadge status={paymentInfo.status} />
-              </span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-gray-600">결제 금액:</span>
-              <span>{paymentInfo.totalAmount.toLocaleString()}원</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-gray-600">결제 일시:</span>
-              <span>{orderDate}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 하단 버튼 */}
-        <div className="p-6 flex justify-between">
-          <Link href="/mypage?tab=orders" className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded">
-            주문 목록으로
-          </Link>
-          {(paymentInfo.status === 'pending' || paymentInfo.status === 'processing') && (
-            <button 
-              className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded"
-              onClick={() => {
-                if (window.confirm('주문을 취소하시겠습니까?')) {
-                  // 주문 취소 API 호출
-                  alert('주문 취소 기능은 아직 구현되지 않았습니다.');
-                }
-              }}
-            >
-              주문 취소
-            </button>
+          {shippingInfo.memo && (
+            <p><span className="font-medium">배송 메모:</span> {shippingInfo.memo}</p>
           )}
         </div>
       </div>
+      
+      {/* 결제 정보 */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-lg font-semibold mb-4">결제 정보</h2>
+        <div className="space-y-2">
+          <p><span className="font-medium">결제 방법:</span> {paymentInfo.method === 'kakao' ? '카카오페이' : paymentInfo.method === 'card' ? '신용카드' : paymentInfo.method === 'bank' ? '무통장입금' : paymentInfo.method === 'toss' ? '토스페이먼츠' : paymentInfo.method}</p>
+          <p><span className="font-medium">결제 금액:</span> {formatPrice(paymentInfo.totalAmount)}</p>
+          <p><span className="font-medium">결제일:</span> {orderDate}</p>
+        </div>
+      </div>
+      
+      <div className="mt-8 text-center">
+        <Button onClick={() => router.push('/mypage?tab=orders')}>
+          주문 목록으로 돌아가기
+        </Button>
+      </div>
+      
+      {/* 리뷰 모달 */}
+      {selectedProduct && (
+        <ReviewModal
+          isOpen={reviewModalOpen}
+          onClose={handleCloseReviewModal}
+          orderId={orderId}
+          productName={selectedProduct.name}
+          productId={selectedProduct.id}
+        />
+      )}
     </div>
   );
 } 
