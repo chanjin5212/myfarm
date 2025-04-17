@@ -1,11 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { checkToken, getAuthHeader, logout } from '@/utils/auth';
 import toast, { Toaster } from 'react-hot-toast';
+
+// URL 파라미터 처리 컴포넌트
+function TabParamsHandler({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'orders') {
+      setActiveTab('orders');
+    }
+  }, [searchParams, setActiveTab]);
+
+  return null;
+}
 
 interface User {
   id: string;
@@ -93,21 +107,12 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-export default function MobileMyPage() {
-  const searchParams = useSearchParams();
+function MobileMyPageContent() {
   const router = useRouter();
   
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('profile');
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
-
-  // URL 파라미터에서 탭 정보 가져오기
-  useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam === 'orders') {
-      setActiveTab('orders');
-    }
-  }, [searchParams]);
 
   // 로그인 확인 및 데이터 로드
   useEffect(() => {
@@ -198,25 +203,58 @@ export default function MobileMyPage() {
   if (!user) return null;
 
   return (
-    <div className="pb-16">
+    <div className="min-h-screen bg-gray-50 pb-24">
       <Toaster position="top-center" />
       
-      {/* 헤더 영역 */}
-      <div className="sticky top-12 z-10 bg-white shadow-sm">
-        <div className="px-4 py-3 border-b">
-          <h1 className="text-lg font-bold text-center">마이페이지</h1>
+      {/* 헤더 */}
+      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-30">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold">마이페이지</h1>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-600"
+          >
+            로그아웃
+          </button>
         </div>
-        
-        {/* 탭 메뉴 */}
+      </div>
+      
+      {/* 사용자 정보 요약 */}
+      <div className="pt-16 pb-3 px-4 bg-white shadow-sm mb-2">
+        <div className="flex items-center">
+          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+            {user.avatar_url ? (
+              <Image 
+                src={user.avatar_url} 
+                alt={user.nickname || '사용자'} 
+                className="w-full h-full object-cover" 
+                width={64}
+                height={64}
+              />
+            ) : (
+              <span className="text-2xl text-gray-500">
+                {(user.nickname || user.name || 'U').charAt(0)}
+              </span>
+            )}
+          </div>
+          <div className="ml-4">
+            <h2 className="font-semibold text-lg">{user.nickname || user.name || '사용자'}</h2>
+            <p className="text-sm text-gray-600">{user.email}</p>
+          </div>
+        </div>
+      </div>
+      
+      {/* 탭 메뉴 */}
+      <div className="bg-white mb-2 shadow-sm">
         <div className="flex border-b">
           <button
-            className={`flex-1 py-3 text-center text-sm font-medium ${activeTab === 'profile' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}
+            className={`flex-1 py-3 text-center font-medium ${activeTab === 'profile' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('profile')}
           >
             프로필
           </button>
           <button
-            className={`flex-1 py-3 text-center text-sm font-medium ${activeTab === 'orders' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}
+            className={`flex-1 py-3 text-center font-medium ${activeTab === 'orders' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-600'}`}
             onClick={() => setActiveTab('orders')}
           >
             주문내역
@@ -224,7 +262,7 @@ export default function MobileMyPage() {
         </div>
       </div>
       
-      {/* 프로필 탭 */}
+      {/* 프로필 탭 컨텐츠 */}
       {activeTab === 'profile' && (
         <div className="p-4">
           {/* 사용자 정보 섹션 */}
@@ -349,7 +387,7 @@ export default function MobileMyPage() {
         </div>
       )}
       
-      {/* 주문내역 탭 */}
+      {/* 주문내역 탭 컨텐츠 */}
       {activeTab === 'orders' && (
         <div className="p-4">
           {orderHistory.length > 0 ? (
@@ -412,5 +450,19 @@ export default function MobileMyPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MobileMyPage() {
+  return (
+    <>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-green-500"></div>
+        </div>
+      }>
+        <MobileMyPageContent />
+      </Suspense>
+    </>
   );
 } 

@@ -1,11 +1,26 @@
 'use client';
 
-import React, { useState, FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, FormEvent, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast, Toaster } from 'react-hot-toast';
 import { Spinner } from '@/components/ui/CommonStyles';
 
 export default function MobileResetPasswordPage() {
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <Toaster position="top-center" />
+      <Suspense fallback={
+        <div className="flex justify-center items-center min-h-screen">
+          <Spinner size="lg" />
+        </div>
+      }>
+        <MobileResetPasswordContent />
+      </Suspense>
+    </div>
+  );
+}
+
+function MobileResetPasswordContent() {
   const router = useRouter();
   const [loginId, setLoginId] = useState('');
   const [email, setEmail] = useState('');
@@ -158,9 +173,7 @@ export default function MobileResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <Toaster position="top-center" />
-      
+    <>
       {/* 헤더 */}
       <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-10">
         <div className="flex items-center">
@@ -256,7 +269,7 @@ export default function MobileResetPasswordPage() {
           {step === 2 && (
             <>
               <p className="text-center text-gray-600 mb-6">
-                이메일로 발송된 인증번호를 입력하세요
+                이메일로 전송된 인증번호를 입력하세요
               </p>
               
               <form onSubmit={handleVerifyCode} className="space-y-5">
@@ -270,10 +283,9 @@ export default function MobileResetPasswordPage() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    placeholder="이메일로 받은 6자리 인증번호를 입력하세요"
+                    placeholder="인증번호 6자리를 입력하세요"
                     required
                   />
-                  <p className="text-xs text-gray-500 mt-1">인증번호는 발송 후 1시간 동안 유효합니다.</p>
                 </div>
                 
                 <button
@@ -282,14 +294,6 @@ export default function MobileResetPasswordPage() {
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex justify-center items-center"
                 >
                   {isLoading ? <Spinner size="sm" /> : '인증번호 확인'}
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="w-full py-2 px-4 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md"
-                >
-                  이전 단계로
                 </button>
               </form>
             </>
@@ -316,6 +320,9 @@ export default function MobileResetPasswordPage() {
                     placeholder="새 비밀번호를 입력하세요"
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    8~16자의 영문 대/소문자, 숫자, 특수문자를 각각 1개 이상 포함해야 합니다.
+                  </p>
                 </div>
                 
                 <div>
@@ -328,20 +335,9 @@ export default function MobileResetPasswordPage() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    placeholder="새 비밀번호를 다시 입력하세요"
+                    placeholder="비밀번호를 다시 입력하세요"
                     required
                   />
-                </div>
-                
-                <div className="bg-gray-50 p-3 rounded-md text-xs text-gray-600">
-                  <p className="font-medium mb-1">비밀번호 조건:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>8~16자 사이로 입력</li>
-                    <li>영문 대문자(A-Z) 1개 이상 포함</li>
-                    <li>영문 소문자(a-z) 1개 이상 포함</li>
-                    <li>숫자(0-9) 1개 이상 포함</li>
-                    <li>특수문자(!@#$%^&*(),.?&quot;:{}|&lt;&gt;) 1개 이상 포함</li>
-                  </ul>
                 </div>
                 
                 <button
@@ -349,21 +345,13 @@ export default function MobileResetPasswordPage() {
                   disabled={isLoading}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex justify-center items-center"
                 >
-                  {isLoading ? <Spinner size="sm" /> : '비밀번호 변경하기'}
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="w-full py-2 px-4 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md"
-                >
-                  이전 단계로
+                  {isLoading ? <Spinner size="sm" /> : '비밀번호 변경'}
                 </button>
               </form>
             </>
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 } 

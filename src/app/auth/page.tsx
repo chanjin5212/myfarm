@@ -1,10 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { triggerLoginEvent } from '@/utils/auth';
 import { Button, Input } from '@/components/ui/CommonStyles';
+
+// URL 파라미터에서 성공 메시지를 가져오는 컴포넌트
+function SuccessMessageHandler({ setSuccessMessage }: { setSuccessMessage: (message: string | null) => void }) {
+  const searchParams = useSearchParams();
+  
+  useEffect(() => {
+    const success = searchParams.get('success');
+    if (success === 'password_reset') {
+      setSuccessMessage('비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.');
+    }
+  }, [searchParams, setSuccessMessage]);
+  
+  return null;
+}
 
 export default function AuthPage() {
   const [loginId, setLoginId] = useState('');
@@ -13,15 +27,6 @@ export default function AuthPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // URL 파라미터에서 성공 메시지 확인
-  useEffect(() => {
-    const success = searchParams.get('success');
-    if (success === 'password_reset') {
-      setSuccessMessage('비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.');
-    }
-  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +139,11 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      {/* useSearchParams를 Suspense로 감싸서 사용 */}
+      <Suspense fallback={null}>
+        <SuccessMessageHandler setSuccessMessage={setSuccessMessage} />
+      </Suspense>
+      
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">

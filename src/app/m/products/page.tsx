@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -20,43 +20,95 @@ interface Category {
   name: string;
 }
 
-function MobileProductsPage() {
-  const router = useRouter();
+// URL 파라미터를 처리하는 컴포넌트
+function ProductParamsHandler({ 
+  setInitialFilters 
+}: { 
+  setInitialFilters: (params: { 
+    categoryId: string | null, 
+    searchQuery: string | null,
+    sortOption: string,
+    minPrice: string | null,
+    maxPrice: string | null,
+    isOrganic: string | null,
+    pageParam: string | null
+  }) => void 
+}) {
   const searchParams = useSearchParams();
   
-  // URL 쿼리 파라미터
-  const categoryId = searchParams.get('category');
-  const searchQuery = searchParams.get('query');
-  const sortOption = searchParams.get('sort') || 'newest';
-  const minPrice = searchParams.get('min_price');
-  const maxPrice = searchParams.get('max_price');
-  const isOrganic = searchParams.get('organic');
-  const pageParam = searchParams.get('page');
+  useEffect(() => {
+    // URL 쿼리 파라미터
+    const categoryId = searchParams.get('category');
+    const searchQuery = searchParams.get('query');
+    const sortOption = searchParams.get('sort') || 'newest';
+    const minPrice = searchParams.get('min_price');
+    const maxPrice = searchParams.get('max_price');
+    const isOrganic = searchParams.get('organic');
+    const pageParam = searchParams.get('page');
+    
+    setInitialFilters({
+      categoryId,
+      searchQuery,
+      sortOption,
+      minPrice,
+      maxPrice,
+      isOrganic,
+      pageParam
+    });
+  }, [searchParams, setInitialFilters]);
+  
+  return null;
+}
+
+function MobileProductsPage() {
+  const router = useRouter();
+  
+  // 초기 필터 값 저장용 상태
+  const [initialFilters, setInitialFilters] = useState({
+    categoryId: null as string | null,
+    searchQuery: null as string | null,
+    sortOption: 'newest',
+    minPrice: null as string | null,
+    maxPrice: null as string | null,
+    isOrganic: null as string | null,
+    pageParam: null as string | null
+  });
   
   // 상태 관리
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(pageParam ? parseInt(pageParam) : 1);
+  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   
   // 필터 상태
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryId);
-  const [selectedSort, setSelectedSort] = useState<string>(sortOption);
-  const [priceRange, setPriceRange] = useState<{min?: number, max?: number}>({
-    min: minPrice ? parseInt(minPrice) : undefined,
-    max: maxPrice ? parseInt(maxPrice) : undefined
-  });
-  const [organicOnly, setOrganicOnly] = useState<boolean>(isOrganic === 'true');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSort, setSelectedSort] = useState<string>('newest');
+  const [priceRange, setPriceRange] = useState<{min?: number, max?: number}>({});
+  const [organicOnly, setOrganicOnly] = useState<boolean>(false);
+  
+  // initialFilters가 설정되면 실제 상태에 적용
+  useEffect(() => {
+    if (initialFilters.categoryId !== null) {
+      setSelectedCategory(initialFilters.categoryId);
+      setPriceRange({
+        min: initialFilters.minPrice ? parseInt(initialFilters.minPrice) : undefined,
+        max: initialFilters.maxPrice ? parseInt(initialFilters.maxPrice) : undefined
+      });
+      setSelectedSort(initialFilters.sortOption);
+      setOrganicOnly(initialFilters.isOrganic === 'true');
+      setPage(initialFilters.pageParam ? parseInt(initialFilters.pageParam) : 1);
+    }
+  }, [initialFilters]);
   
   // URL 쿼리 업데이트 함수
   const updateQueryParams = useCallback(() => {
     const params = new URLSearchParams();
     
     if (selectedCategory) params.set('category', selectedCategory);
-    if (searchQuery) params.set('query', searchQuery);
+    if (initialFilters.searchQuery) params.set('query', initialFilters.searchQuery);
     if (selectedSort) params.set('sort', selectedSort);
     if (priceRange.min) params.set('min_price', priceRange.min.toString());
     if (priceRange.max) params.set('max_price', priceRange.max.toString());
@@ -64,7 +116,7 @@ function MobileProductsPage() {
     if (page > 1) params.set('page', page.toString());
     
     router.push(`/m/products?${params.toString()}`);
-  }, [selectedCategory, searchQuery, selectedSort, priceRange, organicOnly, page, router]);
+  }, [selectedCategory, initialFilters.searchQuery, selectedSort, priceRange, organicOnly, page, router]);
   
   // 필터 적용 핸들러
   const applyFilters = () => {
@@ -86,13 +138,15 @@ function MobileProductsPage() {
   
   // 상품 목록 가져오기
   useEffect(() => {
+    if (selectedCategory === null && initialFilters.categoryId === null) return;
+    
     const fetchProducts = async () => {
       setLoading(true);
       
       try {
         const params = new URLSearchParams();
         if (selectedCategory) params.append('category', selectedCategory);
-        if (searchQuery) params.append('search', searchQuery);
+        if (initialFilters.searchQuery) params.append('search', initialFilters.searchQuery);
         if (selectedSort) params.append('sort', selectedSort);
         if (priceRange.min) params.append('min_price', priceRange.min.toString());
         if (priceRange.max) params.append('max_price', priceRange.max.toString());
@@ -120,7 +174,7 @@ function MobileProductsPage() {
     };
     
     fetchProducts();
-  }, [selectedCategory, searchQuery, selectedSort, priceRange, organicOnly, page]);
+  }, [selectedCategory, initialFilters.searchQuery, selectedSort, priceRange, organicOnly, page, initialFilters.categoryId]);
   
   // 카테고리 가져오기
   useEffect(() => {
@@ -442,5 +496,13 @@ function MobileProductsPage() {
 }
 
 export default function Products() {
-  return <MobileProductsPage />;
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    }>
+      <MobileProductsPage />
+    </Suspense>
+  );
 } 

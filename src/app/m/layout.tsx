@@ -46,7 +46,7 @@ export default function MobileLayout({
       <header className="bg-white shadow-sm sticky top-0 z-50" suppressHydrationWarning={true}>
         <div className="container mx-auto py-3 px-4">
           <div className="flex items-center justify-between">
-            <a href="/m" className="font-bold text-xl text-green-600">마이팜</a>
+            <a href="/m" className="font-bold text-xl text-[#e3c478]">숙경팜</a>
             <div className="flex space-x-3">
               <a href="/m/search" aria-label="검색">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
