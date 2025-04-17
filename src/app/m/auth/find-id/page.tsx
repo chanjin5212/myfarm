@@ -163,7 +163,7 @@ export default function MobileFindIdPage() {
       <Toaster position="top-center" />
       
       {/* 헤더 */}
-      <div className="bg-white px-4 py-4 shadow-sm fixed top-12 left-0 right-0 z-10">
+      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-10">
         <div className="flex items-center">
           <button
             onClick={handleGoBack}
@@ -178,7 +178,7 @@ export default function MobileFindIdPage() {
         </div>
       </div>
       
-      <div className="pt-24 px-4">
+      <div className="pt-16 px-4">
         {step === Step.FORM && (
           <div className="bg-white rounded-lg shadow p-5">
             <p className="text-center text-gray-600 mb-6">

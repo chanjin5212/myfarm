@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Spinner } from '@/components/ui/CommonStyles';
 
 interface Product {
   id: string;
@@ -78,10 +79,12 @@ function MobileProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   
   // 필터 상태
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -91,16 +94,18 @@ function MobileProductsPage() {
   
   // initialFilters가 설정되면 실제 상태에 적용
   useEffect(() => {
-    if (initialFilters.categoryId !== null) {
-      setSelectedCategory(initialFilters.categoryId);
-      setPriceRange({
-        min: initialFilters.minPrice ? parseInt(initialFilters.minPrice) : undefined,
-        max: initialFilters.maxPrice ? parseInt(initialFilters.maxPrice) : undefined
-      });
-      setSelectedSort(initialFilters.sortOption);
-      setOrganicOnly(initialFilters.isOrganic === 'true');
-      setPage(initialFilters.pageParam ? parseInt(initialFilters.pageParam) : 1);
-    }
+    // 페이지 로드 시 초기 필터 적용
+    setSelectedCategory(initialFilters.categoryId);
+    setPriceRange({
+      min: initialFilters.minPrice ? parseInt(initialFilters.minPrice) : undefined,
+      max: initialFilters.maxPrice ? parseInt(initialFilters.maxPrice) : undefined
+    });
+    setSelectedSort(initialFilters.sortOption);
+    setOrganicOnly(initialFilters.isOrganic === 'true');
+    setPage(initialFilters.pageParam ? parseInt(initialFilters.pageParam) : 1);
+    
+    // 초기 필터 설정 완료 플래그
+    setInitialLoadDone(true);
   }, [initialFilters]);
   
   // URL 쿼리 업데이트 함수
@@ -138,10 +143,10 @@ function MobileProductsPage() {
   
   // 상품 목록 가져오기
   useEffect(() => {
-    if (selectedCategory === null && initialFilters.categoryId === null) return;
-    
     const fetchProducts = async () => {
+      // initialLoadDone이 false여도 기본 데이터는 불러옴
       setLoading(true);
+      setError(null);
       
       try {
         const params = new URLSearchParams();
@@ -154,8 +159,16 @@ function MobileProductsPage() {
         params.append('page', page.toString());
         params.append('limit', '10');
         
+        console.log('Fetching products with params:', params.toString());
+        
         const response = await fetch(`/api/products?${params.toString()}`);
+        
+        if (!response.ok) {
+          throw new Error(`상품 정보를 불러오는데 실패했습니다. (상태 코드: ${response.status})`);
+        }
+        
         const data = await response.json();
+        console.log('Products loaded:', data);
         
         // 첫 페이지이면 목록 초기화, 아니면 기존 목록에 추가
         if (page === 1) {
@@ -168,19 +181,25 @@ function MobileProductsPage() {
         setHasMore(data.hasMore || false);
       } catch (error) {
         console.error('상품 로딩 오류:', error);
+        setError(error instanceof Error ? error.message : '상품을 불러오는 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
       }
     };
     
     fetchProducts();
-  }, [selectedCategory, initialFilters.searchQuery, selectedSort, priceRange, organicOnly, page, initialFilters.categoryId]);
+  }, [selectedCategory, initialFilters.searchQuery, selectedSort, priceRange, organicOnly, page]);
   
   // 카테고리 가져오기
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await fetch('/api/categories');
+        
+        if (!response.ok) {
+          throw new Error(`카테고리 정보를 불러오는데 실패했습니다. (상태 코드: ${response.status})`);
+        }
+        
         const data = await response.json();
         setCategories(data.categories || []);
       } catch (error) {
@@ -238,6 +257,9 @@ function MobileProductsPage() {
   
   return (
     <div className="pb-6">
+      {/* ProductParamsHandler 추가 */}
+      <ProductParamsHandler setInitialFilters={setInitialFilters} />
+      
       {/* 검색 및 필터 헤더 */}
       <div className="sticky top-12 z-10 bg-white shadow-sm">
         <div className="flex items-center p-2 border-b">
@@ -359,6 +381,13 @@ function MobileProductsPage() {
           총 {totalCount}개 상품
         </p>
         
+        {/* 에러 표시 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+        
         {/* 상품 목록 */}
         <div className="space-y-3">
           {products.map((product) => (
@@ -368,13 +397,14 @@ function MobileProductsPage() {
         
         {/* 로딩 상태 */}
         {loading && (
-          <div className="flex justify-center py-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+          <div className="flex flex-col items-center justify-center py-10">
+            <Spinner size="md" className="mb-3" />
+            <p className="text-sm text-gray-500">상품 정보를 불러오고 있습니다</p>
           </div>
         )}
         
         {/* 더보기 버튼 */}
-        {!loading && hasMore && (
+        {!loading && hasMore && products.length > 0 && (
           <div className="text-center py-6">
             <button
               onClick={() => setPage(prev => prev + 1)}
@@ -386,7 +416,7 @@ function MobileProductsPage() {
         )}
         
         {/* 상품 없음 메시지 */}
-        {!loading && products.length === 0 && (
+        {!loading && products.length === 0 && !error && (
           <div className="flex flex-col items-center justify-center py-12">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 text-gray-300 mb-3">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -498,8 +528,9 @@ function MobileProductsPage() {
 export default function Products() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-green-500"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Spinner size="lg" className="mb-4" />
+        <p className="text-gray-500">상품 정보를 불러오고 있습니다</p>
       </div>
     }>
       <MobileProductsPage />

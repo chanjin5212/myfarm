@@ -552,6 +552,10 @@ export default function MobileRegisterPage() {
     }
   };
 
+  const handleGoBack = () => {
+    router.push('/m/auth');
+  };
+
   return (
     <>
       <Script
@@ -563,7 +567,18 @@ export default function MobileRegisterPage() {
         
         {/* 헤더 */}
         <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-10">
-          <h1 className="text-xl font-bold text-center">회원가입</h1>
+          <div className="flex items-center">
+            <button
+              onClick={handleGoBack}
+              className="p-1 mr-2"
+              aria-label="뒤로 가기"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-bold">회원가입</h1>
+          </div>
         </div>
         
         {/* 폼 */}
