@@ -194,7 +194,7 @@ export default function MobileAuthPage() {
             </button>
           </form>
           
-          <div className="flex justify-between text-sm mt-4">
+          <div className="flex justify-center items-center text-sm mt-4 space-x-4">
             <Link href="/m/auth/find-id" className="text-green-600">
               아이디 찾기
             </Link>
@@ -222,18 +222,30 @@ export default function MobileAuthPage() {
               <button
                 type="button"
                 onClick={handleNaverLogin}
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-[#03C75A] text-white"
+                className="w-14 h-14 rounded-full flex items-center justify-center bg-[#03C75A] text-white 
+                  hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer
+                  shadow-md hover:shadow-xl active:shadow-sm"
                 disabled={isLoading}
               >
-                <span className="font-bold text-base">N</span>
+                <img 
+                  src="/images/naver-logo.png" 
+                  alt="네이버 로그인" 
+                  className="w-8 h-8"
+                />
               </button>
               <button
                 type="button"
                 onClick={handleKakaoLogin}
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-[#FEE500] text-black"
+                className="w-14 h-14 rounded-full flex items-center justify-center bg-[#FEE500] text-black
+                  hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer
+                  shadow-md hover:shadow-xl active:shadow-sm"
                 disabled={isLoading}
               >
-                <span className="font-bold text-base">K</span>
+                <img 
+                  src="/images/kakao-logo.png" 
+                  alt="카카오 로그인" 
+                  className="w-8 h-8"
+                />
               </button>
             </div>
           </div>

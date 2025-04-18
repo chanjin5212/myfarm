@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSessionChecker } from '@/lib/SessionChecker';
 
 // 인증 컨텍스트 타입 정의
 interface AuthContextType {
@@ -35,36 +34,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     checkAuth();
   }, []);
-
-  // 세션 체커 설정
-  useEffect(() => {
-    // 세션 만료 처리 함수
-    const handleSessionInvalid = () => {
-      console.log('세션이 만료되었습니다.');
-      logout();
-      alert('세션이 만료되어 로그아웃 되었습니다.');
-    };
-
-    // 세션 체커 가져오기
-    const sessionChecker = getSessionChecker(
-      userId,
-      handleSessionInvalid,
-      5 * 60 * 1000 // 5분마다 체크
-    );
-
-    // 로그인 상태일 때만 세션 체크 시작
-    if (isLoggedIn && userId) {
-      sessionChecker.start();
-      console.log('세션 체커가 시작되었습니다.');
-    } else {
-      sessionChecker.stop();
-    }
-
-    // 컴포넌트 언마운트 시 세션 체커 중지
-    return () => {
-      sessionChecker.stop();
-    };
-  }, [isLoggedIn, userId]);
 
   // 로그인 상태 확인
   const checkAuth = (): boolean => {

@@ -144,7 +144,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userId, recipient_name, phone, address, detail_address, is_default, memo } = body;
-    
+    console.log(userId);
+    console.log(recipient_name);
+    console.log(phone);
+    console.log(address);
     if (!userId || !recipient_name || !phone || !address) {
       return NextResponse.json(
         { error: '필수 정보가 누락되었습니다. (받는 사람, 연락처, 주소는 필수)' }, 

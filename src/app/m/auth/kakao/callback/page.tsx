@@ -1,41 +1,47 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { triggerLoginEvent } from '@/utils/auth';
 import { Spinner } from '@/components/ui/CommonStyles';
 
 export default function MobileKakaoCallbackPage() {
   const router = useRouter();
+  const isProcessing = useRef(false);
 
   useEffect(() => {
     const handleCallback = async () => {
-      // 기존 로컬 스토리지 데이터 정리
-      localStorage.removeItem('google_user_info');
-      localStorage.removeItem('google_access_token');
-      localStorage.removeItem('naver_user_info');
-      localStorage.removeItem('naver_access_token');
-      localStorage.removeItem('token');
       
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const state = urlParams.get('state');
-      const savedState = localStorage.getItem('kakaoLoginState');
-
-      // state 검증 - 카카오는 state 파라미터를 사용합니다
-      if (!state || state !== savedState) {
-        alert('잘못된 요청입니다.');
-        router.push('/m/auth');
-        return;
-      }
-
-      if (!code) {
-        alert('인증 코드가 없습니다.');
-        router.push('/m/auth');
-        return;
-      }
+      // 이미 처리 중이면 중복 실행 방지
+      if (isProcessing.current) return;
+      isProcessing.current = true;
 
       try {
+        // 기존 로컬 스토리지 데이터 정리
+        localStorage.removeItem('google_user_info');
+        localStorage.removeItem('google_access_token');
+        localStorage.removeItem('naver_user_info');
+        localStorage.removeItem('naver_access_token');
+        localStorage.removeItem('token');
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const savedState = localStorage.getItem('kakaoLoginState');
+
+        // state 검증 - 카카오는 state 파라미터를 사용합니다
+        if (!state || state !== savedState) {
+          alert('잘못된 요청입니다.');
+          router.replace('/m/auth');
+          return;
+        }
+
+        if (!code) {
+          alert('인증 코드가 없습니다.');
+          router.replace('/m/auth');
+          return;
+        }
+
         // 서버 API를 통해 토큰 교환
         const response = await fetch('/api/auth/kakao', {
           method: 'POST',
@@ -99,7 +105,7 @@ export default function MobileKakaoCallbackPage() {
           };
           
           // 토큰 정보 로깅 추가
-          console.log('카카오 로그인 토큰 정보:', token);
+          console.log('Kakao 로그인 토큰 정보:', token);
           
           localStorage.setItem('token', JSON.stringify(token));
           
@@ -110,15 +116,18 @@ export default function MobileKakaoCallbackPage() {
           // 로그인 상태 변경 이벤트 발생
           triggerLoginEvent();
           
-          router.push('/m');
+          // replace를 사용하여 히스토리 스택에 쌓이지 않도록 함
+          router.replace('/m');
         } else {
           // 새 사용자인 경우 약관 동의 페이지로 이동
-          router.push('/m/auth/terms');
+          router.replace('/m/auth/terms');
         }
       } catch (error) {
         console.error('로그인 과정 오류:', error);
         alert('카카오 로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
-        router.push('/m/auth');
+        router.replace('/m/auth');
+      } finally {
+        isProcessing.current = false;
       }
     };
 

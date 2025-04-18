@@ -188,25 +188,23 @@ export default function MobileChangePassword() {
       <Toaster position="top-center" />
       
       {/* 헤더 */}
-      <div className="sticky top-12 z-10 bg-white shadow-sm">
-        <div className="px-4 py-3 border-b">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => router.back()}
-              className="text-gray-500"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-            </button>
-            <h1 className="text-lg font-bold">비밀번호 변경</h1>
-            <div className="w-6 h-6"></div> {/* 빈 공간으로 중앙 정렬 유지 */}
-          </div>
+      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-50">
+        <div className="flex items-center">
+          <button
+            onClick={() => router.back()}
+            className="p-1 mr-2"
+            aria-label="뒤로 가기"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold">비밀번호 변경</h1>
         </div>
       </div>
       
       {/* 비밀번호 변경 폼 */}
-      <div className="p-4">
+      <div className="p-4 pt-20">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* 현재 비밀번호 입력 */}
           <div>

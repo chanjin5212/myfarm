@@ -50,15 +50,13 @@ export const addToLocalCart = (item: LocalCartItem): void => {
  * @param quantity 새로운 수량
  */
 export const updateLocalCartItem = (itemId: string, quantity: number): void => {
-  if (typeof window === 'undefined') return;
+  const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+  const itemIndex = cart.findIndex((item: LocalCartItem) => item.id === itemId);
   
-  const cart = getLocalCart();
-  
-  const updatedCart = cart.map(item => 
-    item.id === itemId ? { ...item, quantity } : item
-  );
-  
-  localStorage.setItem('cart', JSON.stringify(updatedCart));
+  if (itemIndex !== -1) {
+    cart[itemIndex].quantity = quantity;
+    localStorage.setItem('cart', JSON.stringify(cart));
+  }
 };
 
 /**
@@ -66,12 +64,8 @@ export const updateLocalCartItem = (itemId: string, quantity: number): void => {
  * @param itemId 삭제할 아이템 ID
  */
 export const removeFromLocalCart = (itemId: string): void => {
-  if (typeof window === 'undefined') return;
-  
-  const cart = getLocalCart();
-  
-  const updatedCart = cart.filter(item => item.id !== itemId);
-  
+  const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+  const updatedCart = cart.filter((item: LocalCartItem) => item.id !== itemId);
   localStorage.setItem('cart', JSON.stringify(updatedCart));
 };
 

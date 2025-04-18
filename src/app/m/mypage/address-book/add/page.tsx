@@ -8,7 +8,9 @@ import { Spinner } from '@/components/ui/CommonStyles';
 
 interface AddressFormData {
   recipient_name: string;
-  phone: string;
+  phoneNumberPrefix: string;
+  phoneNumberMiddle: string;
+  phoneNumberSuffix: string;
   address: string;
   detail_address: string;
   is_default: boolean;
@@ -31,7 +33,9 @@ export default function AddShippingAddress() {
   const router = useRouter();
   const [formData, setFormData] = useState<AddressFormData>({
     recipient_name: '',
-    phone: '',
+    phoneNumberPrefix: '010',
+    phoneNumberMiddle: '',
+    phoneNumberSuffix: '',
     address: '',
     detail_address: '',
     is_default: false,
@@ -47,27 +51,33 @@ export default function AddShippingAddress() {
     }
   }, [router]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: checked }));
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/[^0-9]/g, '');
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
     
-    // 자동 하이픈 추가
-    if (value.length > 3 && value.length <= 7) {
-      value = `${value.slice(0, 3)}-${value.slice(3)}`;
-    } else if (value.length > 7) {
-      value = `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7, 11)}`;
+    // 체크박스 처리
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked
+      }));
+      return;
     }
     
-    setFormData(prev => ({ ...prev, phone: value }));
+    // 전화번호 중간 자리와 끝자리는 숫자 4자리만 허용
+    if (name === 'phoneNumberMiddle' || name === 'phoneNumberSuffix') {
+      const numericValue = value.replace(/\D/g, '').slice(0, 4);
+      setFormData(prev => ({
+        ...prev,
+        [name]: numericValue
+      }));
+      return;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleAddressSearch = () => {
@@ -101,7 +111,7 @@ export default function AddShippingAddress() {
     e.preventDefault();
     
     // 유효성 검사
-    if (!formData.recipient_name || !formData.phone || !formData.address) {
+    if (!formData.recipient_name || !formData.phoneNumberMiddle || !formData.phoneNumberSuffix || !formData.address) {
       toast.error('받는 사람, 연락처, 주소는 필수 입력 항목입니다.');
       return;
     }
@@ -109,14 +119,16 @@ export default function AddShippingAddress() {
     setLoading(true);
     
     try {
-      const { isLoggedIn } = checkToken();
-      if (!isLoggedIn) {
+      const { isLoggedIn, user } = checkToken();
+      if (!isLoggedIn || !user?.id) {
         router.push('/m/auth');
         return;
       }
       
       const authHeader = getAuthHeader();
-      const userId = localStorage.getItem('userId');
+      
+      // 전화번호 조합
+      const phone = `${formData.phoneNumberPrefix}-${formData.phoneNumberMiddle}-${formData.phoneNumberSuffix}`;
       
       const response = await fetch('/api/shipping-addresses', {
         method: 'POST',
@@ -125,8 +137,13 @@ export default function AddShippingAddress() {
           ...authHeader
         },
         body: JSON.stringify({
-          userId,
-          ...formData
+          userId: user.id,
+          recipient_name: formData.recipient_name,
+          phone,
+          address: formData.address,
+          detail_address: formData.detail_address,
+          is_default: formData.is_default,
+          memo: formData.memo
         })
       });
       
@@ -146,122 +163,174 @@ export default function AddShippingAddress() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50">
       <Toaster position="top-center" />
-      <div className="mb-6">
-        <h1 className="text-xl font-bold">배송지 추가</h1>
+      {/* 헤더 */}
+      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-30">
+        <div className="flex items-center">
+          <button
+            onClick={() => router.back()}
+            className="p-1 mr-2"
+            aria-label="뒤로 가기"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold">배송지 추가</h1>
+        </div>
       </div>
       
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-4">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              받는 사람 *
-            </label>
-            <input
-              type="text"
-              name="recipient_name"
-              value={formData.recipient_name}
-              onChange={handleChange}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              required
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              연락처 *
-            </label>
-            <input
-              type="text"
-              name="phone"
-              value={formData.phone}
-              onChange={handlePhoneChange}
-              placeholder="010-0000-0000"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              required
-              maxLength={13}
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              주소 *
-            </label>
-            <div className="flex mb-2">
+      {/* 입력 폼 */}
+      <div className="pt-16 pb-24 px-4">
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-4">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                받는 사람 *
+              </label>
+              <input
+                type="text"
+                name="recipient_name"
+                value={formData.recipient_name}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                휴대폰 번호 *
+              </label>
+              <div className="flex space-x-2">
+                <select
+                  id="phoneNumberPrefix"
+                  name="phoneNumberPrefix"
+                  value={formData.phoneNumberPrefix}
+                  onChange={handleChange}
+                  className="w-1/4 rounded-md p-2.5 border border-gray-300 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="010">010</option>
+                  <option value="011">011</option>
+                  <option value="016">016</option>
+                  <option value="017">017</option>
+                  <option value="018">018</option>
+                  <option value="019">019</option>
+                </select>
+                <input
+                  id="phoneNumberMiddle"
+                  name="phoneNumberMiddle"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="0000"
+                  value={formData.phoneNumberMiddle}
+                  onChange={handleChange}
+                  className="w-1/3 rounded-md p-2.5 border border-gray-300 focus:ring-green-500 focus:border-green-500"
+                />
+                <input
+                  id="phoneNumberSuffix"
+                  name="phoneNumberSuffix"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="0000"
+                  value={formData.phoneNumberSuffix}
+                  onChange={handleChange}
+                  className="w-1/3 rounded-md p-2.5 border border-gray-300 focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                주소 *
+              </label>
+              <div className="flex space-x-2 mb-2">
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  readOnly
+                  className="w-2/5 rounded-l-md p-2.5 border border-gray-300 focus:ring-green-500 focus:border-green-500"
+                  placeholder="우편번호"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={handleAddressSearch}
+                  className="shrink-0 rounded-r-md px-4 py-2.5 font-medium text-sm bg-gray-600 text-white hover:bg-gray-700"
+                >
+                  주소 검색
+                </button>
+              </div>
               <input
                 type="text"
                 name="address"
                 value={formData.address}
                 readOnly
-                className="w-full p-2 border border-gray-300 rounded-l-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="w-full rounded-md p-2.5 border border-gray-300 focus:ring-green-500 focus:border-green-500 mb-2"
+                placeholder="기본주소"
                 required
               />
-              <button
-                type="button"
-                onClick={handleAddressSearch}
-                className="bg-gray-600 text-white px-3 py-2 rounded-r-md"
-              >
-                주소 검색
-              </button>
+              <input
+                type="text"
+                name="detail_address"
+                value={formData.detail_address}
+                onChange={handleChange}
+                placeholder="상세 주소"
+                className="w-full rounded-md p-2.5 border border-gray-300 focus:ring-green-500 focus:border-green-500"
+              />
             </div>
             
-            <input
-              type="text"
-              name="detail_address"
-              value={formData.detail_address}
-              onChange={handleChange}
-              placeholder="상세 주소"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                배송 메모
+              </label>
+              <input
+                type="text"
+                name="memo"
+                value={formData.memo}
+                onChange={handleChange}
+                placeholder="예: 부재시 경비실에 맡겨주세요"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="is_default"
+                name="is_default"
+                checked={formData.is_default}
+                onChange={handleChange}
+                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+              />
+              <label htmlFor="is_default" className="ml-2 block text-sm text-gray-700">
+                기본 배송지로 설정
+              </label>
+            </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              배송 메모
-            </label>
-            <input
-              type="text"
-              name="memo"
-              value={formData.memo}
-              onChange={handleChange}
-              placeholder="예: 부재시 경비실에 맡겨주세요"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
+          <div className="mt-6 flex space-x-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-3 rounded-md font-medium"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-md font-medium flex justify-center items-center"
+            >
+              {loading ? <Spinner size="sm" /> : '저장'}
+            </button>
           </div>
-          
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="is_default"
-              name="is_default"
-              checked={formData.is_default}
-              onChange={handleCheckboxChange}
-              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-            />
-            <label htmlFor="is_default" className="ml-2 block text-sm text-gray-700">
-              기본 배송지로 설정
-            </label>
-          </div>
-        </div>
-        
-        <div className="mt-6 flex space-x-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 py-3 rounded-md font-medium"
-          >
-            취소
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-md font-medium flex justify-center items-center"
-          >
-            {loading ? <Spinner size="sm" /> : '저장'}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

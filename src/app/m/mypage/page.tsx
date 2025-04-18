@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { checkToken, getAuthHeader, logout } from '@/utils/auth';
+import { checkToken, getAuthHeader, logout, triggerLoginEvent } from '@/utils/auth';
 import toast, { Toaster } from 'react-hot-toast';
 
 // URL 파라미터 처리 컴포넌트
@@ -188,15 +188,16 @@ function MobileMyPageContent() {
   };
 
   const handleLogout = () => {
-    try {
-      logout();
-      toast.success('로그아웃되었습니다');
-      router.push('/m');
-    } catch (error) {
-      console.error('로그아웃 중 오류:', error);
-      localStorage.removeItem('token');
-      router.push('/m');
-    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('cartItems');
+    localStorage.removeItem('naver_user_info');
+    localStorage.removeItem('naver_access_token');
+    localStorage.removeItem('kakao_user_info');
+    localStorage.removeItem('kakao_access_token');
+    localStorage.removeItem('google_user_info');
+    localStorage.removeItem('google_access_token');
+    triggerLoginEvent();
+    router.push('/m/auth');
   };
 
   // 로그인되지 않은 상태면 이 컴포넌트는 렌더링되지 않음 (위에서 리다이렉트)
@@ -209,7 +210,18 @@ function MobileMyPageContent() {
       {/* 헤더 */}
       <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-30">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">마이페이지</h1>
+          <div className="flex items-center">
+            <button
+              onClick={() => router.back()}
+              className="p-1 mr-2"
+              aria-label="뒤로 가기"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-bold">마이페이지</h1>
+          </div>
           <button
             onClick={handleLogout}
             className="text-sm text-gray-600"
@@ -220,7 +232,7 @@ function MobileMyPageContent() {
       </div>
       
       {/* 사용자 정보 요약 */}
-      <div className="pt-16 pb-3 px-4 bg-white shadow-sm mb-2">
+      <div className="pt-20 pb-3 px-4 bg-white shadow-sm mb-2">
         <div className="flex items-center">
           <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
             {user.avatar_url ? (
@@ -267,28 +279,6 @@ function MobileMyPageContent() {
         <div className="p-4">
           {/* 사용자 정보 섹션 */}
           <div className="bg-white rounded-lg shadow-sm mb-6">
-            <div className="p-4 border-b flex items-center">
-              <div className="flex-shrink-0">
-                {user.avatar_url ? (
-                  <Image
-                    src={user.avatar_url}
-                    alt="프로필 이미지"
-                    width={60}
-                    height={60}
-                    className="h-15 w-15 rounded-full"
-                  />
-                ) : (
-                  <div className="h-15 w-15 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl font-bold">
-                    {user.nickname?.charAt(0) || user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div className="ml-4">
-                <h2 className="text-lg font-bold">{user.nickname || user.name || '회원'}</h2>
-                <p className="text-gray-600 text-sm">{user.email}</p>
-              </div>
-            </div>
-            
             <div className="p-4">
               <div className="space-y-4">
                 <div>

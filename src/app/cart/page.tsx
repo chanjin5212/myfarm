@@ -107,6 +107,7 @@ export default function CartPage() {
     // 로그인 상태 확인
     const { user: currentUser } = checkToken();
     setUser(currentUser);
+
   }, []);
 
   // 장바구니 데이터 가져오기 함수
@@ -115,7 +116,11 @@ export default function CartPage() {
     setError(null);
     
     try {
-      if (!user) {
+
+      const { isLoggedIn } = checkToken();
+
+      if (!isLoggedIn) {
+        
         // 로컬 스토리지에서 장바구니 데이터 가져오기
         const localCartData = localStorage.getItem('cart');
         if (!localCartData) {
@@ -574,7 +579,9 @@ export default function CartPage() {
       
       // 각 옵션별로 수량 업데이트
       for (const option of editOptions) {
-        if (!user) {
+        const { isLoggedIn } = checkToken();
+      
+        if (!isLoggedIn) {
           // 로컬 스토리지 업데이트 로직
           const existingCart = localStorage.getItem('cart');
           
@@ -607,7 +614,8 @@ export default function CartPage() {
           });
           
           if (!response.ok) {
-            throw new Error('장바구니 업데이트에 실패했습니다.');
+            const errorData = await response.json();
+            throw new Error(errorData.error || '장바구니 업데이트에 실패했습니다.');
           }
         }
       }
@@ -621,7 +629,7 @@ export default function CartPage() {
       
     } catch (error) {
       console.error('장바구니 수정 오류:', error);
-      alert('장바구니 수정에 실패했습니다.');
+      alert(error instanceof Error ? error.message : '장바구니 수정에 실패했습니다.');
       setActionLoading(false);
     }
   };

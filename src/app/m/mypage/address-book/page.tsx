@@ -6,6 +6,7 @@ import { toast, Toaster } from 'react-hot-toast';
 import { CheckIcon, PlusIcon, PencilIcon, TrashIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { checkToken, getAuthHeader } from '@/utils/auth';
 import { Spinner } from '@/components/ui/CommonStyles';
+import Script from 'next/script';
 
 interface ShippingAddress {
   id: string;
@@ -37,17 +38,13 @@ export default function MobileAddressBook() {
   useEffect(() => {
     const fetchAddresses = async () => {
       try {
-        const { isLoggedIn } = checkToken();
-        if (!isLoggedIn) {
+        const { isLoggedIn, user } = checkToken();
+        if (!isLoggedIn || !user?.id) {
           router.push('/m/auth');
           return;
         }
 
-        const authHeader = getAuthHeader();
-        const userId = localStorage.getItem('userId');
-        const response = await fetch(`/api/shipping-addresses?userId=${userId}`, {
-          headers: authHeader,
-        });
+        const response = await fetch(`/api/shipping-addresses?userId=${user.id}`);
 
         if (!response.ok) {
           throw new Error('배송지 목록을 불러오는데 실패했습니다.');
@@ -56,14 +53,7 @@ export default function MobileAddressBook() {
         const data = await response.json();
         console.log('배송지 목록:', data.addresses);
         
-        // 기본값 설정
-        const addresses = data.addresses?.map((addr: ShippingAddress) => ({
-          ...addr,
-          is_editable: addr.is_editable !== false,  // 명시적으로 false가 아니면 true로 설정
-          is_deletable: addr.is_deletable !== false // 명시적으로 false가 아니면 true로 설정
-        })) || [];
-        
-        setAddresses(addresses);
+        setAddresses(data.addresses || []);
       } catch (error) {
         console.error('배송지 불러오기 오류:', error);
         toast.error('배송지 목록을 불러오는데 실패했습니다.');
@@ -90,17 +80,14 @@ export default function MobileAddressBook() {
     
     try {
       setDeleting(addressId);
-      const { isLoggedIn } = checkToken();
-      if (!isLoggedIn) {
+      const { isLoggedIn, user } = checkToken();
+      if (!isLoggedIn || !user?.id) {
         router.push('/m/auth');
         return;
       }
 
-      const authHeader = getAuthHeader();
-      const userId = localStorage.getItem('userId');
-      const response = await fetch(`/api/shipping-addresses/${addressId}?userId=${userId}`, {
+      const response = await fetch(`/api/shipping-addresses/${addressId}?userId=${user.id}`, {
         method: 'DELETE',
-        headers: authHeader,
       });
 
       if (!response.ok) {
@@ -149,96 +136,119 @@ export default function MobileAddressBook() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-6">
+    <div className="pb-16">
       <Toaster position="top-center" />
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">배송지 관리</h1>
-        <button
-          onClick={handleAddAddress}
-          className="flex items-center text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg"
-        >
-          <PlusIcon className="h-4 w-4 mr-1" />
-          배송지 추가
-        </button>
+      <Script
+        src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"
+        strategy="lazyOnload"
+      />
+      
+      {/* 헤더 */}
+      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-50">
+        <div className="flex items-center">
+          <button
+            onClick={() => router.back()}
+            className="p-1 mr-2"
+            aria-label="뒤로 가기"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold">배송지 관리</h1>
+        </div>
       </div>
-
-      {addresses.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <p className="text-gray-500">등록된 배송지가 없습니다.</p>
+      
+      {/* 배송지 목록 */}
+      <div className="p-4 pt-20">
+        <div className="flex justify-end mb-4">
           <button
             onClick={handleAddAddress}
-            className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+            className="flex items-center text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg"
           >
-            배송지 추가하기
+            <PlusIcon className="h-4 w-4 mr-1" />
+            배송지 추가
           </button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {addresses.map((address) => (
-            <div key={address.id} className={`bg-white rounded-lg shadow p-4 ${
-              address.is_default ? 'border-l-4 border-green-500' : 
-              address.default_address ? 'border-l-4 border-blue-500' : ''
-            }`}>
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center">
-                  <span className="font-medium text-lg">{address.display_name || address.recipient_name}</span>
-                  {address.is_default && (
-                    <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full flex items-center">
-                      <CheckIcon className="h-3 w-3 mr-0.5" />
-                      기본 배송지
-                    </span>
-                  )}
-                  {address.default_address && (
-                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
-                      <LockClosedIcon className="h-3 w-3 mr-0.5" />
-                      내 기본 주소
-                    </span>
+
+        {addresses.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-6 text-center">
+            <p className="text-gray-500">등록된 배송지가 없습니다.</p>
+            <button
+              onClick={handleAddAddress}
+              className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              배송지 추가하기
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {addresses.map((address) => (
+              <div key={address.id} className={`bg-white rounded-lg shadow p-4 ${
+                address.is_default ? 'border-l-4 border-green-500' : 
+                address.default_address ? 'border-l-4 border-blue-500' : ''
+              }`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center">
+                    <span className="font-medium text-lg">{address.display_name || address.recipient_name}</span>
+                    {address.is_default && (
+                      <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full flex items-center">
+                        <CheckIcon className="h-3 w-3 mr-0.5" />
+                        기본 배송지
+                      </span>
+                    )}
+                    {address.default_address && (
+                      <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full flex items-center">
+                        <LockClosedIcon className="h-3 w-3 mr-0.5" />
+                        내 기본 주소
+                      </span>
+                    )}
+                  </div>
+                  {!address.default_address && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditAddress(address.id)}
+                        className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <PencilIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAddress(address.id)}
+                        disabled={deleting === address.id}
+                        className={`p-1.5 rounded-full ${
+                          deleting === address.id
+                            ? 'text-gray-400'
+                            : 'text-red-500 hover:text-red-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        {deleting === address.id ? (
+                          <Spinner size="sm" />
+                        ) : (
+                          <TrashIcon className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
-                {!address.default_address && (
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleEditAddress(address.id)}
-                      className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAddress(address.id)}
-                      disabled={deleting === address.id}
-                      className={`p-1.5 rounded-full ${
-                        deleting === address.id
-                          ? 'text-gray-400'
-                          : 'text-red-500 hover:text-red-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      {deleting === address.id ? (
-                        <Spinner size="sm" />
-                      ) : (
-                        <TrashIcon className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
+                <p className="text-sm text-gray-600">{address.phone}</p>
+                <p className="text-sm text-gray-800 mt-1">
+                  {address.address} {address.detail_address || ''}
+                </p>
+                {address.note && (
+                  <p className="text-xs text-blue-500 mt-1 italic">
+                    {address.note}
+                  </p>
+                )}
+                {address.memo && (
+                  <p className="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded">
+                    {address.memo}
+                  </p>
                 )}
               </div>
-              <p className="text-sm text-gray-600">{address.phone}</p>
-              <p className="text-sm text-gray-800 mt-1">
-                {address.address} {address.detail_address || ''}
-              </p>
-              {address.note && (
-                <p className="text-xs text-blue-500 mt-1 italic">
-                  {address.note}
-                </p>
-              )}
-              {address.memo && (
-                <p className="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded">
-                  {address.memo}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 } 

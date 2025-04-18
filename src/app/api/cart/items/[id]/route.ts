@@ -142,6 +142,7 @@ export async function PATCH(
       }, { status: 400 });
     }
     
+
     // 수량 업데이트
     const { data: updatedItem, error: updateError } = await supabase
       .from('cart_items')
@@ -149,8 +150,10 @@ export async function PATCH(
       .eq('id', itemId)
       .select()
       .single();
+
     
     if (updateError) {
+      console.log(updateError);
       throw updateError;
     }
     

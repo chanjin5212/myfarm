@@ -17,7 +17,7 @@ const HIDE_HEADER_PATHS = [
   '/m/mypage',
   '/m/mypage/edit-profile',
   '/m/mypage/change-password',
-  '/m/mypage/address-book'
+  '/m/mypage/address-book',  
 ];
 
 export default function MobileLayout({
@@ -28,8 +28,12 @@ export default function MobileLayout({
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
   
-  // 상품 상세 페이지에서는 헤더 숨김
-  const shouldHideHeader = pathname?.startsWith('/m/products/') || pathname === '/m/checkout';
+  // 헤더 숨김 여부 확인
+  const shouldHideHeader = HIDE_HEADER_PATHS.some(path => 
+    pathname === path || 
+    pathname?.startsWith('/m/products/') ||  // 상품 상세 페이지
+    pathname?.startsWith('/m/mypage/address-book/')  // 배송지 관리 관련 모든 페이지
+  );
   
   // 모바일 레이아웃 설정
   useEffect(() => {

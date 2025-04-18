@@ -342,16 +342,15 @@ export default function MobileProductDetailPage() {
               additional_price: option.additionalPrice,
               stock: option.stock
             },
-            total_price: totalPrice * option.quantity, // 옵션 가격을 포함한 총 금액
-            option_price: totalPrice // 단일 옵션 가격 (할인가 + 추가가격)
+            total_price: totalPrice * option.quantity,
+            option_price: totalPrice
           };
         });
       } else {
         // 옵션이 없는 상품
         const unitPrice = productDetails.discount_price || productDetails.price;
         
-        // product_option_id 필드 자체를 생략하여 SQL NULL로 처리
-        const checkoutItem = {
+        checkoutItems = [{
           product_id: productDetails.id,
           quantity: quantity,
           product: {
@@ -362,12 +361,10 @@ export default function MobileProductDetailPage() {
             thumbnail_url: images.length > 0 ? images[0].image_url : productDetails.thumbnail_url,
             stock: productDetails.stock
           },
-          product_option: null, // 옵션 정보 없음
-          total_price: unitPrice * quantity, // 총 금액
-          option_price: unitPrice // 단일 상품 가격 (할인가)
-        };
-        
-        checkoutItems = [checkoutItem];
+          product_option: null,
+          total_price: unitPrice * quantity,
+          option_price: unitPrice
+        }];
       }
       
       // 로컬 스토리지에 체크아웃 상품 정보 저장

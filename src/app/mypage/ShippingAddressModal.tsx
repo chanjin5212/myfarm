@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button, Input, Modal, Checkbox } from '@/components/ui/CommonStyles';
+import { Button, Input, Modal, Checkbox, Spinner } from '@/components/ui/CommonStyles';
 
 interface ShippingAddress {
   id: string;
@@ -427,8 +427,8 @@ export default function ShippingAddressModal({
       )}
       
       {loading && !showAddForm && !showEditForm ? (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+        <div className="flex justify-center items-center min-h-[60vh]">
+          <Spinner size="lg" />
         </div>
       ) : (
         <>

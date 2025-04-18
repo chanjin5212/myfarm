@@ -17,6 +17,7 @@ export interface User {
 // 토큰에서 사용자 정보 확인
 export function checkToken(): { user: User | null, isLoggedIn: boolean } {
   try {
+    
     const tokenData = localStorage.getItem('token');
     if (tokenData) {
       try {

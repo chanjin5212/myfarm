@@ -35,7 +35,7 @@ async function extractUserId(request: NextRequest): Promise<string | null> {
         .select('id')
         .eq('id', token)
         .maybeSingle();
-        
+
       if (userError) {
         console.error('[세션 체크 API] 사용자 확인 오류:', userError.message);
         return null;

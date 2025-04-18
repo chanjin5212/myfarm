@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { checkToken, getAuthHeader, User } from '@/utils/auth';
 import { toast, Toaster } from 'react-hot-toast';
 import { CartItem, LocalCartItem, GroupedCartItem, EditableOption } from '@/types/cart';
-import { getLocalCart, updateLocalCartItem, removeFromLocalCart } from '@/utils/cart';
+import { updateLocalCartItem, removeFromLocalCart } from '@/utils/cart';
 import { getCart, updateCartItem, removeCartItem } from '@/utils/api/cart';
 
 import { Spinner } from '@/components/ui/CommonStyles';
@@ -38,6 +38,8 @@ export default function MobileCartPage() {
   const [isSelectAll, setIsSelectAll] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [removingItemIds, setRemovingItemIds] = useState<string[]>([]);
+  const [availableOptions, setAvailableOptions] = useState<ProductOption[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   
   // 장바구니 데이터 가져오기 함수
   const fetchCartItems = async () => {
@@ -163,18 +165,104 @@ export default function MobileCartPage() {
       setGroupedCartItems(groupedItems);
       
       // 초기에 모든 아이템 선택
-      if (selectedItems.length === 0) {
-        setSelectedItems(cartItems.map(item => item.id));
-        setIsSelectAll(true);
-      }
+      const allGroupIds = groupedItems.map(group => group.product_id);
+      const allItemIds = groupedItems.flatMap(group => 
+        group.options.map(option => option.cart_item_id)
+      );
+      
+      setSelectedGroups(allGroupIds);
+      setSelectedItems(allItemIds);
+      setIsSelectAll(true);
     }
   }, [cartItems]);
   
+  // 모든 아이템 선택/해제
+  const handleSelectAll = (isSelected: boolean) => {
+    setIsSelectAll(isSelected);
+    
+    if (isSelected) {
+      // 모든 그룹 선택
+      const allGroupIds = groupedCartItems.map(group => group.product_id);
+      setSelectedGroups(allGroupIds);
+      // 모든 아이템 선택
+      const allItemIds = groupedCartItems.flatMap(group => 
+        group.options.map(option => option.cart_item_id)
+      );
+      setSelectedItems(allItemIds);
+    } else {
+      setSelectedGroups([]);
+      setSelectedItems([]);
+    }
+  };
+  
+  // 특정 상품 그룹 전체 선택/해제
+  const handleSelectGroup = (groupProductId: string, isSelected: boolean) => {
+    const group = groupedCartItems.find(g => g.product_id === groupProductId);
+    if (!group) return;
+    
+    const groupItemIds = group.options.map(opt => opt.cart_item_id);
+    
+    if (isSelected) {
+      // 그룹 선택 추가
+      setSelectedGroups(prev => [...new Set([...prev, groupProductId])]);
+      // 그룹의 모든 아이템 선택
+      setSelectedItems(prev => [...new Set([...prev, ...groupItemIds])]);
+    } else {
+      // 그룹 선택 제거
+      setSelectedGroups(prev => prev.filter(id => id !== groupProductId));
+      // 그룹의 모든 아이템 선택 해제
+      setSelectedItems(prev => prev.filter(id => !groupItemIds.includes(id)));
+    }
+    
+    // 전체 선택 상태 업데이트
+    const allGroupIds = groupedCartItems.map(g => g.product_id);
+    const isAllSelected = isSelected ? 
+      allGroupIds.every(id => [...selectedGroups, groupProductId].includes(id)) :
+      allGroupIds.every(id => id === groupProductId ? false : selectedGroups.includes(id));
+    setIsSelectAll(isAllSelected);
+  };
+  
+  // 단일 아이템 선택/해제 함수 제거
+  const handleSelectItem = (itemId: string, isSelected: boolean) => {
+    const group = groupedCartItems.find(g => 
+      g.options.some(opt => opt.cart_item_id === itemId)
+    );
+    if (!group) return;
+    
+    // 그룹 단위로 선택/해제
+    handleSelectGroup(group.product_id, isSelected);
+  };
+
+  // 배송비 계산 함수 수정
+  const calculateShippingFee = (itemTotalPrice: number) => {
+    // 선택된 아이템이 없으면 배송비 0원
+    if (selectedItems.length === 0) return 0;
+    // 3만원 이상 구매 시 무료 배송
+    return itemTotalPrice >= 30000 ? 0 : 3000;
+  };
+
+  // 총 배송비 계산 함수
+  const calculateTotalShippingFee = () => {
+    // 상품 그룹별로 배송비 계산
+    return groupedCartItems.reduce((total, group) => {
+      // 해당 그룹의 선택된 옵션들의 총 금액 계산
+      const groupTotal = group.options.reduce((sum, option) => {
+        if (selectedItems.includes(option.cart_item_id)) {
+          const basePrice = group.product.discount_price || group.product.price;
+          return sum + ((basePrice + option.additional_price) * option.quantity);
+        }
+        return sum;
+      }, 0);
+      
+      // 그룹별 배송비 계산 (3만원 이상 무료)
+      return total + calculateShippingFee(groupTotal);
+    }, 0);
+  };
+
   // 선택된 아이템 기반 총 가격 계산
   useEffect(() => {
     const calculateTotal = () => {
       let total = 0;
-      let shippingTotal = 0;
       
       cartItems.forEach(item => {
         if (selectedItems.includes(item.id)) {
@@ -183,9 +271,10 @@ export default function MobileCartPage() {
           const itemTotal = (basePrice + optionPrice) * item.quantity;
           
           total += itemTotal;
-          shippingTotal += calculateShippingFee(itemTotal);
         }
       });
+      
+      const shippingTotal = calculateTotalShippingFee();
       
       setTotalPrice(total);
       setShippingFee(shippingTotal);
@@ -193,52 +282,7 @@ export default function MobileCartPage() {
     };
     
     calculateTotal();
-  }, [cartItems, selectedItems]);
-
-  // 총 상품 금액 계산 함수
-  const calculateTotalPrice = () => {
-    return selectedItems.reduce((total, itemId) => {
-      const item = cartItems.find(i => i.id === itemId);
-      if (!item) return total;
-      
-      const basePrice = item.product.discount_price || item.product.price;
-      const optionPrice = item.product_option ? item.product_option.additional_price : 0;
-      
-      return total + ((basePrice + optionPrice) * item.quantity);
-    }, 0);
-  };
-  
-  // 상품별 배송비 계산 함수
-  const calculateShippingFee = (itemTotalPrice: number) => {
-    // 3만원 이상 구매 시 무료 배송
-    return itemTotalPrice >= 30000 ? 0 : 3000;
-  };
-  
-  // 총 배송비 계산 함수
-  const calculateTotalShippingFee = () => {
-    // 선택된 상품별로 배송비 계산 (상품 그룹별로 별도 계산)
-    return groupedCartItems.reduce((total, group) => {
-      // 해당 그룹의 옵션 중 하나라도 선택되었는지 확인
-      const hasSelectedOption = group.options.some(option => 
-        selectedItems.includes(option.cart_item_id)
-      );
-      
-      if (hasSelectedOption) {
-        // 선택된 옵션만 계산
-        const selectedOptionsTotal = group.options.reduce((optTotal, opt) => {
-          if (selectedItems.includes(opt.cart_item_id)) {
-            const basePrice = group.product.discount_price || group.product.price;
-            return optTotal + ((basePrice + opt.additional_price) * opt.quantity);
-          }
-          return optTotal;
-        }, 0);
-        
-        return total + calculateShippingFee(selectedOptionsTotal);
-      }
-      
-      return total;
-    }, 0);
-  };
+  }, [cartItems, selectedItems, groupedCartItems]);
 
   // 수량 변경 핸들러
   const handleQuantityChange = async (itemId: string, newQuantity: number) => {
@@ -347,42 +391,6 @@ export default function MobileCartPage() {
     }
   };
 
-  // 모든 아이템 선택/해제
-  const handleSelectAll = (isSelected: boolean) => {
-    setIsSelectAll(isSelected);
-    
-    if (isSelected) {
-      setSelectedItems(cartItems.map(item => item.id));
-    } else {
-      setSelectedItems([]);
-    }
-  };
-  
-  // 특정 상품 그룹 전체 선택/해제
-  const handleSelectGroup = (groupProductId: string, isSelected: boolean) => {
-    const group = groupedCartItems.find(g => g.product_id === groupProductId);
-    if (!group) return;
-    
-    const groupItemIds = group.options.map(opt => opt.cart_item_id);
-    
-    if (isSelected) {
-      // 선택 추가
-      setSelectedItems(prev => [...new Set([...prev, ...groupItemIds])]);
-    } else {
-      // 선택 제거
-      setSelectedItems(prev => prev.filter(id => !groupItemIds.includes(id)));
-    }
-  };
-  
-  // 단일 아이템 선택/해제
-  const handleSelectItem = (itemId: string, isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedItems(prev => [...prev, itemId]);
-    } else {
-      setSelectedItems(prev => prev.filter(id => id !== itemId));
-    }
-  };
-  
   // 특정 아이템 단일 삭제
   const handleRemoveSingleItem = async (itemId: string) => {
     if (!confirm('이 상품을 장바구니에서 삭제하시겠습니까?')) {
@@ -537,87 +545,213 @@ export default function MobileCartPage() {
   };
 
   // 옵션 편집 모달 열기
-  const handleOpenEditModal = (groupProductId: string) => {
+  const handleOpenEditModal = async (groupProductId: string) => {
     const group = groupedCartItems.find(g => g.product_id === groupProductId);
     if (!group) return;
     
     setEditingProductId(groupProductId);
-    setEditOptions(group.options.map(opt => ({
-      cart_item_id: opt.cart_item_id,
-      option_name: opt.option_name,
-      option_value: opt.option_value,
-      additional_price: opt.additional_price,
-      quantity: opt.quantity,
-      stock: opt.stock
-    })));
+    
+    // 상품의 모든 옵션 정보 가져오기
+    try {
+      const response = await fetch(`/api/products/${groupProductId}`);
+      if (response.ok) {
+        const data = await response.json();
+        const allOptions = data.options || [];
+        
+        // 현재 선택된 옵션들
+        const currentOptions = group.options.map(opt => ({
+          cart_item_id: opt.cart_item_id,
+          option_name: opt.option_name,
+          option_value: opt.option_value,
+          additional_price: opt.additional_price,
+          quantity: opt.quantity,
+          stock: opt.stock
+        }));
+        
+        setEditOptions(currentOptions);
+        setAvailableOptions(allOptions);
+      }
+    } catch (error) {
+      console.error('옵션 정보 로드 오류:', error);
+    }
+
     setEditModalOpen(true);
   };
   
+  // 옵션 추가 핸들러
+  const handleAddOption = (option: ProductOption) => {
+    // 이미 선택된 옵션인지 확인
+    const isAlreadySelected = editOptions.some(
+      opt => opt.option_name === option.option_name && opt.option_value === option.option_value
+    );
+    
+    if (isAlreadySelected) {
+      toast.error('이미 선택된 옵션입니다.');
+      return;
+    }
+    
+    // 새로운 옵션 추가
+    setEditOptions(prev => [
+      ...prev,
+      {
+        cart_item_id: `new_${option.id}`,
+        option_name: option.option_name,
+        option_value: option.option_value,
+        additional_price: option.additional_price,
+        quantity: 1,
+        stock: option.stock
+      }
+    ]);
+  };
+
+  // 옵션 삭제 핸들러 (편집 모달에서만 사용)
+  const handleRemoveOptionFromModal = (cartItemId: string) => {
+    setEditOptions(prev => prev.filter(opt => opt.cart_item_id !== cartItemId));
+  };
+
   // 옵션 편집 모달 닫기
   const handleCloseEditModal = () => {
     setEditModalOpen(false);
     setEditingProductId(null);
     setEditOptions([]);
   };
-  
+
   // 편집 내용 저장 함수 수정
   const handleSaveEdit = async () => {
-    console.log("여기 타는거야?")
-    if (actionLoading) return; // 이미 로딩 중이면 중복 실행 방지
+    if (actionLoading) return;
     
     try {
       setActionLoading(true);
       
-      // 각 옵션별로 수량 업데이트
-      for (const option of editOptions) {
-        if (!user) {
-          // 로컬 스토리지 업데이트 로직
-          const existingCart = localStorage.getItem('cart');
+      const { isLoggedIn } = checkToken();
+      const group = groupedCartItems.find(g => g.product_id === editingProductId);
+      if (!group) return;
+      
+      // 삭제된 옵션 ID 목록 생성
+      const removedOptionIds = group.options
+        .map(opt => opt.cart_item_id)
+        .filter(id => !editOptions.some(opt => opt.cart_item_id === id));
+      
+      if (!isLoggedIn) {
+        // 로컬 스토리지 업데이트
+        const existingCart = localStorage.getItem('cart');
+        if (existingCart) {
+          const localCart = JSON.parse(existingCart);
           
-          if (existingCart) {
-            const localCart = JSON.parse(existingCart);
-            const item = localCart.find((i: LocalCartItem) => i.id === option.cart_item_id);
-            
-            if (item) {
-              item.quantity = option.quantity;
-              localStorage.setItem('cart', JSON.stringify(localCart));
+          // 삭제된 옵션 제거
+          const updatedCart = localCart.filter((item: LocalCartItem) => !removedOptionIds.includes(item.id));
+          
+          // 기존 아이템 업데이트 및 새 아이템 추가
+          editOptions.forEach(option => {
+            if (option.cart_item_id.startsWith('new_')) {
+              // 새 옵션 추가
+              updatedCart.push({
+                id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                product_id: group.product_id,
+                product_option_id: option.cart_item_id.replace('new_', ''),
+                quantity: option.quantity
+              });
+            } else {
+              // 기존 옵션 수량 업데이트
+              const itemIndex = updatedCart.findIndex((i: LocalCartItem) => i.id === option.cart_item_id);
+              if (itemIndex !== -1) {
+                updatedCart[itemIndex].quantity = option.quantity;
+              }
             }
-          }
-        } else {
-          // 서버 장바구니 업데이트
-          const headers = getAuthHeader();
-          
-          if (!headers.Authorization) {
-            setError('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
-            router.push('/auth');
-            return;
-          }
-          
-          const response = await fetch(`/api/cart/items/${option.cart_item_id}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              ...headers
-            },
-            body: JSON.stringify({ quantity: option.quantity })
           });
           
-          if (!response.ok) {
-            throw new Error('장바구니 업데이트에 실패했습니다.');
-          }
+          localStorage.setItem('cart', JSON.stringify(updatedCart));
+          
+          // 로컬 스토리지 업데이트 후 즉시 장바구니 데이터 다시 불러오기
+          const itemsWithProducts = await Promise.all(
+            updatedCart.map(async (item: LocalCartItem) => {
+              try {
+                const response = await fetch(`/api/products/${item.product_id}`);
+                if (response.ok) {
+                  const data = await response.json();
+                  return {
+                    ...item,
+                    product: data.product,
+                    product_option: item.product_option_id ? 
+                      data.options.find((opt: ProductOption) => opt.id === item.product_option_id) : undefined
+                  };
+                }
+                return null;
+              } catch (err) {
+                console.error(`상품 정보 로딩 오류 (${item.product_id}):`, err);
+                return null;
+              }
+            })
+          );
+          
+          setCartItems(itemsWithProducts.filter(Boolean));
+          setGroupedCartItems(groupCartItems(itemsWithProducts.filter(Boolean)));
         }
+      } else {
+        // 서버 요청을 위한 Promise 배열 생성
+        const updatePromises = [
+          // 삭제된 옵션 제거
+          ...removedOptionIds.map(cartItemId => 
+            fetch(`/api/cart/items/${cartItemId}`, {
+              method: 'DELETE',
+              headers: getAuthHeader()
+            })
+          ),
+          // 기존 옵션 수량 업데이트 및 새 옵션 추가
+          ...editOptions.map(option => {
+            if (option.cart_item_id.startsWith('new_')) {
+              // 새 옵션 추가
+              return fetch('/api/cart', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...getAuthHeader()
+                },
+                body: JSON.stringify({
+                  product_id: group.product_id,
+                  product_option_id: option.cart_item_id.replace('new_', ''),
+                  quantity: option.quantity
+                })
+              });
+            } else {
+              // 기존 옵션 수량 업데이트
+              return fetch(`/api/cart/items/${option.cart_item_id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...getAuthHeader()
+                },
+                body: JSON.stringify({ quantity: option.quantity })
+              });
+            }
+          })
+        ];
+        
+        // 모든 요청 실행
+        await Promise.all(updatePromises);
+        
+        // 서버에서 장바구니 데이터 다시 불러오기
+        const response = await fetch('/api/cart', {
+          headers: getAuthHeader()
+        });
+        
+        if (!response.ok) {
+          throw new Error('장바구니 정보를 가져오는데 실패했습니다.');
+        }
+        
+        const data = await response.json();
+        setCartItems(data.items || []);
+        setGroupedCartItems(groupCartItems(data.items || []));
       }
-      
-      // 장바구니 데이터 다시 불러오기
-      await fetchCartItems();
       
       // 성공 후 상태 초기화 및 모달 닫기
       setActionLoading(false);
       handleCloseEditModal();
+      toast.success('장바구니가 업데이트되었습니다.');
       
     } catch (error) {
       console.error('장바구니 수정 오류:', error);
-      alert('장바구니 수정에 실패했습니다.');
+      toast.error('장바구니 업데이트에 실패했습니다.');
       setActionLoading(false);
     }
   };
@@ -640,6 +774,28 @@ export default function MobileCartPage() {
       )
     );
   };
+
+  // 편집 모달에서의 총 금액 계산
+  const calculateEditModalTotal = () => {
+    const group = groupedCartItems.find(g => g.product_id === editingProductId);
+    if (!group) return { totalPrice: 0, shippingFee: 0, finalPrice: 0 };
+
+    // 선택된 옵션들의 총 금액 계산
+    const totalPrice = editOptions.reduce((sum, option) => {
+      const basePrice = group.product.discount_price || group.product.price;
+      const optionPrice = option.additional_price;
+      return sum + ((basePrice + optionPrice) * option.quantity);
+    }, 0);
+
+    // 배송비 계산 (3만원 이상 무료)
+    const shippingFee = totalPrice >= 30000 ? 0 : 3000;
+    const finalPrice = totalPrice + shippingFee;
+
+    return { totalPrice, shippingFee, finalPrice };
+  };
+
+  // 편집 모달에서의 총 금액
+  const editModalTotals = calculateEditModalTotal();
 
   if (loading) {
     return (
@@ -667,27 +823,9 @@ export default function MobileCartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
-      <Toaster position="top-center" />
-      
-      {/* 헤더 */}
-      <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-10">
-        <div className="flex items-center">
-          <button
-            onClick={() => router.push('/m')}
-            className="p-1 mr-2"
-            aria-label="뒤로 가기"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-          </button>
-          <h1 className="text-xl font-bold">장바구니</h1>
-        </div>
-      </div>
-      
-      {/* 본문 */}
-      <div className="pt-16 px-4">
+    <div className="flex flex-col h-screen">
+      {/* 메인 컨텐츠 */}
+      <div className="flex-1 overflow-y-auto pb-32">
         {groupedCartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 text-gray-300 mb-4">
@@ -708,12 +846,12 @@ export default function MobileCartPage() {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={selectedItems.length === cartItems.length && cartItems.length > 0}
+                  checked={isSelectAll}
                   onChange={(e) => handleSelectAll(e.target.checked)}
                   className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
                 />
                 <label className="ml-2 text-sm">
-                  전체선택 ({selectedItems.length}/{cartItems.length})
+                  전체선택 ({selectedGroups.length}/{groupedCartItems.length})
                 </label>
                 <button 
                   className="ml-auto text-sm text-gray-500"
@@ -733,9 +871,7 @@ export default function MobileCartPage() {
                     <div className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={group.options.every(option => 
-                          selectedItems.includes(option.cart_item_id)
-                        )}
+                        checked={selectedGroups.includes(group.product_id)}
                         onChange={(e) => handleSelectGroup(group.product_id, e.target.checked)}
                         className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
                       />
@@ -780,36 +916,37 @@ export default function MobileCartPage() {
                     {/* 옵션 목록 */}
                     {group.options.length > 0 && (
                       <div className="mt-2 space-y-2">
-                        {group.options.map(option => {
+                        {group.options.map((option) => {
                           if (option.option_name === '기본' && option.option_value === '옵션 없음') {
-                            // 기본 상품만 있는 경우는 옵션 표시 생략하고 수량만 표시
                             return (
-                              <div key={option.cart_item_id} className="flex justify-between items-center py-1">
+                              <div key={option.cart_item_id} className="flex items-center">
                                 <div className="text-sm text-gray-600">
                                   수량: {option.quantity}개
                                 </div>
-                                <div className="text-sm text-gray-800 font-medium">
+                                <div className="ml-auto text-sm text-gray-800 font-medium">
                                   {((group.product.discount_price || group.product.price) * option.quantity).toLocaleString()}원
                                 </div>
                               </div>
                             );
                           }
                           return (
-                            <div key={option.cart_item_id} className="text-xs bg-gray-50 p-2 rounded">
-                              <div className="flex justify-between mb-1">
-                                <span className="text-gray-700">
-                                  {option.option_name}: {option.option_value}
-                                  {option.additional_price > 0 && (
-                                    <span className="text-gray-500 ml-1">(+{option.additional_price.toLocaleString()}원)</span>
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <div className="text-gray-600">
-                                  수량: {option.quantity}개
+                            <div key={option.cart_item_id} className="flex items-center">
+                              <div className="text-xs bg-gray-50 p-2 rounded flex-1">
+                                <div className="flex justify-between mb-1">
+                                  <span className="text-gray-700">
+                                    {option.option_name}: {option.option_value}
+                                    {option.additional_price > 0 && (
+                                      <span className="text-gray-500 ml-1">(+{option.additional_price.toLocaleString()}원)</span>
+                                    )}
+                                  </span>
                                 </div>
-                                <div className="text-gray-800 font-medium">
-                                  {(((group.product.discount_price || group.product.price) + option.additional_price) * option.quantity).toLocaleString()}원
+                                <div className="flex justify-between items-center">
+                                  <div className="text-gray-600">
+                                    수량: {option.quantity}개
+                                  </div>
+                                  <div className="text-gray-800 font-medium">
+                                    {(((group.product.discount_price || group.product.price) + option.additional_price) * option.quantity).toLocaleString()}원
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -847,12 +984,15 @@ export default function MobileCartPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">상품 금액</span>
-                  <span>{totalPrice.toLocaleString()}원</span>
+                  <span>{editModalOpen ? editModalTotals.totalPrice.toLocaleString() : totalPrice.toLocaleString()}원</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">배송비</span>
                   <span>
-                    {shippingFee > 0 ? `${shippingFee.toLocaleString()}원` : '무료'}
+                    {editModalOpen 
+                      ? (editModalTotals.shippingFee > 0 ? `${editModalTotals.shippingFee.toLocaleString()}원` : '무료')
+                      : (shippingFee > 0 ? `${shippingFee.toLocaleString()}원` : '무료')
+                    }
                   </span>
                 </div>
                 {shippingFee > 0 && (
@@ -864,35 +1004,19 @@ export default function MobileCartPage() {
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">결제 예상 금액</span>
-                  <span className="text-lg font-bold text-green-600">{finalPrice.toLocaleString()}원</span>
+                  <span className="text-lg font-bold text-green-600">
+                    {editModalOpen ? editModalTotals.finalPrice.toLocaleString() : finalPrice.toLocaleString()}원
+                  </span>
                 </div>
               </div>
-            </div>
-            
-            {/* 주문하기 버튼(모바일에서 더 위로 표시되게 함) */}
-            <div className="bg-white rounded-lg shadow-sm p-4 mb-16">
-              <button
-                className={`w-full py-3 bg-green-600 text-white rounded-md font-medium ${
-                  actionLoading ? 'opacity-70' : 'active:bg-green-700'
-                }`}
-                onClick={handleCheckout}
-                disabled={actionLoading || selectedItems.length === 0}
-              >
-                {actionLoading ? (
-                  <span className="flex items-center justify-center">
-                    <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
-                    처리 중...
-                  </span>
-                ) : `${finalPrice.toLocaleString()}원 주문하기`}
-              </button>
             </div>
           </div>
         )}
       </div>
       
-      {/* 하단 고정 주문하기 버튼 (기존 버튼 유지) */}
+      {/* 하단 고정 주문하기 버튼 */}
       {groupedCartItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-10">
+        <div className="fixed bottom-14 left-0 right-0 bg-white border-t border-gray-200 p-4 z-20">
           <button
             className={`w-full py-3 bg-green-600 text-white rounded-md font-medium ${
               actionLoading ? 'opacity-70' : 'active:bg-green-700'
@@ -961,63 +1085,93 @@ export default function MobileCartPage() {
                   </div>
                   
                   <div className="p-4">
-                    {editOptions.length > 0 ? (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-medium">선택된 옵션</h4>
-                        {editOptions.map((option) => (
-                          <div key={option.cart_item_id} className="bg-gray-50 p-3 rounded">
-                            <div className="flex justify-between mb-2">
-                              <div className="text-sm">
-                                {option.option_name !== '기본' ? (
-                                  <>
-                                    <span className="font-medium">{option.option_name}: {option.option_value}</span>
-                                    {option.additional_price > 0 && (
-                                      <span className="text-xs text-gray-500 ml-1">(+{option.additional_price.toLocaleString()}원)</span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span className="font-medium">기본 상품</span>
-                                )}
-                              </div>
+                    {/* 옵션 선택 영역 */}
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium mb-2">옵션 선택</h4>
+                      <div className="space-y-2">
+                        <select
+                          className="w-full p-2 border border-gray-300 rounded text-sm"
+                          onChange={(e) => {
+                            const selectedOption = availableOptions.find(opt => opt.id === e.target.value);
+                            if (selectedOption) {
+                              handleAddOption(selectedOption);
+                              e.target.value = ''; // 선택 초기화
+                            }
+                          }}
+                        >
+                          <option value="">옵션을 선택해주세요</option>
+                          {availableOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.option_name}: {option.option_value}
+                              {option.additional_price > 0 && (
+                                ` (+${option.additional_price.toLocaleString()}원)`
+                              )}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 선택된 옵션 목록 */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium">선택된 옵션</h4>
+                      {editOptions.map((option) => (
+                        <div key={option.cart_item_id} className="bg-gray-50 p-3 rounded">
+                          <div className="flex justify-between mb-2">
+                            <div className="text-sm">
+                              {option.option_name !== '기본' ? (
+                                <>
+                                  <span className="font-medium">{option.option_name}: {option.option_value}</span>
+                                  {option.additional_price > 0 && (
+                                    <span className="text-xs text-gray-500 ml-1">(+{option.additional_price.toLocaleString()}원)</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="font-medium">기본 상품</span>
+                              )}
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-gray-500">수량:</span>
-                              <div className="flex border border-gray-300 rounded">
-                                <button
-                                  className="px-2 py-1 text-gray-600"
-                                  onClick={() => handleEditOptionQuantityChange(option.cart_item_id, Math.max(1, option.quantity - 1))}
-                                >
-                                  -
-                                </button>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max={option.stock}
-                                  value={option.quantity}
-                                  onChange={(e) => handleEditOptionQuantityChange(option.cart_item_id, Math.max(1, Math.min(option.stock, parseInt(e.target.value) || 1)))}
-                                  className="w-12 text-center text-sm border-x border-gray-300 focus:outline-none"
-                                />
-                                <button
-                                  className="px-2 py-1 text-gray-600"
-                                  onClick={() => handleEditOptionQuantityChange(option.cart_item_id, Math.min(option.stock, option.quantity + 1))}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-                            {option.stock < 10 && (
-                              <div className="text-xs text-red-500 mt-1">
-                                ※ 재고 {option.stock}개 남음
-                              </div>
-                            )}
+                            <button
+                              className="text-gray-500 hover:text-red-500"
+                              onClick={() => handleRemoveOptionFromModal(option.cart_item_id)}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-6">
-                        <p className="text-gray-500 mb-2">옵션이 없는 상품입니다.</p>
-                      </div>
-                    )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">수량:</span>
+                            <div className="flex border border-gray-300 rounded">
+                              <button
+                                className="px-2 py-1 text-gray-600"
+                                onClick={() => handleEditOptionQuantityChange(option.cart_item_id, Math.max(1, option.quantity - 1))}
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                max={option.stock}
+                                value={option.quantity}
+                                onChange={(e) => handleEditOptionQuantityChange(option.cart_item_id, Math.max(1, Math.min(option.stock, parseInt(e.target.value) || 1)))}
+                                className="w-12 text-center text-sm border-x border-gray-300 focus:outline-none"
+                              />
+                              <button
+                                className="px-2 py-1 text-gray-600"
+                                onClick={() => handleEditOptionQuantityChange(option.cart_item_id, Math.min(option.stock, option.quantity + 1))}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          {option.stock < 10 && (
+                            <div className="text-xs text-red-500 mt-1">
+                              ※ 재고 {option.stock}개 남음
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   
                   <div className="p-4 border-t border-gray-200">

@@ -154,12 +154,7 @@ function HomePage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col justify-center items-center min-h-[60vh] bg-white">
-        <Spinner size="lg" />
-        <p className="mt-4 text-gray-500 text-sm">상품 정보를 불러오는 중입니다...</p>
-      </div>
-    );
+    return null;
   }
 
   return (
