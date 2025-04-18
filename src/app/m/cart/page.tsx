@@ -823,9 +823,9 @@ export default function MobileCartPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col min-h-screen">
       {/* 메인 컨텐츠 */}
-      <div className="flex-1 overflow-y-auto pb-32">
+      <div className="flex-1">
         {groupedCartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 text-gray-300 mb-4">
@@ -840,7 +840,7 @@ export default function MobileCartPage() {
             </Link>
           </div>
         ) : (
-          <div>
+          <div className="pb-32">
             {/* 전체 선택 영역 */}
             <div className="bg-white rounded-lg shadow-sm mb-3 p-3">
               <div className="flex items-center">
