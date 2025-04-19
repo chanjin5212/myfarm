@@ -32,11 +32,11 @@ interface ProductOption {
 }
 
 interface PageProps {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
   searchParams: Record<string, string | string[] | undefined>;
 }
 
-export default function EditProductPage({ params }: PageProps) {
+export default function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,13 +74,8 @@ export default function EditProductPage({ params }: PageProps) {
     const initParams = async () => {
       try {
         // params 처리
-        let id: string;
-        if (params instanceof Promise) {
-          const resolvedParams = await params;
-          id = resolvedParams.productId;
-        } else {
-          id = params.productId;
-        }
+        const resolvedParams = await params;
+        const id = resolvedParams.productId;
         
         setProductId(id);
         setFormData(prev => ({ ...prev, id }));

@@ -7,10 +7,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 // GET 요청 처리 - 상품 옵션 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
+
 ) {
   try {
-    const productId = params.productId;
+    const productId = (await params).productId;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 상품 옵션 조회
@@ -37,10 +38,10 @@ export async function GET(
 // POST 요청 처리 - 상품 옵션 추가
 export async function POST(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = params.productId;
+    const productId = (await params).productId;
     const { options } = await request.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -85,10 +86,10 @@ export async function POST(
 // PUT 요청 처리 - 상품 옵션 업데이트 (전체 옵션 목록 교체)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = params.productId;
+    const productId = (await params).productId;
     const { options } = await request.json();
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
