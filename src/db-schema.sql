@@ -43,6 +43,7 @@ CREATE TABLE users (
 	postcode varchar(10) NULL,
 	address text NULL,
 	detail_address text NULL,
+	is_admin bool DEFAULT false NULL,
 	CONSTRAINT users_email_unique UNIQUE (email),
 	CONSTRAINT users_login_id_key UNIQUE (login_id),
 	CONSTRAINT users_pkey PRIMARY KEY (id)
@@ -94,25 +95,22 @@ CREATE TABLE categories (
 -- DROP TABLE products;
 
 CREATE TABLE products (
-	id uuid DEFAULT uuid_generate_v4() NOT NULL,
-	"name" varchar(200) NOT NULL,
+	id uuid NOT NULL DEFAULT uuid_generate_v4(),
+	created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at timestamptz NULL,
+	name varchar(255) NOT NULL,
 	description text NULL,
 	price int4 NOT NULL,
-	discount_price int4 NULL,
-	stock int4 DEFAULT 0 NOT NULL,
-	status varchar(20) DEFAULT 'active'::character varying NULL,
+	-- discount_price int4 NULL,
+	stock int4 NOT NULL DEFAULT 0,
+	"status" varchar(20) NOT NULL DEFAULT 'active'::character varying,
 	category_id uuid NULL,
-	seller_id uuid NULL,
 	thumbnail_url text NULL,
 	origin varchar(100) NULL,
 	harvest_date date NULL,
-	storage_method text NULL,
-	is_organic bool DEFAULT false NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
-	CONSTRAINT products_pkey PRIMARY KEY (id),
-	CONSTRAINT products_category_id_fkey FOREIGN KEY (category_id) REFERENCES categories(id),
-	CONSTRAINT products_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES users(id)
+	storage_method varchar(255) NULL,
+	is_organic bool NULL DEFAULT false,
+	CONSTRAINT products_pkey PRIMARY KEY (id)
 );
 
 

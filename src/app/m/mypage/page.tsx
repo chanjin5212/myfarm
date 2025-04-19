@@ -12,6 +12,8 @@ function TabParamsHandler({ setActiveTab }: { setActiveTab: (tab: string) => voi
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    if (!searchParams) return;
+    
     const tabParam = searchParams.get('tab');
     if (tabParam === 'orders') {
       setActiveTab('orders');
@@ -44,9 +46,16 @@ interface OrderHistory {
   status: string;
   created_at: string;
   items: Array<{
+    product_id: string;
     product_name: string;
     quantity: number;
     price: number;
+    options: {
+      name: string;
+      value: string;
+      additional_price: number;
+    };
+    product_image?: string;
   }>;
 }
 
@@ -382,59 +391,166 @@ function MobileMyPageContent() {
         <div className="p-4">
           {orderHistory.length > 0 ? (
             <div className="space-y-4">
-              {orderHistory.map((order) => (
-                <div key={order.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <div className="flex justify-between items-center p-4 border-b">
-                    <div>
-                      <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
-                      <p className="font-medium">{order.order_number}</p>
-                    </div>
-                    <OrderStatusBadge status={order.status} />
-                  </div>
+              {orderHistory.map((order) => {
+                // 상품 ID별로 그룹화
+                const groupedItems = order.items.reduce((acc, item) => {
+                  if (!acc[item.product_id]) {
+                    acc[item.product_id] = {
+                      product_name: item.product_name,
+                      product_image: item.product_image,
+                      total_quantity: 0,
+                      total_price: 0,
+                      options: []
+                    };
+                  }
+                  acc[item.product_id].total_quantity += item.quantity;
+                  acc[item.product_id].total_price += item.price * item.quantity;
                   
-                  <div className="p-4">
-                    {order.items.map((item, index) => (
-                      <div key={index} className="py-2 border-b last:border-0">
-                        <div className="flex justify-between">
-                          <p className="font-medium">{item.product_name}</p>
-                          <p className="text-gray-600 text-sm">{item.quantity}개</p>
-                        </div>
-                        <p className="text-right text-sm">{item.price.toLocaleString()}원</p>
+                  // options가 문자열이면 JSON으로 파싱
+                  let options = item.options;
+                  if (typeof options === 'string') {
+                    try {
+                      options = JSON.parse(options);
+                    } catch (e) {
+                      console.error('옵션 파싱 오류:', e);
+                      options = { name: '기본', value: '옵션 없음', additional_price: 0 };
+                    }
+                  }
+                  
+                  // options가 객체이면 옵션 정보를 추가
+                  if (typeof options === 'object' && options !== null) {
+                    acc[item.product_id].options.push({
+                      option_name: options.name || '기본',
+                      option_value: options.value || '옵션 없음',
+                      additional_price: options.additional_price || 0,
+                      quantity: item.quantity,
+                      price: item.price
+                    });
+                  }
+                  
+                  return acc;
+                }, {} as Record<string, {
+                  product_name: string;
+                  product_image?: string;
+                  total_quantity: number;
+                  total_price: number;
+                  options: Array<{
+                    option_name: string;
+                    option_value: string;
+                    additional_price: number;
+                    quantity: number;
+                    price: number;
+                  }>;
+                }>);
+
+                return (
+                  <div key={order.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div className="flex justify-between items-center p-4 border-b">
+                      <div>
+                        <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
+                        <p className="font-medium">{order.order_number}</p>
                       </div>
-                    ))}
+                      <OrderStatusBadge status={order.status} />
+                    </div>
                     
-                    <div className="flex justify-between items-center mt-3 pt-3 border-t">
-                      <span className="font-medium">총 결제금액</span>
-                      <span className="font-bold text-green-600">{order.total_amount.toLocaleString()}원</span>
+                    <div className="p-4">
+                      {Object.entries(groupedItems).map(([productId, product]) => (
+                        <div key={productId} className="py-3 border-b last:border-0">
+                          <div className="flex gap-3 mb-3">
+                            <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                              {product.product_image ? (
+                                <Image
+                                  src={product.product_image}
+                                  alt={product.product_name}
+                                  width={80}
+                                  height={80}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <p className="font-medium text-base truncate">{product.product_name}</p>
+                                <p className="text-gray-600 text-sm whitespace-nowrap ml-2">
+                                  총 {product.total_quantity}개
+                                </p>
+                              </div>
+                              
+                              <div className="space-y-1 mt-2">
+                                {product.options.map((option, index) => (
+                                  <div key={index} className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600">
+                                      {option.option_name === '기본' && option.option_value === '옵션 없음' ? (
+                                        `수량: ${option.quantity}개`
+                                      ) : (
+                                        <>
+                                          {option.option_name}: {option.option_value}
+                                          {option.additional_price > 0 && (
+                                            <span className="text-gray-500 ml-1">(+{option.additional_price.toLocaleString()}원)</span>
+                                          )}
+                                          <span className="ml-2">수량: {option.quantity}개</span>
+                                        </>
+                                      )}
+                                    </span>
+                                    <span className="text-gray-800">
+                                      {option.price.toLocaleString()}원
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              <div className="flex justify-end mt-2">
+                                <span className="text-sm font-medium text-gray-900">
+                                  상품 합계: {product.total_price.toLocaleString()}원
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                        <span className="font-medium text-base">총 결제금액</span>
+                        <span className="font-bold text-lg text-green-600">
+                          {order.total_amount.toLocaleString()}원
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gray-50 p-3 flex justify-end space-x-2">
+                      <Link
+                        href={`/m/mypage/orders/${order.id}`}
+                        className="px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        주문 상세
+                      </Link>
+                      
+                      {order.status === 'delivered' && (
+                        <Link
+                          href={`/m/mypage/write-review?order=${order.id}`}
+                          className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                        >
+                          리뷰 작성
+                        </Link>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="bg-gray-50 p-3 flex justify-end space-x-2">
-                    <Link
-                      href={`/m/mypage/orders/${order.id}`}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded text-gray-700"
-                    >
-                      주문 상세
-                    </Link>
-                    
-                    {order.status === 'delivered' && (
-                      <Link
-                        href={`/m/mypage/write-review?order=${order.id}`}
-                        className="px-3 py-1.5 text-sm bg-green-600 text-white rounded"
-                      >
-                        리뷰 작성
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 mx-auto text-gray-300 mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mx-auto text-gray-300 mb-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
               </svg>
-              <p className="text-gray-500">주문 내역이 없습니다</p>
+              <p className="text-gray-500 text-lg">주문 내역이 없습니다</p>
+              <p className="text-gray-400 text-sm mt-2">새로운 상품을 구매해보세요</p>
             </div>
           )}
         </div>

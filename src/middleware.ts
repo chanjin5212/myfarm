@@ -10,10 +10,18 @@ function isMobileDevice(userAgent: string): boolean {
 
 /**
  * Next.js 미들웨어 함수
- * 모든 요청을 그대로 통과시킴
  */
 export function middleware(request: NextRequest) {
-  // 모든 요청을 그대로 통과시킴
+  const { pathname } = request.nextUrl;
+  
+  // Admin 경로 처리
+  if (pathname === '/admin' || pathname === '/admin/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/admin/login';
+    return NextResponse.redirect(url);
+  }
+  
+  // 그 외 모든 요청은 그대로 통과
   return NextResponse.next();
 }
 

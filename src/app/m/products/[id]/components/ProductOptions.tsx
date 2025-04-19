@@ -129,11 +129,6 @@ export default function MobileProductOptions({
     );
   };
   
-  // 옵션 삭제 핸들러
-  const handleRemoveOption = (optionId: string) => {
-    setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
-  };
-  
   // 기본 수량 변경 핸들러 (옵션이 없는 상품용)
   const handleBaseQuantityChange = (newQuantity: number) => {
     if (newQuantity < 1) {
@@ -147,6 +142,11 @@ export default function MobileProductOptions({
     }
     
     setQuantity(newQuantity);
+  };
+  
+  // 옵션 삭제 핸들러
+  const handleRemoveOption = (optionId: string) => {
+    setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
   };
   
   return (

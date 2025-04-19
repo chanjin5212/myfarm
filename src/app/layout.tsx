@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Header from '@/components/Header';
-import { Providers } from "./providers";
-import { AuthProvider } from '@/components/AuthProvider';
+import { Toaster } from 'react-hot-toast';
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -16,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MyFarm - 농산물 직거래",
-  description: "신선한 농산물을 직거래로 만나보세요",
+  title: "쇼핑몰",
+  description: "쇼핑몰 웹사이트",
 };
 
 export default function RootLayout({
@@ -27,36 +25,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <head>
-        <style 
-          dangerouslySetInnerHTML={{ 
-            __html: `
-              /* 모바일 페이지 스타일링 */
-              body.mobile-layout header:not(.bg-white) {
-                display: none !important;
-              }
-              /* 전체 배경색 하얀색으로 설정 */
-              body {
-                background-color: white !important;
-              }
-            ` 
-          }} 
-        />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans bg-white`}
-        suppressHydrationWarning={true}
-      >
-        <Providers>
-          <AuthProvider>
-            <div className="flex flex-col min-h-screen bg-white">
-              <Header />
-              <main className="flex-grow bg-white">
-                {children}
-              </main>
-            </div>
-          </AuthProvider>
-        </Providers>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
+        <Toaster position="top-center" />
+        {children}
       </body>
     </html>
   );

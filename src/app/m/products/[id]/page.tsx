@@ -71,17 +71,14 @@ export default function MobileProductDetailPage() {
   const [isAddingToCart, setIsAddingToCart] = useState<boolean>(false);
   const [cartSuccessPopup, setCartSuccessPopup] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [translateX, setTranslateX] = useState(0);
+  const [currentImage, setCurrentImage] = useState<number>(0);
 
   // 상품 정보 가져오기
   useEffect(() => {
     const fetchProductDetails = async () => {
       setLoading(true);
       try {
-        const apiUrl = `/api/products/${params.id}`;
+        const apiUrl = `/api/products/${params?.id}`;
         const response = await fetch(apiUrl);
         
         if (!response.ok) {
@@ -102,36 +99,14 @@ export default function MobileProductDetailPage() {
       }
     };
 
-    if (params.id) {
+    if (params?.id) {
       fetchProductDetails();
     }
-  }, [params.id]);
+  }, [params?.id]);
 
-  // 터치 이벤트 핸들러
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    setStartX(e.touches[0].clientX);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    const currentX = e.touches[0].clientX;
-    const diff = currentX - startX;
-    setTranslateX(diff);
-  };
-
-  const handleTouchEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    
-    if (Math.abs(translateX) > 50) {
-      if (translateX > 0 && currentSlide > 0) {
-        setCurrentSlide(prev => prev - 1);
-      } else if (translateX < 0 && currentSlide < images.length - 1) {
-        setCurrentSlide(prev => prev + 1);
-      }
-    }
-    setTranslateX(0);
+  // 선택한 썸네일에 따라 메인 이미지 변경
+  const handleThumbnailClick = (index: number) => {
+    setCurrentImage(index);
   };
 
   // 장바구니 추가 핸들러
@@ -451,60 +426,53 @@ export default function MobileProductDetailPage() {
 
       {/* 컨텐츠 영역 - 헤더 높이만큼 상단 여백 추가 */}
       <div className="pt-14">
-        {/* 이미지 슬라이더 */}
-        <div 
-          className="relative w-full aspect-square overflow-hidden"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
-          <div 
-            className="transition-transform duration-300 ease-in-out h-full flex"
-            style={{ 
-              transform: `translateX(calc(-${currentSlide * 100}% + ${translateX}px))`,
-              touchAction: 'none'
-            }}
-          >
-            {images.length > 0 ? (
-              images.map((image, index) => (
-                <div key={image.id} className="w-full h-full flex-shrink-0">
-                  <Image
-                    src={image.image_url}
-                    alt={`${productDetails.name} 이미지 ${index + 1}`}
-                    fill
-                    sizes="100vw"
-                    className="object-cover"
-                    priority={index === 0}
-                  />
-                </div>
-              ))
-            ) : (
-              <div className="w-full h-full flex-shrink-0">
-                <Image
-                  src={productDetails.thumbnail_url || '/images/default-product.jpg'}
-                  alt={productDetails.name}
-                  fill
-                  sizes="100vw"
-                  className="object-cover"
-                  priority
-                />
-              </div>
-            )}
-          </div>
-          
-          {/* 이미지 인디케이터 */}
-          {images.length > 1 && (
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center space-x-2">
-              {images.map((_, index) => (
-                <button 
-                  key={index}
-                  className={`w-2 h-2 rounded-full ${currentSlide === index ? 'bg-white' : 'bg-white/50'}`}
-                  onClick={() => setCurrentSlide(index)}
-                />
-              ))}
-            </div>
+        {/* 메인 이미지 */}
+        <div className="relative w-full aspect-square bg-gray-100">
+          {images.length > 0 ? (
+            <Image
+              src={images[currentImage]?.image_url || '/images/default-product.jpg'}
+              alt={`${productDetails?.name} 대표 이미지`}
+              fill
+              sizes="100vw"
+              className="object-contain"
+              priority
+              unoptimized={images[currentImage]?.image_url?.includes('blob:')}
+            />
+          ) : (
+            <Image
+              src={productDetails?.thumbnail_url || '/images/default-product.jpg'}
+              alt={productDetails?.name || '상품 이미지'}
+              fill
+              sizes="100vw"
+              className="object-contain"
+              priority
+              unoptimized={productDetails?.thumbnail_url?.includes('blob:')}
+            />
           )}
         </div>
+        
+        {/* 이미지 썸네일 목록 */}
+        {images.length > 1 && (
+          <div className="flex overflow-x-auto py-3 px-4 gap-2 bg-white">
+            {images.map((image, index) => (
+              <button
+                key={image.id} 
+                onClick={() => handleThumbnailClick(index)}
+                className={`flex-shrink-0 w-16 h-16 border-2 rounded overflow-hidden 
+                  ${currentImage === index ? 'border-green-500' : 'border-gray-200'}`}
+              >
+                <Image
+                  src={image.image_url}
+                  alt={`${productDetails?.name} 이미지 ${index + 1}`}
+                  width={64}
+                  height={64}
+                  className="object-cover w-full h-full"
+                  unoptimized={image.image_url?.includes('blob:')}
+                />
+              </button>
+            ))}
+          </div>
+        )}
         
         {/* 상품 정보 */}
         <MobileProductInfo product={productDetails} />
@@ -529,22 +497,40 @@ export default function MobileProductDetailPage() {
       
       {/* 하단 고정 영역 - 장바구니/구매 버튼 */}
       <div className="fixed bottom-14 left-0 right-0 bg-white border-t p-3 flex space-x-2 z-40">
-        <button
-          onClick={handleAddToCart}
-          disabled={isAddingToCart}
-          className="flex-1 border-2 border-green-600 bg-white text-green-600 py-2.5 rounded-md font-medium flex items-center justify-center"
-        >
-          {isAddingToCart ? (
-            <span className="inline-block w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2" />
-          ) : null}
-          장바구니
-        </button>
-        <button
-          onClick={handleBuyNow}
-          className="flex-1 bg-green-600 text-white py-2.5 rounded-md font-medium"
-        >
-          바로 구매
-        </button>
+        {productDetails.status === 'active' ? (
+          <>
+            <button
+              onClick={handleAddToCart}
+              disabled={isAddingToCart}
+              className="flex-1 border-2 border-green-600 bg-white text-green-600 py-2.5 rounded-md font-medium flex items-center justify-center"
+            >
+              {isAddingToCart ? (
+                <span className="inline-block w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2" />
+              ) : null}
+              장바구니
+            </button>
+            <button
+              onClick={handleBuyNow}
+              className="flex-1 bg-green-600 text-white py-2.5 rounded-md font-medium"
+            >
+              바로 구매
+            </button>
+          </>
+        ) : (
+          <div className="flex-1 py-3 bg-gray-100 rounded-md text-center font-medium text-gray-700">
+            {productDetails.status === 'out_of_stock' ? (
+              <>
+                <span className="text-red-500 mr-1">품절</span> 
+                상품입니다
+              </>
+            ) : (
+              <>
+                <span className="text-gray-600 mr-1">판매중지</span> 
+                상품입니다
+              </>
+            )}
+          </div>
+        )}
       </div>
       
       {/* 장바구니 성공 팝업 */}
