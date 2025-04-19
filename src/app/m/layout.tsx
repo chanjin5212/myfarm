@@ -65,7 +65,7 @@ export default function MobileLayout({
   }
   
   return (
-    <div className="mobile-layout bg-white text-black min-h-screen" suppressHydrationWarning={true}>
+    <div className="mobile-layout bg-white min-h-screen" style={{ color: '#171717' }} suppressHydrationWarning={true}>
       <Toaster
         position="top-center"
         toastOptions={{
@@ -106,7 +106,7 @@ export default function MobileLayout({
       )}
       
       {/* 메인 콘텐츠 */}
-      <div className={`bg-white text-black min-h-screen ${shouldHideHeader ? '' : 'pt-14'}`}>
+      <div className={`bg-white min-h-screen ${shouldHideHeader ? '' : 'pt-14'}`} style={{ color: '#171717' }}>
         <Suspense fallback={
           <div className="flex justify-center items-center min-h-[60vh] bg-white">
             <Spinner size="lg" />

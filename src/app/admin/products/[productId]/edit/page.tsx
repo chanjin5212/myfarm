@@ -364,9 +364,9 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
   }
 
   return (
-    <div className="p-4">
+    <div className="p-4" style={{ color: "#171717" }}>
       <div className="mb-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold">상품 수정</h1>
+        <h1 className="text-xl font-semibold" style={{ color: "#171717" }}>상품 수정</h1>
         <Button
           variant="outline"
           size="sm"
@@ -377,7 +377,7 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
       </div>
       
       <div className="bg-white rounded-lg shadow p-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" style={{ color: "#171717" }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">

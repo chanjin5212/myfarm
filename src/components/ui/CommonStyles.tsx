@@ -76,13 +76,13 @@ export const Input: React.FC<InputProps> = ({
   } ${widthClass} ${className}`;
   
   return (
-    <div className={widthClass}>
+    <div className={widthClass} style={{ color: '#171717' }}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium mb-1" style={{ color: '#171717' }}>
           {label}
         </label>
       )}
-      <input className={inputStyle} {...props} />
+      <input className={inputStyle} {...props} style={{ color: '#171717' }} />
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>
   );
@@ -108,13 +108,13 @@ export const Textarea: React.FC<TextareaProps> = ({
   } ${widthClass} ${className}`;
   
   return (
-    <div className={widthClass}>
+    <div className={widthClass} style={{ color: '#171717' }}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium mb-1" style={{ color: '#171717' }}>
           {label}
         </label>
       )}
-      <textarea className={textareaStyle} {...props} />
+      <textarea className={textareaStyle} {...props} style={{ color: '#171717' }} />
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>
   );
@@ -186,15 +186,15 @@ export const Select: React.FC<SelectProps> = ({
   } ${widthClass} ${className}`;
   
   return (
-    <div className={widthClass}>
+    <div className={widthClass} style={{ color: '#171717' }}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium mb-1" style={{ color: '#171717' }}>
           {label}
         </label>
       )}
-      <select className={selectStyle} {...props}>
+      <select className={selectStyle} {...props} style={{ color: '#171717' }}>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} style={{ color: '#171717' }}>
             {option.label}
           </option>
         ))}
