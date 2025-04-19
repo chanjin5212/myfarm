@@ -31,7 +31,12 @@ interface ProductOption {
   stock: string;
 }
 
-export default function EditProductPage({ params }: { params: { productId: string } | Promise<{ productId: string }> }) {
+interface PageProps {
+  params: { productId: string };
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default function EditProductPage({ params }: PageProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
