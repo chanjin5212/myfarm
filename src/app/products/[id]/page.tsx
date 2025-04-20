@@ -78,6 +78,11 @@ export default function ProductDetailPage() {
   // 탭 상태 추가
   const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
   
+  // 리뷰 관련 상태
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState<boolean>(false);
+  const [reviewSort, setReviewSort] = useState<string>('latest');
+  
   // 버튼별 로딩 상태 추가
   const [changingOptionId, setChangingOptionId] = useState<string | null>(null);
   const [changingBaseQuantity, setChangingBaseQuantity] = useState<boolean>(false);
