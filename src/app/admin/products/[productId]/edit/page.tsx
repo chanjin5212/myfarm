@@ -7,6 +7,7 @@ import ImageUpload from '@/components/ui/ImageUpload';
 import MultipleImageUpload, { ProductImage, uploadProductImages } from '@/components/ui/MultipleImageUpload';
 import { toast } from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
+import { use } from 'react';
 
 interface ProductData {
   id?: string;
@@ -32,11 +33,11 @@ interface ProductOption {
 }
 
 interface PageProps {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
   searchParams: Record<string, string | string[] | undefined>;
 }
 
-export default function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
+export default function EditProductPage({ params }: PageProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,17 +65,14 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
   });
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
 
+  const resolvedParams = use(params);
+
   useEffect(() => {
-    const initData = async () => {
-      const resolvedParams = await params;
-      if (resolvedParams.productId) {
-        setProductId(resolvedParams.productId);
-        initProductData(resolvedParams.productId);
-      }
-    };
-    
-    initData();
-  }, [params]);
+    if (resolvedParams.productId) {
+      setProductId(resolvedParams.productId);
+      initProductData(resolvedParams.productId);
+    }
+  }, [resolvedParams]);
 
   // 상품 데이터 초기화
   const initProductData = async (productId: string) => {
@@ -137,7 +135,6 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
     
     try {
       setLoading(true);
-      const resolvedParams = await params;
       const productId = resolvedParams.productId;
       
       // 상품 데이터 유효성 검사
@@ -410,6 +407,36 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
     );
   };
 
+  // 옵션 삭제 핸들러
+  const handleRemoveOption = async (optionId: string) => {
+    try {
+      const response = await fetch(`/api/admin/products/${resolvedParams.productId}/options`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ optionId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.hasReferences) {
+          toast.error(data.error);
+          return;
+        }
+        throw new Error(data.error || '옵션 삭제에 실패했습니다.');
+      }
+
+      // 삭제 성공 시 UI 업데이트
+      setProductOptions(prev => prev.filter(o => o.id !== optionId));
+      toast.success('옵션이 삭제되었습니다.');
+    } catch (error) {
+      console.error('옵션 삭제 오류:', error);
+      toast.error(error instanceof Error ? error.message : '옵션 삭제에 실패했습니다.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 flex justify-center items-center h-64">
@@ -575,9 +602,7 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setProductOptions(prev => prev.filter(o => o.id !== option.id));
-                                }}
+                                onClick={() => handleRemoveOption(option.id || '')}
                                 className="text-red-600 hover:text-red-900 text-sm"
                               >
                                 삭제
@@ -593,15 +618,6 @@ export default function EditProductPage({ params }: { params: Promise<{ productI
                               <span className="text-gray-500">재고량:</span>
                               <span className="ml-2">{option.stock}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center">
-                            <input 
-                              type="radio" 
-                              checked={option.is_default} 
-                              onChange={() => handleSetDefaultOption(option.id || '')}
-                              className="h-4 w-4 mr-2"
-                            />
-                            <label className="text-sm text-gray-600">기본 옵션으로 설정</label>
                           </div>
                         </div>
                       </div>
