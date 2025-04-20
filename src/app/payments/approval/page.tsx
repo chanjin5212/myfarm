@@ -7,9 +7,9 @@ import { Spinner } from '@/components/ui/CommonStyles';
 // 메인 컨텐츠 컴포넌트 - useSearchParams을 사용
 function ApprovalContent() {
   const searchParams = useSearchParams();
-  const pg_token = searchParams.get('pg_token');
-  const order_id = searchParams.get('order_id');
-  const status = searchParams.get('status') || 'unknown';
+  const pg_token = searchParams?.get('pg_token');
+  const order_id = searchParams?.get('order_id');
+  const status = searchParams?.get('status') || 'unknown';
   const [message, setMessage] = useState<string>('결제 정보를 확인하는 중입니다...');
 
   useEffect(() => {

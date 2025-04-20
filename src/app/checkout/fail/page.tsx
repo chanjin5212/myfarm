@@ -14,7 +14,7 @@ function PaymentFailContent() {
     async function handlePaymentFail() {
       try {
         // 실패한 주문 취소 처리
-        const orderId = searchParams.get('orderId');
+        const orderId = searchParams?.get('orderId');
         if (orderId) {
           await fetch(`/api/orders/cancel`, {
             method: 'POST',

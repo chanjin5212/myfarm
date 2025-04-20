@@ -16,9 +16,9 @@ function PaymentSuccessContent() {
   useEffect(() => {
     async function confirmPayment() {
       try {
-        const paymentKey = searchParams.get('paymentKey');
-        const orderId = searchParams.get('orderId');
-        const amount = searchParams.get('amount');
+        const paymentKey = searchParams?.get('paymentKey');
+        const orderId = searchParams?.get('orderId');
+        const amount = searchParams?.get('amount');
         
         if (!paymentKey || !orderId || !amount) {
           throw new Error('결제 정보가 올바르지 않습니다.');

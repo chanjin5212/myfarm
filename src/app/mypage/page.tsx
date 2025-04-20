@@ -136,7 +136,7 @@ function MyPageContent() {
 
   // URL 파라미터에서 탭 정보 가져오기
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
+    const tabParam = searchParams?.get('tab');
     if (tabParam === 'orders') {
       setActiveTab('orders');
     }

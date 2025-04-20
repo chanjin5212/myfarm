@@ -80,7 +80,7 @@ interface GroupedOrderItem {
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const orderId = params.orderId as string;
+  const orderId = params?.orderId as string;
 
   // 주문 관련 상태
   const [orderInfo, setOrderInfo] = useState<any>(null);

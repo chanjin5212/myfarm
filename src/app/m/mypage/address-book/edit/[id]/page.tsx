@@ -39,7 +39,7 @@ interface DaumPostcodeResult {
 export default function EditShippingAddress() {
   const router = useRouter();
   const params = useParams();
-  const addressId = params.id as string;
+  const addressId = params?.id as string;
   
   const [formData, setFormData] = useState<AddressFormData>({
     recipient_name: '',

@@ -11,7 +11,7 @@ function SuccessMessageHandler({ setSuccessMessage }: { setSuccessMessage: (mess
   const searchParams = useSearchParams();
   
   useEffect(() => {
-    const success = searchParams.get('success');
+    const success = searchParams?.get('success');
     if (success === 'password-reset') {
       setSuccessMessage('비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.');
     }

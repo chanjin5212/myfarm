@@ -24,7 +24,7 @@ interface ProductOptionsProps {
     id: string;
     name: string;
     price: number;
-    stock: number;
+    stock?: number;
   };
   options: ProductOption[];
   selectedOptions: SelectedOption[];
@@ -290,4 +290,4 @@ export default function MobileProductOptions({
       </div>
     </div>
   );
-} 
+}

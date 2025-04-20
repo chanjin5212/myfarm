@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getAuthHeader, checkToken } from '@/utils/auth';
@@ -100,9 +100,11 @@ export default function ProductDetailPage() {
     const fetchProductDetails = async () => {
       console.log('fetchProductDetails 함수 실행됨');
       setLoading(true);
+      setError('');
+
       try {
         // 상품 상세 정보 가져오기
-        const apiUrl = `/api/products/${params.id}`;
+        const apiUrl = `/api/products/${params?.id}`;
         console.log('API 요청 URL:', apiUrl);
         
         const response = await fetch(apiUrl);
@@ -133,20 +135,18 @@ export default function ProductDetailPage() {
         } else if (data.product.thumbnail_url) {
           setSelectedImage(data.product.thumbnail_url);
         }
-        
-        setError(null);
-      } catch (err) {
-        console.error('상품 상세 로딩 오류:', err);
+      } catch (error) {
+        console.error('상품 정보 로딩 오류:', error);
         setError('상품 정보를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
       }
     };
 
-    if (params.id) {
+    if (params?.id) {
       fetchProductDetails();
     }
-  }, [params.id]);
+  }, [params?.id]);
 
   const handleQuantityChange = (optionId: string, newQuantity: number) => {
     // 수량은 최소 1 이상이어야 함
@@ -517,6 +517,33 @@ export default function ProductDetailPage() {
       return productDetails ? (productDetails.discount_price || productDetails.price) * quantity : 0;
     }
   };
+
+  // 상품 리뷰 가져오기
+  const fetchReviews = useCallback(async (page = 1) => {
+    if (!activeTab || activeTab !== 'review') return;
+    
+    setReviewsLoading(true);
+    
+    try {
+      // 리뷰 API 호출
+      const response = await fetch(
+        `/api/products/${params?.id}/reviews?page=${page}&limit=5&sort=${reviewSort}`
+      );
+      
+      const data = await response.json();
+      
+      if (page === 1) {
+        setReviews(data.reviews || []);
+      } else {
+        setReviews(prev => [...prev, ...(data.reviews || [])]);
+      }
+    } catch (error) {
+      console.error('상품 리뷰 로딩 오류:', error);
+      setError('상품 리뷰를 불러오는데 실패했습니다.');
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [params?.id, activeTab, reviewSort]);
 
   if (loading) {
     return (
