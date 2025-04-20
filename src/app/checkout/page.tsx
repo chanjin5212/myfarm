@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button, Textarea, Radio, Checkbox, Card, Spinner } from '@/components/ui/CommonStyles';
 import ShippingAddressModal from './ShippingAddressModal';
-import { getAuthHeader } from '@/utils/auth';
+import { getAuthHeader, checkToken } from '@/utils/auth';
 import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
 
 interface User {
@@ -36,7 +36,6 @@ interface CartItem {
     value: string;
     additional_price: number;
   };
-  shippingFee: number;
   originalPrice: number;
   additionalPrice: number;
   totalPrice: number;
@@ -65,7 +64,7 @@ export default function CheckoutPage() {
     phone: '',
     address: '',
     detailAddress: '',
-    memo: '',
+    memo: ''
   });
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [addresses, setAddresses] = useState<ShippingAddress[]>([]);
@@ -78,7 +77,6 @@ export default function CheckoutPage() {
   
   // 계산된 가격 정보
   const [totalPrice, setTotalPrice] = useState(0);
-  const [shippingFee, setShippingFee] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
   
   // 토스 페이먼츠 위젯 관련 상태
@@ -352,8 +350,6 @@ export default function CheckoutPage() {
                   additional_price: additionalPrice
                 } : undefined,
                 totalPrice: totalItemPrice, // 총 가격
-                // 배송비는 그룹화 단계에서 계산됨
-                shippingFee: 0
               };
             });
             
@@ -388,7 +384,6 @@ export default function CheckoutPage() {
               return {
                 ...item,
                 productOptionId,
-                shippingFee: 0 // 그룹화 과정에서 재계산
               };
             });
             setItems(formattedItems);
@@ -409,71 +404,43 @@ export default function CheckoutPage() {
     }
   };
 
-  // 아이템을 productId 기준으로 그룹화하는 함수
+  // 상품 그룹화 함수
   const groupItemsByProduct = (items: CartItem[]) => {
-    const grouped: any[] = [];
-    
-    // 아이템들을 productId 기준으로 그룹화
+    const grouped: Record<string, any> = {};
+
     items.forEach(item => {
-      const existingGroup = grouped.find(group => group.productId === item.productId);
-      
-      if (existingGroup) {
-        // 이미 해당 상품 그룹이 있는 경우
-        existingGroup.items.push(item);
-        existingGroup.totalQuantity += item.quantity;
-        existingGroup.totalPrice += item.price * item.quantity;
-      } else {
-        // 새 상품 그룹 생성
-        grouped.push({
+      if (!grouped[item.productId]) {
+        grouped[item.productId] = {
           productId: item.productId,
           name: item.name,
           image: item.image,
-          items: [item],
-          totalQuantity: item.quantity,
-          totalPrice: item.price * item.quantity
-        });
+          items: [],
+          totalQuantity: 0,
+          totalPrice: 0
+        };
       }
+      
+      grouped[item.productId].items.push(item);
+      grouped[item.productId].totalQuantity += item.quantity;
+      grouped[item.productId].totalPrice += item.price * item.quantity;
     });
     
-    // 각 그룹별 배송비 계산
-    grouped.forEach(group => {
-      // 3만원 이상 구매 시 무료배송
-      group.shippingFee = group.totalPrice >= 30000 ? 0 : 3000;
-    });
-    
-    return grouped;
+    return Object.values(grouped);
   };
   
-  // 가격에 따른 배송비 계산 함수
-  const calculateShippingFeeByPrice = (price: number, quantity: number) => {
-    const totalPrice = price * quantity;
-    return totalPrice >= 30000 ? 0 : 3000; // 3만원 이상 구매시 무료배송
+  // 총 상품 가격 계산
+  const calculateTotalPrice = () => {
+    return items.reduce((total, item) => {
+      return total + (item.price * item.quantity);
+    }, 0);
   };
-  
-  // 총 상품 금액 계산 (상품 가격 * 수량의 합)
-  const calculateItemsTotalPrice = (items: CartItem[]) => {
-    return items.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-  
-  // 총 배송비 계산 (상품별로 중복 없이 계산)
-  const calculateTotalShippingFee = (groupedItems: any[]) => {
-    return groupedItems.reduce((total, group) => total + group.shippingFee, 0);
-  };
-  
+
   // 상품이 로드되면 그룹화 및 가격 계산
   useEffect(() => {
     if (items.length > 0) {
-      // 상품 그룹화
-      const grouped = groupItemsByProduct(items);
-      setGroupedItems(grouped);
-      
-      // 가격 계산
-      const itemsTotal = calculateItemsTotalPrice(items);
-      const shippingTotal = calculateTotalShippingFee(grouped);
-      
-      setTotalPrice(itemsTotal);
-      setShippingFee(shippingTotal);
-      setFinalPrice(itemsTotal + shippingTotal);
+      const productTotal = calculateTotalPrice();
+      setTotalPrice(productTotal);
+      setFinalPrice(productTotal);
     }
   }, [items]);
 
@@ -611,45 +578,40 @@ export default function CheckoutPage() {
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!agreeToTerms) {
-      alert('주문 및 결제 정보 수집 동의가 필요합니다.');
-      return;
-    }
-    
     if (!validateShippingInfo()) {
       return;
     }
     
-    if (!widgets || !ready) {
-      alert('결제 모듈이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
-      initTossPayments(); // 다시 초기화 시도
+    if (!agreeToTerms) {
+      alert('주문 정보 확인 및 결제에 동의해주세요.');
+      return;
+    }
+    
+    if (orderProcessing) {
       return;
     }
     
     setOrderProcessing(true);
     setOrderError(null);
     
+    // 안전한 문자열 처리 함수
+    const safeString = (str: string) => {
+      return str ? String(str).replace(/[<>]/g, '') : '';
+    };
+    
+    // 주문 정보 생성
     try {
-      console.log('주문 처리 시작');
-      
-      const authHeader = getAuthHeader();
-      if (!authHeader.Authorization) {
-        throw new Error('로그인이 필요합니다. 로그인 후 다시 시도해주세요.');
-      }
-      
+      // 로그인 상태 확인
+      const { isLoggedIn } = checkToken();
       const userId = user?.id || localStorage.getItem('userId');
+      
       if (!userId) {
-        throw new Error('사용자 정보를 찾을 수 없습니다.');
+        setOrderError('로그인 정보를 찾을 수 없습니다. 다시 로그인해주세요.');
+        router.push('/login');
+        return;
       }
       
-      // 한글 등이 포함된 문자열을 안전하게 처리
-      const safeString = (str: string) => {
-        if (!str) return '';
-        // 비 ASCII 문자를 포함하는지 확인
-        return str.normalize('NFC');
-      };
-      
-      // 주문 데이터 구성
+      // 주문 데이터 생성
       const orderData = {
         userId: userId,
         items: items.map(item => ({
@@ -670,31 +632,24 @@ export default function CheckoutPage() {
         })),
         shipping: {
           name: safeString(shippingInfo.name),
-          phone: shippingInfo.phone,
+          phone: safeString(shippingInfo.phone),
           address: safeString(shippingInfo.address),
-          detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
-          memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
+          detailAddress: safeString(shippingInfo.detailAddress),
+          memo: safeString(shippingInfo.memo),
+          addressId: selectedAddressId
         },
-        payment: {
-          method: 'toss',  // 토스 페이먼츠로 변경
-          totalAmount: finalPrice
-        }
+        totalPrice: totalPrice,
+        totalAmount: finalPrice
       };
-      
-      // JSON 문자열로 변환 후 다시 파싱하여 인코딩 문제 방지
-      const orderDataString = JSON.stringify(orderData);
-      const orderDataParsed = JSON.parse(orderDataString);
-      
-      console.log('주문 데이터:', orderDataParsed);
       
       // 주문 생성 API 호출
       const orderResponse = await fetch('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...authHeader
+          ...getAuthHeader()
         },
-        body: JSON.stringify({ orderData: orderDataParsed })
+        body: JSON.stringify({ orderData: orderData })
       });
       
       console.log('주문 API 응답 상태:', orderResponse.status);
@@ -740,7 +695,7 @@ export default function CheckoutPage() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...authHeader
+                ...getAuthHeader()
               },
               body: JSON.stringify({ orderId: orderResult.orderId })
             });
@@ -886,7 +841,6 @@ export default function CheckoutPage() {
             
             <div className="mt-4 text-right">
               <p className="text-gray-600">상품 금액: {totalPrice.toLocaleString()}원</p>
-              <p className="text-gray-600">배송비: {shippingFee.toLocaleString()}원</p>
               <p className="text-lg font-semibold">
                 결제 예정 금액: {finalPrice.toLocaleString()}원
               </p>
@@ -954,10 +908,6 @@ export default function CheckoutPage() {
               <div className="flex justify-between">
                 <span className="text-gray-600">상품 금액</span>
                 <span>{totalPrice.toLocaleString()}원</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">배송비</span>
-                <span>{shippingFee.toLocaleString()}원</span>
               </div>
             </div>
             <div className="flex justify-between items-center pt-4 font-semibold">

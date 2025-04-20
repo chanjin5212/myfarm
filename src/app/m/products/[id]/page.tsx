@@ -10,6 +10,7 @@ import MobileProductTabs from './components/ProductTabs';
 import { Spinner } from '@/components/ui/CommonStyles';
 import Link from 'next/link';
 import { LocalCartItem } from '@/types/cart';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface ProductDetail {
   id: string;
@@ -17,7 +18,6 @@ interface ProductDetail {
   description: string;
   price: number;
   discount_price?: number;
-  stock: number;
   status: string;
   category_id?: string;
   seller_id?: string;
@@ -46,6 +46,9 @@ interface ProductOption {
   option_value: string;
   additional_price: number;
   stock: number;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface SelectedOption {
@@ -56,6 +59,13 @@ interface SelectedOption {
   additionalPrice: number;
   quantity: number;
   stock: number;
+}
+
+interface CartProduct {
+  id: string;
+  name: string;
+  price: number;
+  thumbnail_url: string;
 }
 
 export default function MobileProductDetailPage() {
@@ -72,6 +82,7 @@ export default function MobileProductDetailPage() {
   const [cartSuccessPopup, setCartSuccessPopup] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
   const [currentImage, setCurrentImage] = useState<number>(0);
+  const [addToCartSuccess, setAddToCartSuccess] = useState<boolean>(false);
 
   // 상품 정보 가져오기
   useEffect(() => {
@@ -170,7 +181,21 @@ export default function MobileProductDetailPage() {
             console.log('장바구니 추가 결과:', results);
             
           } else {
-            // 옵션 없는 상품 - product_option_id를 null로 전달
+            // 옵션이 없는 상품인데 재고가 부족한 경우
+            if (options.length === 0) {
+              // Check if there's a default option with stock
+              const defaultOption = options.find(opt => opt.is_default);
+              if (!defaultOption || defaultOption.stock <= 0) {
+                toast({
+                  title: "재고 부족",
+                  description: "상품의 재고가 부족합니다.",
+                  variant: "destructive",
+                });
+                return;
+              }
+            }
+            
+            // 옵션이 없는 상품 - product_option_id를 null로 전달
             const requestBody = {
               product_id: productDetails.id,
               product_option_id: null,
@@ -197,6 +222,7 @@ export default function MobileProductDetailPage() {
           
           // 성공 팝업 표시
           setCartSuccessPopup(true);
+          setAddToCartSuccess(true);
         } catch (error) {
           console.error('장바구니 추가 오류:', error);
           alert(error instanceof Error ? error.message : '장바구니에 추가하는데 실패했습니다.');
@@ -265,6 +291,7 @@ export default function MobileProductDetailPage() {
         
         // 성공 팝업 표시
         setCartSuccessPopup(true);
+        setAddToCartSuccess(true);
       }
     } catch (error) {
       console.error('장바구니 추가 오류:', error);
@@ -277,80 +304,53 @@ export default function MobileProductDetailPage() {
 
   // 바로 구매 핸들러
   const handleBuyNow = () => {
-    // 옵션이 있는 상품인데 옵션을 선택하지 않은 경우
-    if (options.length > 0 && selectedOptions.length === 0) {
-      alert('옵션을 선택해주세요.');
-      return;
-    }
-    
     if (!productDetails) {
-      alert('상품 정보를 찾을 수 없습니다.');
+      toast.error("상품 정보를 찾을 수 없습니다.");
       return;
     }
-    
-    try {
-      // 바로 구매 상품 정보 생성
-      let checkoutItems = [];
-      
-      if (options.length > 0) {
-        // 옵션이 있는 상품
-        checkoutItems = selectedOptions.map(option => {
-          const basePrice = productDetails.discount_price || productDetails.price;
-          const totalPrice = basePrice + option.additionalPrice;
-          
-          return {
-            product_id: productDetails.id,
-            product_option_id: option.optionId,
-            quantity: option.quantity,
-            product: {
-              id: productDetails.id,
-              name: productDetails.name,
-              price: productDetails.price,
-              discount_price: productDetails.discount_price,
-              thumbnail_url: images.length > 0 ? images[0].image_url : productDetails.thumbnail_url,
-              stock: productDetails.stock
-            },
-            product_option: {
-              id: option.optionId,
-              option_name: option.optionName,
-              option_value: option.optionValue,
-              additional_price: option.additionalPrice,
-              stock: option.stock
-            },
-            total_price: totalPrice * option.quantity,
-            option_price: totalPrice
-          };
-        });
-      } else {
-        // 옵션이 없는 상품
-        const unitPrice = productDetails.discount_price || productDetails.price;
-        
-        checkoutItems = [{
-          product_id: productDetails.id,
-          quantity: quantity,
-          product: {
-            id: productDetails.id,
-            name: productDetails.name,
-            price: productDetails.price,
-            discount_price: productDetails.discount_price,
-            thumbnail_url: images.length > 0 ? images[0].image_url : productDetails.thumbnail_url,
-            stock: productDetails.stock
-          },
-          product_option: null,
-          total_price: unitPrice * quantity,
-          option_price: unitPrice
-        }];
-      }
-      
-      // 로컬 스토리지에 체크아웃 상품 정보 저장
-      localStorage.setItem('directCheckoutItems', JSON.stringify(checkoutItems));
-      
-      // 체크아웃 페이지로 이동
-      router.push('/m/checkout?direct=true');
-    } catch (error) {
-      console.error('바로 구매하기 실패:', error);
-      alert('주문 처리 중 오류가 발생했습니다.');
+
+    // Find the first option with stock available
+    const availableOption = options.find(opt => opt.stock > 0);
+    if (options.length > 0 && !availableOption) {
+      toast.error("재고가 없습니다");
+      return;
     }
+
+    if (selectedOptions.length === 0 && options.length > 0) {
+      toast.error("옵션을 선택해주세요");
+      return;
+    }
+
+    if (quantity <= 0) {
+      toast.error("수량을 선택해주세요");
+      return;
+    }
+
+    // 즉시 구매를 위한 상품 정보 생성
+    const productForCart: CartProduct = {
+      id: productDetails.id,
+      name: productDetails.name,
+      price: productDetails.price,
+      thumbnail_url: productDetails.thumbnail_url || ""
+    };
+
+    // 옵션 정보
+    const optionInfo = selectedOptions.length > 0 ? {
+      id: selectedOptions[0].optionId,
+      name: selectedOptions[0].optionName,
+      value: selectedOptions[0].optionValue,
+      additionalPrice: selectedOptions[0].additionalPrice,
+    } : null;
+
+    // 로컬 스토리지에 즉시 구매 정보 저장
+    const buyNowItem = {
+      product: productForCart,
+      quantity,
+      option: optionInfo,
+    };
+
+    localStorage.setItem("buyNowItem", JSON.stringify(buyNowItem));
+    router.push("/m/checkout?type=buy-now");
   };
 
   // 장바구니 팝업 닫기
@@ -362,6 +362,13 @@ export default function MobileProductDetailPage() {
   const goToCart = () => {
     router.push('/m/cart');
   };
+
+  useEffect(() => {
+    if (addToCartSuccess) {
+      toast.success("상품이 장바구니에 추가되었습니다.");
+      setAddToCartSuccess(false);
+    }
+  }, [addToCartSuccess]);
 
   if (loading) {
     return (
@@ -393,6 +400,7 @@ export default function MobileProductDetailPage() {
 
   return (
     <div className="pb-20">
+      <Toaster position="top-center" />
       {/* 고정 헤더 */}
       <header className="fixed top-0 left-0 right-0 bg-white shadow-sm z-50 border-b border-gray-200">
         <div className="container mx-auto py-3 px-4">

@@ -679,10 +679,6 @@ export default function ProductDetailPage() {
               <div className="w-24 font-semibold">배송방법</div>
               <div>택배배송</div>
             </div>
-            <div className="flex border-b py-3">
-              <div className="w-24 font-semibold">배송비</div>
-              <div>3,000원 (30,000원 이상 구매 시 무료배송)</div>
-            </div>
           </div>
 
           {/* 옵션 선택 - 옵션이 있을 때만 표시 */}

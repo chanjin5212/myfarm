@@ -13,17 +13,20 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 interface OrderItem {
-  id: string;
   productId: string;
+  productOptionId?: string | null;
   name: string;
   price: number;
+  originalPrice: number;
+  additionalPrice: number;
+  totalPrice: number;
   quantity: number;
   image: string;
-  option?: {
+  selectedOptions?: {
     name: string;
     value: string;
-  };
-  shippingFee: number;
+    additional_price: number;
+  } | null;
 }
 
 interface ShippingInfo {
@@ -153,45 +156,16 @@ export async function POST(request: NextRequest) {
     const orderItems = orderData.items.map((item: any) => ({
       order_id: order.id,
       product_id: item.productId,
+      product_option_id: item.productOptionId,
       quantity: item.quantity,
-      product_option_id: item.productOptionId || null,
       price: item.price,
-      options: item.selectedOptions ? item.selectedOptions : null
+      options: item.selectedOptions ? {
+        name: item.selectedOptions.name,
+        value: item.selectedOptions.value
+      } : null
     }));
 
-    // 상품 ID 유효성 검사
-    for (const item of orderItems) {
-      console.log('상품 조회 시도:', item.product_id);
-      
-      // products 테이블에서 상품 조회
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', item.product_id)
-        .single();
-
-      if (productError) {
-        console.error('products 테이블 조회 오류:', productError);
-        console.error('상품 ID:', item.product_id);
-      }
-
-      if (!product) {
-        console.error('상품을 찾을 수 없음:', item.product_id);
-        // 주문 삭제
-        await supabase
-          .from('orders')
-          .delete()
-          .eq('id', order.id);
-        return NextResponse.json(
-          { message: '유효하지 않은 상품이 포함되어 있습니다.' },
-          { status: 400 }
-        );
-      }
-
-      console.log('찾은 상품:', product);
-    }
-
-    const { error: itemsError } = await supabase
+    const { data: savedItems, error: itemsError } = await supabase
       .from('order_items')
       .insert(orderItems);
 
@@ -209,34 +183,36 @@ export async function POST(request: NextRequest) {
     }
 
     // 상품 재고 업데이트
-    for (const item of orderItems) {
-      console.log('재고 업데이트 시도:', item.product_id);
+    for (const item of orderData.items) {
+      if (!item.productOptionId) {
+        continue; // 옵션이 없는 상품은 건너뛰기
+      }
       
-      // 상품 정보 조회
-      const { data: product, error: productError } = await supabase
-        .from('products')
+      // 상품 옵션 정보 조회
+      const { data: productOption, error: productOptionError } = await supabase
+        .from('product_options')
         .select('stock')
-        .eq('id', item.product_id)
+        .eq('id', item.productOptionId)
         .single();
 
-      if (productError || !product) {
-        console.error('상품 조회 오류:', productError);
+      if (productOptionError || !productOption) {
+        console.error('상품 옵션 조회 오류:', productOptionError);
         // 주문 삭제
         await supabase
           .from('orders')
           .delete()
           .eq('id', order.id);
         return NextResponse.json(
-          { message: '상품 정보를 찾을 수 없습니다.' },
+          { message: '상품 옵션 정보를 찾을 수 없습니다.' },
           { status: 500 }
         );
       }
 
       // 재고 업데이트
       const { error: stockError } = await supabase
-        .from('products')
-        .update({ stock: product.stock - item.quantity })
-        .eq('id', item.product_id);
+        .from('product_options')
+        .update({ stock: productOption.stock - item.quantity })
+        .eq('id', item.productOptionId);
 
       if (stockError) {
         console.error('재고 업데이트 오류:', stockError);
@@ -384,7 +360,7 @@ export async function GET(request: NextRequest) {
           name: item.product_name,
           price: item.price,
           quantity: item.quantity,
-          image: item.image,
+          image: item.product_image,
           option: item.option_name && item.option_value ? {
             name: item.option_name,
             value: item.option_value

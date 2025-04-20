@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   try {
     // 요청 본문 가져오기
     const body = await request.json();
-    const { product_id, order_id, rating, content } = body;
+    const { product_id, order_id, rating, content, image_url } = body;
 
     // 필수 필드 확인
     if (!product_id || !rating || !content) {
@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
           order_id: order_id || null,
           rating,
           content,
+          image_url: image_url || null,
           status: 'active'
         }
       ])

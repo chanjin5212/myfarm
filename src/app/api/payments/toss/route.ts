@@ -101,6 +101,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 결제 승인 요청 전 1초 대기
+    console.log('결제 승인 요청 전 1초 대기...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     // 토스 페이먼츠 API 호출하여 결제 승인
     const tossPaymentResponse = await fetch(
       `${TOSS_API_URL}/${paymentKey}`,

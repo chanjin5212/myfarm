@@ -43,6 +43,7 @@ export async function GET(
       .from('product_options')
       .select('*')
       .eq('product_id', id)
+      .order('is_default', { ascending: false })
       .order('option_name', { ascending: true });
     
     if (optionsError) {
@@ -128,12 +129,10 @@ export async function PATCH(
       description,
       price,
       sale_price,
-      category,
       stock,
       is_active,
       manufacturer,
       country_of_origin,
-      shipping_fee,
       total_sales,
       rating,
       review_count
@@ -146,12 +145,10 @@ export async function PATCH(
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = price;
     if (sale_price !== undefined) updateData.sale_price = sale_price;
-    if (category !== undefined) updateData.category = category;
     if (stock !== undefined) updateData.stock = stock;
     if (is_active !== undefined) updateData.is_active = is_active;
     if (manufacturer !== undefined) updateData.manufacturer = manufacturer;
     if (country_of_origin !== undefined) updateData.country_of_origin = country_of_origin;
-    if (shipping_fee !== undefined) updateData.shipping_fee = shipping_fee;
     if (total_sales !== undefined) updateData.total_sales = total_sales;
     if (rating !== undefined) updateData.rating = rating;
     if (review_count !== undefined) updateData.review_count = review_count;

@@ -30,6 +30,7 @@ export async function GET(
       .eq('id', orderId)
       .eq('user_id', userId)
       .single();
+
     
     if (orderError) {
       console.error('주문 확인 오류:', orderError);
@@ -66,18 +67,20 @@ export async function GET(
     const formattedItems = orderItems.map(item => {
       // 타입 오류 수정을 위해 products 필드를 정확히 처리
       const productInfo = item.products || {};
+      console.log('주문 상품 옵션 내용:', item.options);
       
       return {
         id: item.id,
-        name: typeof productInfo === 'object' && 'name' in productInfo ? productInfo.name : '상품명 없음',
-        image: typeof productInfo === 'object' && 'thumbnail_url' in productInfo ? productInfo.thumbnail_url : null,
+        product_id: item.product_id,
         quantity: item.quantity,
         price: item.price,
-        options: item.options,
-        product_id: item.product_id
+        name: typeof productInfo === 'object' && 'name' in productInfo ? productInfo.name : (item.options?.name || '상품명 없음'),
+        image: typeof productInfo === 'object' && 'thumbnail_url' in productInfo ? productInfo.thumbnail_url : (item.options?.image || null),
+        options: item.options || {}
       };
     });
     
+    console.log('응답할 주문 상품 데이터:', JSON.stringify(formattedItems, null, 2));
     return NextResponse.json(formattedItems);
   } catch (error) {
     console.error('서버 오류:', error);

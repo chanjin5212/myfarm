@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -37,8 +37,13 @@ function ProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // 이미지 URL이 유효한지 확인하는 함수
-  const checkImageUrlExists = async (url: string, productId: string) => {
+  // 이미지 URL이 유효한지 확인하는 함수 - useCallback으로 메모이제이션
+  const checkImageUrlExists = useCallback(async (url: string, productId: string) => {
+    // 이미 확인한 URL은 다시 확인하지 않음
+    if (validImageUrls[productId] !== undefined) {
+      return validImageUrls[productId];
+    }
+    
     try {
       const response = await fetch(url, { method: 'HEAD' });
       // 응답이 성공적이면 이미지가 존재함
@@ -49,31 +54,31 @@ function ProductsContent() {
       setValidImageUrls(prev => ({ ...prev, [productId]: false }));
       return false;
     }
-  };
+  }, [validImageUrls]);
 
-  // 제품 데이터가 로드된 후 이미지 URL 확인
+  // 제품 데이터가 로드된 후 이미지 URL 확인 - 최적화
   useEffect(() => {
-    if (products.length > 0) {
-      products.forEach(product => {
-        const imageUrl = product.thumbnail_url || product.image_url;
-        if (imageUrl) {
-          checkImageUrlExists(imageUrl, product.id);
-        }
-      });
+    // 새로 추가된 제품만 이미지 URL 확인
+    const unverifiedProducts = products.filter(product => 
+      validImageUrls[product.id] === undefined && (product.thumbnail_url || product.image_url)
+    );
+    
+    if (unverifiedProducts.length > 0) {
+      // 병렬로 모든 이미지 URL 확인
+      Promise.all(
+        unverifiedProducts.map(product => {
+          const imageUrl = product.thumbnail_url || product.image_url;
+          if (imageUrl) {
+            return checkImageUrlExists(imageUrl, product.id);
+          }
+          return Promise.resolve(false);
+        })
+      );
     }
-  }, [products]);
+  }, [products, checkImageUrlExists, validImageUrls]);
 
-  useEffect(() => {
-    // 상품 로드
-    loadProducts();
-  }, [selectedCategory, sortOption, currentPage]);
-
-  useEffect(() => {
-    // 카테고리 로드
-    loadCategories();
-  }, []);
-
-  const loadProducts = async () => {
+  // 상품 로드 함수 - useCallback으로 메모이제이션
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -108,9 +113,10 @@ function ProductsContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategory, sortOption, currentPage]);
 
-  const loadCategories = async () => {
+  // 카테고리 로드 함수 - useCallback으로 메모이제이션
+  const loadCategories = useCallback(async () => {
     try {
       const response = await fetch('/api/categories');
       if (!response.ok) {
@@ -123,7 +129,17 @@ function ProductsContent() {
     } catch (err) {
       console.error('카테고리 로드 오류:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // 상품 로드
+    loadProducts();
+  }, [loadProducts]); // loadProducts에 의존성을 설정하면 selectedCategory, sortOption, currentPage가 변경될 때 실행됨
+
+  useEffect(() => {
+    // 카테고리 로드 - 한 번만 실행됨
+    loadCategories();
+  }, [loadCategories]);
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const categoryId = e.target.value;
@@ -199,12 +215,11 @@ function ProductsContent() {
                           fill
                           className="object-cover rounded-t-lg"
                           unoptimized={true}
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.onerror = null;
-                            target.src = '/images/default-product.png';
-                            // 캐시 업데이트
-                            setValidImageUrls(prev => ({ ...prev, [product.id]: false }));
+                          onError={() => {
+                            // onError에서 상태 변경을 하지 않고 이미 false로 설정되어 기본 이미지로 전환됨
+                            if (validImageUrls[product.id] !== false) {
+                              setValidImageUrls(prev => ({ ...prev, [product.id]: false }));
+                            }
                           }}
                         />
                       ) : (
@@ -283,4 +298,4 @@ export default function Products() {
       <ProductsContent />
     </Suspense>
   );
-} 
+}

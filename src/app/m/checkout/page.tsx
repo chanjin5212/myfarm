@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button, Textarea, Radio, Checkbox, Card, Spinner } from '@/components/ui/CommonStyles';
 import ShippingAddressModal from './ShippingAddressModal';
+import PaymentModal from './PaymentModal';
 import { getAuthHeader, checkToken } from '@/utils/auth';
 import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
+import { Noto_Sans_Lao_Looped } from 'next/font/google';
+import { v4 as uuidv4 } from 'uuid';
 
 interface User {
   id: string;
@@ -23,22 +26,23 @@ interface User {
   memo?: string;
 }
 
-interface CartItem {
-  id: string;
-  productId: string;
-  productOptionId?: string | null;
-  name: string;
-  price: number;
-  quantity: number;
-  image: string;
-  option?: {
+interface GroupedCartItem {
+  product_id: string;
+  product: {
+    id: string;
     name: string;
-    value: string;
-    additional_price: number;
+    price: number;
+    thumbnail_url?: string;
   };
-  shippingFee: number;
-  originalPrice: number;
-  additionalPrice: number;
+  options: {
+    id: string;
+    option_name: string;
+    option_value: string;
+    additional_price: number;
+    quantity: number;
+    price: number;
+  }[];
+  totalQuantity: number;
   totalPrice: number;
 }
 
@@ -51,15 +55,35 @@ interface ShippingAddress {
   is_default: boolean;
   memo?: string;
   default_user_address?: boolean;
+  default_address?: boolean;
+  note?: string;
+  display_name?: string;
 }
 
 export default function MobileCheckoutPage() {
   const router = useRouter();
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [groupedItems, setGroupedItems] = useState<any[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+  const searchParams = useSearchParams();
+  const isDirect = useMemo(() => searchParams?.get('direct') === 'true', [searchParams]);
+  const isBuyNow = useMemo(() => searchParams?.get('type') === 'buy-now', [searchParams]);
+  
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [selectableAddresses, setSelectableAddresses] = useState<any[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [groupedItems, setGroupedItems] = useState<GroupedCartItem[]>([]);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<string>('card');
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentAttempts, setPaymentAttempts] = useState(0);
+  const [orderRequests, setOrderRequests] = useState<string>('');
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [shippingInfo, setShippingInfo] = useState({
     name: '',
     phone: '',
@@ -69,25 +93,31 @@ export default function MobileCheckoutPage() {
   });
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [addresses, setAddresses] = useState<ShippingAddress[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [token, setToken] = useState('');
   const [orderProcessing, setOrderProcessing] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   
-  // 계산된 가격 정보
-  const [totalPrice, setTotalPrice] = useState(0);
-  const [shippingFee, setShippingFee] = useState(0);
-  const [finalPrice, setFinalPrice] = useState(0);
+  // 결제 UI 컨테이너 참조 제거
   
-  // 토스 페이먼츠 위젯 관련 상태
-  const [widgets, setWidgets] = useState<any>(null);
-  const [ready, setReady] = useState(false);
-  
-  // 결제 UI 컨테이너 참조
-  const paymentMethodRef = useRef<HTMLDivElement>(null);
-  const agreementRef = useRef<HTMLDivElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [shippingAddresses, setShippingAddresses] = useState<ShippingAddress[]>([]);
+  const [isNewAddress, setIsNewAddress] = useState(false);
+  const [newAddress, setNewAddress] = useState<ShippingAddress>({
+    id: '',
+    recipient_name: '',
+    phone: '',
+    address: '',
+    detail_address: '',
+    is_default: false
+  });
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [orderIdForPayment, setOrderIdForPayment] = useState('');
+  const [orderNameForPayment, setOrderNameForPayment] = useState('');
 
   // 로그인 상태 확인
   const checkLoginStatus = async () => {
@@ -96,13 +126,13 @@ export default function MobileCheckoutPage() {
       
       if (!isLoggedIn || !tokenUser) {
         router.push('/m/auth');
-        return;
+        return false;
       }
 
       const headers = getAuthHeader();
       if (!headers.Authorization) {
         router.push('/m/auth');
-        return;
+        return false;
       }
 
       const response = await fetch('/api/auth/check-session', {
@@ -113,203 +143,363 @@ export default function MobileCheckoutPage() {
         const data = await response.json();
         if (data.valid) {
           setUser({ id: tokenUser.id });
+          return true;
         } else {
           router.push('/m/auth');
+          return false;
         }
       } else {
         router.push('/m/auth');
+        return false;
       }
     } catch (error) {
-      console.error('로그인 상태 확인 오류:', error);
       router.push('/m/auth');
+      return false;
+    }
+  };
+
+  // 배송지 목록 로드 함수
+  const loadShippingAddresses = async () => {
+    try {
+      const { user: tokenUser, isLoggedIn } = checkToken();
+      
+      if (!isLoggedIn || !tokenUser) {
+        setError('로그인이 필요합니다.');
+        router.push('/m/auth');
+        return;
+      }
+      
+      const userId = tokenUser.id;
+      localStorage.setItem('userId', userId);
+      
+      const headers = getAuthHeader();
+      const response = await fetch(`/api/shipping-addresses?userId=${userId}`, {
+        headers
+      });
+      
+      if (!response.ok) {
+        throw new Error('배송지 정보를 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      const addressList = data.addresses || [];
+      setAddresses(addressList);
+      
+      const defaultAddress = addressList.find((addr: ShippingAddress) => 
+        addr.is_default || addr.default_address
+      );
+      
+      if (defaultAddress) {
+        setSelectedAddress(defaultAddress);
+        setSelectedAddressId(defaultAddress.id);
+        setShippingInfo({
+          name: defaultAddress.recipient_name,
+          phone: defaultAddress.phone,
+          address: defaultAddress.address,
+          detailAddress: defaultAddress.detail_address || '',
+          memo: defaultAddress.memo || '',
+        });
+      }
+    } catch (error) {
+      setError('배송지 정보를 불러오는데 실패했습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // 주문 상품 로드
-  const loadCheckoutItems = async () => {
-    setLoading(true);
+  const loadDirectCheckoutItems = () => {
     try {
-      // URL 쿼리에서 direct 파라미터 확인
-      const urlParams = new URLSearchParams(window.location.search);
-      const isDirect = urlParams.get('direct') === 'true';
+      let directItems: any[] = [];
       
-      if (isDirect) {
-        // 바로 구매 아이템 가져오기
-        const directItems = localStorage.getItem('directCheckoutItems');
-        if (!directItems) {
-          setError('바로 구매 정보를 찾을 수 없습니다.');
-          router.push('/m/products');
+      if (isBuyNow) {
+        const buyNowData = localStorage.getItem('buyNowItem');
+        if (!buyNowData) {
+          setErrorMessage('상품 정보를 찾을 수 없습니다.');
           return;
         }
         
-        try {
-          const parsedItems = JSON.parse(directItems);
-          if (Array.isArray(parsedItems)) {
-            // directCheckoutItems의 형식을 기존 체크아웃 아이템 형식으로 변환
-            const formattedItems = parsedItems.map(item => {
-              // 상품 가격 - 옵션 추가 가격이 포함된 가격 사용
-              const itemPrice = item.option_price || (item.product.discount_price || item.product.price);
-              // 옵션 추가 가격이 있는 경우
-              const additionalPrice = item.product_option ? item.product_option.additional_price : 0;
-              const totalItemPrice = itemPrice * item.quantity;
-              
-              return {
-                id: `direct_${item.product_id}${item.product_option_id ? '_' + item.product_option_id : ''}`,
-                productId: item.product_id,
-                productOptionId: item.product_option_id || null,
-                name: item.product.name,
-                price: itemPrice,
-                originalPrice: item.product.discount_price || item.product.price,
-                additionalPrice: additionalPrice,
-                quantity: item.quantity,
-                image: item.product.thumbnail_url || '/images/default-product.png',
-                option: item.product_option ? {
-                  name: item.product_option.option_name,
-                  value: item.product_option.option_value,
-                  additional_price: additionalPrice
-                } : undefined,
-                totalPrice: totalItemPrice,
-                shippingFee: 0
-              };
-            });
-            
-            setItems(formattedItems);
-            
-            // 상품 그룹화
-            const grouped = groupItemsByProduct(formattedItems);
-            setGroupedItems(grouped);
-            
-            // 가격 계산
-            const total = calculateItemsTotalPrice(formattedItems);
-            const shipping = calculateTotalShippingFee(grouped);
-            
-            setTotalPrice(total);
-            setShippingFee(shipping);
-            setFinalPrice(total + shipping);
-          } else {
-            throw new Error('유효하지 않은 바로 구매 아이템 형식');
-          }
-        } catch (parseError) {
-          console.error('바로 구매 아이템 파싱 오류:', parseError);
-          setError('바로 구매 아이템 형식이 올바르지 않습니다.');
-          router.push('/m/products');
-        }
+        const buyNowItem = JSON.parse(buyNowData);
+        const basePrice = parseInt(buyNowItem.product.price) || 0;
+        const additionalPrice = buyNowItem.option ? parseInt(buyNowItem.option.additionalPrice) || 0 : 0;
+        const totalUnitPrice = basePrice + additionalPrice;
+        
+        directItems = [{
+          id: `direct_${Date.now()}`,
+          product_id: buyNowItem.product.id,
+          product_option_id: buyNowItem.option ? buyNowItem.option.id : null,
+          quantity: buyNowItem.quantity,
+          product: {
+            id: buyNowItem.product.id,
+            name: buyNowItem.product.name,
+            price: basePrice,
+            thumbnail_url: buyNowItem.product.thumbnail_url
+          },
+          product_option: buyNowItem.option ? {
+            id: buyNowItem.option.id,
+            option_name: buyNowItem.option.name,
+            option_value: buyNowItem.option.value,
+            additional_price: additionalPrice,
+          } : null,
+        }];
       } else {
-        // 기존 장바구니 체크아웃 아이템 가져오기
-        const checkoutItems = localStorage.getItem('checkoutItems');
-        if (!checkoutItems) {
-          router.push('/m/cart');
+        const checkoutData = localStorage.getItem('checkoutItems');
+        if (!checkoutData) {
+          setErrorMessage('주문할 상품 정보를 찾을 수 없습니다.');
           return;
         }
-
-        try {
-          const parsedItems = JSON.parse(checkoutItems);
-          if (Array.isArray(parsedItems)) {
-            const formattedItems = parsedItems.map(item => ({
-              ...item,
-              productOptionId: item.option ? (item.productOptionId || null) : null,
-              shippingFee: 0
-            }));
-            
-            setItems(formattedItems);
-            
-            // 상품 그룹화
-            const grouped = groupItemsByProduct(formattedItems);
-            setGroupedItems(grouped);
-            
-            // 가격 계산
-            const total = calculateItemsTotalPrice(formattedItems);
-            const shipping = calculateTotalShippingFee(grouped);
-            
-            setTotalPrice(total);
-            setShippingFee(shipping);
-            setFinalPrice(total + shipping);
-          } else {
-            throw new Error('유효하지 않은 체크아웃 아이템 형식');
-          }
-        } catch (parseError) {
-          console.error('체크아웃 아이템 파싱 오류:', parseError);
-          setError('체크아웃 아이템 형식이 올바르지 않습니다.');
-          router.push('/m/cart');
-        }
+        
+        const checkoutItems = JSON.parse(checkoutData);
+        directItems = checkoutItems.map((item: any) => {
+          const totalPrice = parseInt(item.price) || 0;
+          const hasOption = !!item.option;
+          const additionalPrice = 0;
+          const basePrice = totalPrice;
+          
+          return {
+            id: item.id,
+            product_id: item.productId,
+            product_option_id: item.productOptionId,
+            quantity: item.quantity,
+            product: {
+              id: item.productId,
+              name: item.name,
+              price: totalPrice,
+              thumbnail_url: item.image
+            },
+            product_option: hasOption ? {
+              id: item.productOptionId,
+              option_name: item.option.name,
+              option_value: item.option.value,
+              additional_price: 0
+            } : null
+          };
+        });
       }
+      
+      setCartItems(directItems);
+      const grouped = groupItemsByProduct(directItems);
+      setGroupedItems(grouped);
+      const productTotal = calculateTotalProductPrice(grouped);
+      setTotalPrice(productTotal);
+      setFinalPrice(productTotal);
+      
     } catch (error) {
-      console.error('체크아웃 아이템 로드 오류:', error);
-      setError('체크아웃 아이템을 로드하는 중 오류가 발생했습니다.');
+      setErrorMessage('주문 정보를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
   // 상품 그룹화
-  const groupItemsByProduct = (items: CartItem[]) => {
-    const grouped: Record<string, any> = {};
-    
+  const groupItemsByProduct = (items: any[]): GroupedCartItem[] => {
+    const groupedItems: Record<string, GroupedCartItem> = {};
+
     items.forEach(item => {
-      if (!grouped[item.productId]) {
-        grouped[item.productId] = {
-          productId: item.productId,
-          name: item.name,
-          image: item.image,
-          items: [],
+      const productId = item.product_id;
+      
+      if (!groupedItems[productId]) {
+        groupedItems[productId] = {
+          product_id: productId,
+          product: item.product,
+          options: [],
           totalQuantity: 0,
           totalPrice: 0
         };
       }
       
-      grouped[item.productId].items.push(item);
-      grouped[item.productId].totalQuantity += item.quantity;
-      grouped[item.productId].totalPrice += item.price * item.quantity;
+      // 장바구니에서 넘어온 가격 그대로 사용
+      const itemTotalPrice = parseInt(item.product.price) * item.quantity;
+      
+      // 옵션 정보 저장
+      groupedItems[productId].options.push({
+        id: item.product_option ? item.product_option.id : 'base',
+        option_name: item.product_option ? item.product_option.option_name : '기본',
+        option_value: item.product_option ? item.product_option.option_value : '옵션 없음',
+        additional_price: 0,
+        quantity: item.quantity,
+        price: parseInt(item.product.price) // 각 옵션의 가격 저장
+      });
+      
+      // 그룹의 총 수량과 가격 갱신
+      groupedItems[productId].totalQuantity += item.quantity;
+      groupedItems[productId].totalPrice += itemTotalPrice;
+      
     });
     
-    return Object.values(grouped);
-  };
-
-  // 배송비 계산
-  const calculateShippingFeeByPrice = (price: number, quantity: number) => {
-    return price * quantity >= 30000 ? 0 : 3000;
+    return Object.values(groupedItems);
   };
 
   // 총 상품 금액 계산
-  const calculateItemsTotalPrice = (items: CartItem[]) => {
-    return items.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  // 총 배송비 계산
-  const calculateTotalShippingFee = (groupedItems: any[]) => {
-    return groupedItems.reduce((total, group) => {
-      return total + calculateShippingFeeByPrice(group.totalPrice, group.totalQuantity);
+  const calculateTotalProductPrice = (groupedItems: any[]) => {
+    const total = groupedItems.reduce((total, group) => {
+      // 각 그룹의 totalPrice를 그대로 사용
+      return total + group.totalPrice;
     }, 0);
+    
+    return total;
   };
 
-  // 배송지 목록 로드
-  const loadShippingAddresses = async () => {
-    if (!user) return;
+  // 주문 검증 및 모달 오픈
+  const handleOpenPaymentModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!agreeToTerms) {
+      alert('주문 및 결제 정보 수집 동의가 필요합니다.');
+      return;
+    }
+    
+    if (!validateShippingInfo()) {
+      return;
+    }
+    
+    setOrderProcessing(true);
     
     try {
-      const headers = getAuthHeader();
-      const response = await fetch(`/api/shipping-addresses?userId=${user.id}`, {
-        method: 'GET',
-        headers,
-      });
+      // 배송 정보를 localStorage에 저장
+      localStorage.setItem('checkoutShippingInfo', JSON.stringify(shippingInfo));
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.addresses && Array.isArray(data.addresses)) {
-          setAddresses(data.addresses);
-          
-          // 기본 배송지가 있으면 선택
-          const defaultAddress = data.addresses.find((addr: ShippingAddress) => addr.is_default);
-          if (defaultAddress) {
-            handleAddressChange(defaultAddress);
-          }
-        }
-      } else {
-        console.error('배송지 목록 로드 실패:', response.status);
+      // 주문 상품 정보를 localStorage에 저장 (아직 저장되지 않은 경우)
+      if (!localStorage.getItem('checkoutItems')) {
+        const checkoutItems = cartItems.map(item => {
+          const itemPrice = parseInt(item.product.price) || 0;
+          return {
+            productId: item.product_id,
+            productOptionId: item.product_option_id || null,
+            name: item.product.name,
+            price: itemPrice,
+            quantity: item.quantity,
+            image: item.product.thumbnail_url || '/images/default-product.png',
+            option: item.product_option ? {
+              name: item.product_option.option_name,
+              value: item.product_option.option_value,
+              additionalPrice: item.product_option.additional_price || 0
+            } : null
+          };
+        });
+        
+        localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
       }
+      
+      // 주문명 생성
+      const orderName = cartItems.length > 1 
+        ? `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`
+        : cartItems[0].product.name;
+      
+      // UUID 형식의 주문 ID 생성
+      const tempOrderId = uuidv4();
+      
+      setOrderIdForPayment(tempOrderId);
+      setOrderNameForPayment(orderName);
+      setShowPaymentModal(true);
+      setOrderProcessing(false);
     } catch (error) {
-      console.error('배송지 목록 로드 오류:', error);
+      setOrderError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
+      setOrderProcessing(false);
     }
+  };
+
+  // 결제 성공 처리
+  const handlePaymentSuccess = async () => {
+    // 이 단계는 실제로는 successUrl에서 처리됨
+    setOrderProcessing(false);
+  };
+
+  // 결제 실패 처리
+  const handlePaymentFail = (error: any) => {
+    setOrderError(error.message || '결제 처리에 실패했습니다.');
+    setOrderProcessing(false);
+  };
+
+  // 페이지 초기화
+  useEffect(() => {
+    const initializePage = async () => {
+      try {
+        setLoading(true);
+        const isLoggedIn = await checkLoginStatus();
+        
+        if (!isLoggedIn) {
+          return; // 로그인 실패 시 더 이상 진행하지 않음
+        }
+        
+        // 로그인에 성공한 경우에만 실행
+        await Promise.all([
+          loadDirectCheckoutItems(),
+          loadShippingAddresses()
+        ]);
+      } catch (error) {
+        setErrorMessage('페이지 로딩 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializePage();
+  }, []);
+
+  // 사용자 정보가 변경되면 배송지 목록 로드
+  useEffect(() => {
+    if (user && !selectedAddressId) {
+      loadShippingAddresses();
+    }
+  }, [user, selectedAddressId]);
+
+  // 배송지 선택되지 않았지만 배송지 정보 있을 때 처리
+  useEffect(() => {
+    // 배송지 ID는 없지만 배송 정보가 있을 경우 (예: 모달에서 선택은 안했지만 기본 배송지 정보는 있는 경우)
+    if (!selectedAddressId && 
+        shippingInfo.name && 
+        shippingInfo.phone && 
+        shippingInfo.address && 
+        addresses.length > 0) {
+      // 기본 배송지 선택
+      const defaultAddr = addresses.find(addr => addr.is_default || addr.default_address);
+      if (defaultAddr) {
+        setSelectedAddressId(defaultAddr.id);
+      }
+    }
+  }, [shippingInfo, addresses, selectedAddressId]);
+
+  // 로딩 중일 때 표시할 스피너
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Spinner size="lg" />
+        <p className="mt-4 text-gray-500">주문 정보를 불러오는 중입니다...</p>
+      </div>
+    );
+  }
+
+  // 에러가 있을 때 표시할 화면
+  if (errorMessage) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <p className="text-red-500 mb-4">{errorMessage}</p>
+        <Button
+          onClick={() => router.push('/m/cart')}
+          className="bg-green-600 text-white"
+        >
+          장바구니로 돌아가기
+        </Button>
+      </div>
+    );
+  }
+
+  // 배송 정보 유효성 검사
+  const validateShippingInfo = () => {
+    if (!shippingInfo.name) {
+      alert('받는 사람 이름을 입력해주세요.');
+      return false;
+    }
+    if (!shippingInfo.phone) {
+      alert('연락처를 입력해주세요.');
+      return false;
+    }
+    if (!shippingInfo.address) {
+      alert('주소를 입력해주세요.');
+      return false;
+    }
+    return true;
   };
 
   // 배송지 정보 업데이트
@@ -339,333 +529,38 @@ export default function MobileCheckoutPage() {
     }));
   };
 
-  // 토스 페이먼츠 위젯 초기화
-  const initTossPayments = async () => {
-    try {
-      const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
-      const userId = user?.id || localStorage.getItem('userId') || 'ANONYMOUS';
-      
-      const tossPayments = await loadTossPayments(clientKey);
-      const widgetsInstance = tossPayments.widgets({ 
-        customerKey: userId 
-      });
-      
-      setWidgets(widgetsInstance);
-    } catch (error) {
-      console.error('토스 페이먼츠 초기화 오류:', error);
-    }
-  };
-
-  // 페이지 초기화
-  useEffect(() => {
-    const initializePage = async () => {
-      try {
-        setLoading(true);
-        await checkLoginStatus();
-        await loadCheckoutItems();
-        await initTossPayments();
-      } catch (error) {
-        console.error('페이지 초기화 오류:', error);
-        setError('페이지 로딩 중 오류가 발생했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializePage();
-  }, []);
-
-  // 사용자 정보가 변경되면 배송지 목록 로드
-  useEffect(() => {
-    if (user) {
-      loadShippingAddresses();
-    }
-  }, [user]);
-
-  // 위젯과 DOM이 준비되면 렌더링
-  useEffect(() => {
-    if (widgets && paymentMethodRef.current && agreementRef.current && finalPrice > 0) {
-      renderWidgets();
-    }
-  }, [widgets, finalPrice, paymentMethodRef.current, agreementRef.current]);
-
-  // 금액 변경 시 위젯 업데이트
-  useEffect(() => {
-    if (!widgets || !ready) return;
-    
-    const updateAmount = async () => {
-      try {
-        const amountToSet = Math.max(finalPrice, 1000);
-        await widgets.setAmount({
-          currency: 'KRW',
-          value: amountToSet,
-        });
-      } catch (error) {
-        console.error('결제 금액 업데이트 실패:', error);
-      }
-    };
-    
-    updateAmount();
-  }, [widgets, finalPrice, ready]);
-
-  // 로딩 중일 때 표시할 스피너
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <Spinner size="lg" />
-        <p className="mt-4 text-gray-500">주문 정보를 불러오는 중입니다...</p>
-      </div>
-    );
-  }
-
-  // 에러가 있을 때 표시할 화면
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <p className="text-red-500 mb-4">{error}</p>
-        <Button
-          onClick={() => router.push('/m/cart')}
-          className="bg-green-600 text-white"
-        >
-          장바구니로 돌아가기
-        </Button>
-      </div>
-    );
-  }
-
-  // 위젯 렌더링
-  const renderWidgets = async () => {
-    if (!widgets || !paymentMethodRef.current || !agreementRef.current) return;
-    
-    try {
-      const amountToSet = Math.max(finalPrice, 1000);
-      
-      await widgets.setAmount({
-        currency: 'KRW',
-        value: amountToSet,
-      });
-      
-      await widgets.renderPaymentMethods({
-        selector: "#payment-method",
-        variantKey: "DEFAULT",
-      });
-      
-      await widgets.renderAgreement({
-        selector: "#agreement",
-        variantKey: "AGREEMENT",
-      });
-      
-      setReady(true);
-    } catch (error) {
-      console.error('위젯 렌더링 실패:', error);
-    }
-  };
-
-  // 주문 제출
-  const handleSubmitOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!agreeToTerms) {
-      alert('주문 및 결제 정보 수집 동의가 필요합니다.');
-      return;
-    }
-    
-    if (!validateShippingInfo()) {
-      return;
-    }
-    
-    if (!widgets || !ready) {
-      alert('결제 모듈이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
-      initTossPayments(); // 다시 초기화 시도
-      return;
-    }
-    
-    setOrderProcessing(true);
-    setOrderError(null);
-    
-    try {
-      console.log('주문 처리 시작');
-      
-      const authHeader = getAuthHeader();
-      if (!authHeader.Authorization) {
-        throw new Error('로그인이 필요합니다. 로그인 후 다시 시도해주세요.');
-      }
-      
-      const userId = user?.id || localStorage.getItem('userId');
-      if (!userId) {
-        throw new Error('사용자 정보를 찾을 수 없습니다.');
-      }
-      
-      // 한글 등이 포함된 문자열을 안전하게 처리
-      const safeString = (str: string) => {
-        if (!str) return '';
-        return str.normalize('NFC');
-      };
-      
-      // 주문 데이터 구성
-      const orderData = {
-        userId: userId,
-        items: items.map(item => ({
-          productId: item.productId,
-          productOptionId: item.productOptionId || null,
-          name: safeString(item.name),
-          price: item.price,
-          originalPrice: item.originalPrice || item.price,
-          additionalPrice: item.additionalPrice || 0,
-          totalPrice: item.totalPrice || (item.price * item.quantity),
-          quantity: item.quantity,
-          image: item.image,
-          selectedOptions: item.option ? { 
-            name: safeString(item.option.name), 
-            value: safeString(item.option.value),
-            additional_price: item.option.additional_price || 0
-          } : null
-        })),
-        shipping: {
-          name: safeString(shippingInfo.name),
-          phone: shippingInfo.phone,
-          address: safeString(shippingInfo.address),
-          detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
-          memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
-        },
-        payment: {
-          method: 'toss',
-          totalAmount: finalPrice
-        }
-      };
-      
-      // JSON 문자열로 변환 후 다시 파싱하여 인코딩 문제 방지
-      const orderDataString = JSON.stringify(orderData);
-      const orderDataParsed = JSON.parse(orderDataString);
-      
-      console.log('주문 데이터:', orderDataParsed);
-      
-      // 주문 생성 API 호출
-      const orderResponse = await fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeader
-        },
-        body: JSON.stringify({ orderData: orderDataParsed })
-      });
-      
-      console.log('주문 API 응답 상태:', orderResponse.status);
-      
-      if (!orderResponse.ok) {
-        const errorData = await orderResponse.json();
-        console.error('주문 API 에러 응답:', errorData);
-        throw new Error(errorData.error || errorData.message || '주문 생성에 실패했습니다.');
-      }
-      
-      const orderResult = await orderResponse.json();
-      console.log('주문 생성 결과:', orderResult);
-      
-      // orderId 저장
-      localStorage.setItem('currentOrderId', orderResult.orderId);
-      
-      // 토스 페이먼츠 위젯으로 결제 요청
-      try {
-        console.log('토스 페이먼츠 결제 요청');
-        
-        await widgets.requestPayment({
-          orderId: orderResult.orderId,
-          orderName: items.length > 1 
-            ? `${items[0].name} 외 ${items.length - 1}건`
-            : items[0].name,
-          customerName: shippingInfo.name,
-          customerEmail: user?.email || '',
-          successUrl: `${window.location.origin}/m/checkout/success`,
-          failUrl: `${window.location.origin}/m/checkout/fail?orderId=${orderResult.orderId}`,
-        });
-        
-        console.log('토스 페이먼츠 결제 요청 완료');
-      } catch (paymentError: any) {
-        console.error('결제 요청 오류:', paymentError);
-        
-        // 결제 취소 처리
-        if (paymentError.message === '취소되었습니다.' || 
-            paymentError.message.includes('cancel') || 
-            paymentError.message.includes('취소')) {
-          console.log('사용자가 결제를 취소했습니다.');
-          
-          // 주문 취소 API 호출
-          try {
-            const cancelResponse = await fetch(`/api/orders/cancel`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...authHeader
-              },
-              body: JSON.stringify({ orderId: orderResult.orderId })
-            });
-            
-            if (cancelResponse.ok) {
-              console.log('주문이 정상적으로 취소되었습니다.');
-            }
-          } catch (cancelError) {
-            console.error('주문 취소 API 호출 실패:', cancelError);
-          }
-          
-          setOrderError('결제가 취소되었습니다. 결제를 다시 시도하려면 아래 버튼을 클릭해주세요.');
-          setOrderProcessing(false);
-        } else {
-          throw new Error(paymentError.message || '결제 요청에 실패했습니다.');
-        }
-      }
-    } catch (error) {
-      console.error('주문 처리 오류:', error);
-      setOrderError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
-      setOrderProcessing(false);
-    }
-  };
-
-  // 배송 정보 유효성 검사
-  const validateShippingInfo = () => {
-    if (!shippingInfo.name) {
-      alert('받는 사람 이름을 입력해주세요.');
-      return false;
-    }
-    if (!shippingInfo.phone) {
-      alert('연락처를 입력해주세요.');
-      return false;
-    }
-    if (!shippingInfo.address) {
-      alert('주소를 입력해주세요.');
-      return false;
-    }
-    return true;
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-20">
       {/* 주문 상품 목록 */}
       <div className="bg-white p-4 mb-4">
         <h2 className="text-lg font-medium mb-4">주문 상품</h2>
         {groupedItems.map((group) => (
-          <div key={group.productId} className="mb-4 pb-4 border-b border-gray-100 last:border-0">
+          <div key={group.product_id} className="mb-4 pb-4 border-b border-gray-100 last:border-0">
             <div className="flex items-start">
               <div className="relative w-20 h-20 mr-3">
                 <Image
-                  src={group.image}
-                  alt={group.name}
+                  src={group.product.thumbnail_url || '/images/default-product.png'}
+                  alt={group.product.name}
                   fill
                   className="object-cover rounded"
                 />
               </div>
               <div className="flex-1">
-                <h3 className="font-medium">{group.name}</h3>
+                <h3 className="font-medium">{group.product.name}</h3>
                 <p className="text-sm text-gray-500">
                   {group.totalQuantity}개 | {group.totalPrice.toLocaleString()}원
                 </p>
-                {group.items.map((item: CartItem) => (
-                  <div key={item.id} className="text-sm text-gray-600 mt-1">
-                    {item.option && (
-                      <p>{item.option.name}: {item.option.value}</p>
-                    )}
-                    <p>{item.quantity}개 × {item.price.toLocaleString()}원</p>
-                  </div>
-                ))}
+                {group.options.map((option) => {
+                  // 각 옵션의 가격 그대로 사용
+                  const optionTotalPrice = option.price * option.quantity;
+                  
+                  return (
+                    <div key={option.id} className="text-sm text-gray-600 mt-1">
+                      <p>{option.option_name}: {option.option_value}</p>
+                      <p>{option.quantity}개 × {option.price.toLocaleString()}원 = {optionTotalPrice.toLocaleString()}원</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -677,7 +572,9 @@ export default function MobileCheckoutPage() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-medium">배송 정보</h2>
           <Button
-            onClick={() => setShowAddressModal(true)}
+            onClick={() => {
+              setShowAddressModal(true);
+            }}
             className="text-sm text-green-600"
           >
             배송지 선택
@@ -723,13 +620,6 @@ export default function MobileCheckoutPage() {
         )}
       </div>
 
-      {/* 결제 수단 */}
-      <div className="bg-white p-4 mb-4">
-        <h2 className="text-lg font-medium mb-4">결제 수단</h2>
-        <div id="payment-method" ref={paymentMethodRef}></div>
-        <div id="agreement" ref={agreementRef}></div>
-      </div>
-
       {/* 결제 정보 */}
       <div className="bg-white p-4 mb-4">
         <h2 className="text-lg font-medium mb-4">결제 정보</h2>
@@ -737,10 +627,6 @@ export default function MobileCheckoutPage() {
           <div className="flex justify-between">
             <span className="text-gray-600">상품 금액</span>
             <span>{totalPrice.toLocaleString()}원</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">배송비</span>
-            <span>{shippingFee.toLocaleString()}원</span>
           </div>
         </div>
         <div className="flex justify-between items-center pt-4 font-semibold">
@@ -758,8 +644,8 @@ export default function MobileCheckoutPage() {
           />
           
           <Button
-            onClick={handleSubmitOrder}
-            disabled={!selectedAddressId || !agreeToTerms || orderProcessing}
+            onClick={handleOpenPaymentModal}
+            disabled={!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || !agreeToTerms || orderProcessing}
             className={`w-full py-3 mt-4 ${
               orderProcessing ? 'bg-gray-400' : 'bg-green-600'
             } text-white`}
@@ -773,12 +659,6 @@ export default function MobileCheckoutPage() {
               '결제하기'
             )}
           </Button>
-
-          {!ready && (
-          <p className="text-yellow-600 text-sm mt-2 text-center">
-            결제 모듈을 불러오는 중입니다...
-          </p>
-          )}
           
           {orderError && (
             <div className="mt-4 p-3 bg-red-100 text-red-700 rounded">
@@ -801,9 +681,22 @@ export default function MobileCheckoutPage() {
       <ShippingAddressModal
         isOpen={showAddressModal}
         onClose={() => setShowAddressModal(false)}
-        userId={user?.id || null}
+        userId={user?.id || ''}
         onAddressSelect={handleAddressChange}
         currentAddresses={addresses}
+      />
+
+      {/* 결제 모달 */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        orderId={orderIdForPayment}
+        orderName={orderNameForPayment}
+        customerName={shippingInfo.name}
+        customerEmail={user?.email || ''}
+        amount={finalPrice}
+        onPaymentSuccess={handlePaymentSuccess}
+        onPaymentFail={handlePaymentFail}
       />
     </div>
   );

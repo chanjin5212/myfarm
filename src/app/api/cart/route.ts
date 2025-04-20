@@ -108,9 +108,7 @@ export async function GET(request: NextRequest) {
           id, 
           name, 
           price, 
-          discount_price, 
-          thumbnail_url, 
-          stock
+          thumbnail_url
         ),
         product_options:product_option_id (
           id, 

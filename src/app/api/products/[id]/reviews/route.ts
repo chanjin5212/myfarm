@@ -135,6 +135,7 @@ export async function GET(
         helpful_count: review.helpful_count || 0,
         status: review.status,
         username: review.users?.nickname || review.users?.name || '사용자',
+        image_url: review.image_url || null,
         images: review.images || []
       };
     }) : [];

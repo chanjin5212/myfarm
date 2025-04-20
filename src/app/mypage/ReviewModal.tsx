@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button, Input, Modal, Textarea } from '@/components/ui/CommonStyles';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getAuthHeader } from '@/utils/auth';
+import Image from 'next/image';
+import { XCircleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -27,6 +29,73 @@ export default function ReviewModal({
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(false);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 파일 크기 제한 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('이미지 크기는 5MB 이하여야 합니다.');
+      return;
+    }
+
+    // 이미지 파일만 허용
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드 가능합니다.');
+      return;
+    }
+
+    setImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    try {
+      setUploadProgress(true);
+      const authHeader = getAuthHeader();
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // 이미지 업로드 API 엔드포인트로 전송
+      const uploadResponse = await fetch('/api/upload/review-image', {
+        method: 'POST',
+        headers: {
+          ...authHeader
+        },
+        body: formData
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || '이미지 업로드에 실패했습니다.');
+      }
+      
+      const data = await uploadResponse.json();
+      return data.imageUrl;
+    } catch (error) {
+      console.error('이미지 업로드 오류:', error);
+      throw error;
+    } finally {
+      setUploadProgress(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +146,12 @@ export default function ReviewModal({
         throw new Error('리뷰를 등록할 상품을 찾을 수 없습니다.');
       }
       
+      // 이미지가 있으면 먼저 업로드
+      let imageUrl = null;
+      if (image) {
+        imageUrl = await uploadImage(image);
+      }
+      
       // 리뷰 등록 API 호출
       const reviewResponse = await fetch('/api/reviews', {
         method: 'POST',
@@ -88,7 +163,8 @@ export default function ReviewModal({
           product_id: finalProductId,
           order_id: orderId,
           rating,
-          content
+          content,
+          image_url: imageUrl
         }),
       });
       
@@ -115,6 +191,8 @@ export default function ReviewModal({
       toast.success('리뷰가 성공적으로 등록되었습니다.');
       setContent('');
       setRating(5);
+      setImage(null);
+      setImagePreview(null);
       onClose();
       router.refresh(); // 페이지 새로고침
     } catch (error) {
@@ -174,20 +252,66 @@ export default function ReviewModal({
             />
           </div>
           
+          {/* 이미지 업로드 섹션 */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              사진 첨부 (선택)
+            </label>
+            <div className="space-y-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageChange}
+                accept="image/*"
+                className="hidden"
+              />
+              
+              {imagePreview ? (
+                <div className="relative w-full h-48 border border-gray-200 rounded-md overflow-hidden">
+                  <Image
+                    src={imagePreview}
+                    alt="리뷰 이미지 미리보기"
+                    fill
+                    style={{ objectFit: 'contain' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 bg-white rounded-full p-1"
+                  >
+                    <XCircleIcon className="w-6 h-6 text-red-500" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-20 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 transition-colors duration-200"
+                >
+                  <PhotoIcon className="h-8 w-8 text-gray-400 mb-1" />
+                  <span className="text-sm text-gray-500">이미지 추가하기</span>
+                </button>
+              )}
+              <p className="text-xs text-gray-500">
+                5MB 이하의 이미지 파일 1개를 업로드할 수 있습니다.
+              </p>
+            </div>
+          </div>
+          
           <div className="flex justify-end space-x-2">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isSubmitting}
+              disabled={isSubmitting || uploadProgress}
             >
               취소
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || uploadProgress}
             >
-              {isSubmitting ? '제출 중...' : '리뷰 등록'}
+              {isSubmitting || uploadProgress ? '제출 중...' : '리뷰 등록'}
             </Button>
           </div>
         </form>

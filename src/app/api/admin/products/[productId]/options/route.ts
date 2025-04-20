@@ -8,10 +8,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ productId: string }> }
-
 ) {
   try {
-    const productId = (await params).productId;
+    const resolvedParams = await params;
+    const productId = resolvedParams.productId;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 상품 옵션 조회
@@ -41,45 +41,39 @@ export async function POST(
   { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = (await params).productId;
     const { options } = await request.json();
+    const resolvedParams = await params;
+    const productId = resolvedParams.productId;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 옵션 데이터 유효성 검사
     if (!options || !Array.isArray(options)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 옵션 데이터입니다.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '유효하지 않은 옵션 데이터입니다.' }, { status: 400 });
     }
 
-    // product_id 확인
-    options.forEach(option => {
-      if (!option.product_id) {
-        option.product_id = productId;
-      }
-    });
-
-    // 옵션 데이터 추가
-    const { data, error } = await supabase
+    // 새 옵션 추가
+    const { data: optionsData, error: optionsError } = await supabase
       .from('product_options')
-      .insert(options)
+      .insert(
+        options.map((option: any) => ({
+          product_id: productId,
+          option_name: option.option_name,
+          option_value: option.option_value,
+          additional_price: option.additional_price,
+          stock: option.stock,
+          is_default: option.is_default || false
+        }))
+      )
       .select();
-
-    if (error) {
-      throw error;
+      
+    if (optionsError) {
+      console.error('옵션 추가 오류:', optionsError);
+      return NextResponse.json({ error: '옵션 추가에 실패했습니다.' }, { status: 500 });
     }
-
-    return NextResponse.json({
-      message: '상품 옵션이 성공적으로 추가되었습니다.',
-      options: data
-    });
+    
+    return NextResponse.json(optionsData);
   } catch (error) {
-    console.error('상품 옵션 추가 오류:', error);
-    return NextResponse.json(
-      { error: '상품 옵션을 추가하는데 실패했습니다.' },
-      { status: 500 }
-    );
+    console.error('옵션 처리 오류:', error);
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }
 
@@ -89,56 +83,49 @@ export async function PUT(
   { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = (await params).productId;
     const { options } = await request.json();
+    const resolvedParams = await params;
+    const productId = resolvedParams.productId;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 옵션 데이터 유효성 검사
     if (!options || !Array.isArray(options)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 옵션 데이터입니다.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '유효하지 않은 옵션 데이터입니다.' }, { status: 400 });
     }
-
-    // 트랜잭션 시작 - 기존 옵션 삭제 후 새 옵션 추가
-    // 1. 기존 옵션 삭제
+    
+    // 기존 옵션 삭제
     const { error: deleteError } = await supabase
       .from('product_options')
       .delete()
       .eq('product_id', productId);
-
+      
     if (deleteError) {
-      throw deleteError;
+      console.error('기존 옵션 삭제 오류:', deleteError);
+      return NextResponse.json({ error: '기존 옵션 삭제에 실패했습니다.' }, { status: 500 });
     }
-
-    // 2. 새 옵션 추가
-    const processedOptions = options.map(option => ({
-      product_id: productId,
-      option_name: option.option_name,
-      option_value: option.option_value,
-      additional_price: option.additional_price, // 추가 가격만 저장
-      stock: option.stock
-    }));
-
-    const { data, error: insertError } = await supabase
+    
+    // 새 옵션 추가
+    const { data: optionsData, error: optionsError } = await supabase
       .from('product_options')
-      .insert(processedOptions)
+      .insert(
+        options.map((option: any) => ({
+          product_id: productId,
+          option_name: option.option_name,
+          option_value: option.option_value,
+          additional_price: option.additional_price,
+          stock: option.stock,
+          is_default: option.is_default || false
+        }))
+      )
       .select();
-
-    if (insertError) {
-      throw insertError;
+      
+    if (optionsError) {
+      console.error('옵션 추가 오류:', optionsError);
+      return NextResponse.json({ error: '옵션 추가에 실패했습니다.' }, { status: 500 });
     }
-
-    return NextResponse.json({
-      message: '상품 옵션이 성공적으로 업데이트되었습니다.',
-      options: data
-    });
+    
+    return NextResponse.json(optionsData);
   } catch (error) {
-    console.error('상품 옵션 업데이트 오류:', error);
-    return NextResponse.json(
-      { error: '상품 옵션을 업데이트하는데 실패했습니다.' },
-      { status: 500 }
-    );
+    console.error('옵션 처리 오류:', error);
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 } 

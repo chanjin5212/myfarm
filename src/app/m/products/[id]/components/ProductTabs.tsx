@@ -27,7 +27,7 @@ interface Review {
   created_at: string;
   status: string;
   username: string;
-  images?: string[];
+  image_url?: string;
 }
 
 export default function MobileProductTabs({ product, activeTab, setActiveTab }: ProductTabsProps) {
@@ -53,6 +53,8 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
     try {
       const response = await fetch(`/api/products/${product.id}/reviews?page=${page}&limit=5`);
       const data = await response.json();
+      
+      console.log('리뷰 응답 데이터:', data); // 디버그용 로그
       
       if (page === 1) {
         setReviews(data.reviews || []);
@@ -234,23 +236,22 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
                       </span>
                     </div>
                     
-                    <h3 className="font-medium mb-1">{review.title}</h3>
+                    <h3 className="font-medium mb-1">{review.title || '리뷰'}</h3>
                     <p className="text-gray-700 text-sm mb-3">{review.content}</p>
                     
-                    {/* 리뷰 이미지 */}
-                    {review.images && review.images.length > 0 && (
-                      <div className="flex space-x-2 overflow-x-auto pb-2">
-                        {review.images.map((imageUrl, index) => (
-                          <div key={index} className="relative w-16 h-16 flex-shrink-0">
-                            <Image
-                              src={imageUrl}
-                              alt={`리뷰 이미지 ${index + 1}`}
-                              fill
-                              sizes="64px"
-                              className="object-cover rounded"
-                            />
-                          </div>
-                        ))}
+                    {/* 리뷰 이미지 표시 (image_url 또는 images 배열 처리) */}
+                    {review.image_url && review.image_url.trim() !== '' && (
+                      <div className="mt-2 mb-3">
+                        <div className="relative w-full h-52 bg-gray-100 rounded-md overflow-hidden">
+                          <Image
+                            src={review.image_url}
+                            alt="리뷰 이미지"
+                            fill
+                            sizes="(max-width: 768px) 100vw, 400px"
+                            className="object-contain"
+                            unoptimized={review.image_url?.includes('blob:')}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

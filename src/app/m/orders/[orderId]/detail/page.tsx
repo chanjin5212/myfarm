@@ -80,7 +80,7 @@ interface GroupedOrderItem {
 export default function MobileOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const orderId = params.orderId as string;
+  const orderId = params?.orderId as string || '';
 
   // 주문 관련 상태
   const [orderInfo, setOrderInfo] = useState<any>(null);
@@ -104,21 +104,38 @@ export default function MobileOrderDetailPage() {
     const grouped: GroupedOrderItem[] = [];
     
     items.forEach(item => {
-      const productId = item.product_id || item.productId;
+      const productId = item.product_id;
       const existingGroup = grouped.find(group => group.product_id === productId);
       
+      // 옵션을 JSON 문자열로 변환하여 비교
+      const optionsKey = JSON.stringify(item.options || {});
+      
       if (existingGroup) {
-        existingGroup.items.push(item);
-        existingGroup.totalQuantity += item.quantity || 1;
-        existingGroup.totalPrice += (item.price || 0) * (item.quantity || 1);
+        // 같은 상품, 같은 옵션인지 확인
+        const existingItemIndex = existingGroup.items.findIndex(i => 
+          JSON.stringify(i.options || {}) === optionsKey
+        );
+        
+        if (existingItemIndex >= 0) {
+          // 같은 옵션을 가진 아이템이 있으면 수량과 가격만 업데이트
+          existingGroup.items[existingItemIndex].quantity += item.quantity;
+          existingGroup.totalQuantity += item.quantity;
+          existingGroup.totalPrice += item.price * item.quantity;
+        } else {
+          // 새로운 옵션이면 아이템 추가
+          existingGroup.items.push(item);
+          existingGroup.totalQuantity += item.quantity;
+          existingGroup.totalPrice += item.price * item.quantity;
+        }
       } else {
+        // 새 상품 그룹 생성
         grouped.push({
           product_id: productId,
-          name: item.name || '상품명 없음',
-          image: item.image || '/images/default-product.png',
+          name: item.name || (item.options && item.options.name) || '상품명 없음',
+          image: item.image || (item.options && item.options.image) || '/images/default-product.png',
           items: [item],
-          totalQuantity: item.quantity || 1,
-          totalPrice: (item.price || 0) * (item.quantity || 1)
+          totalQuantity: item.quantity,
+          totalPrice: item.price * item.quantity
         });
       }
     });
@@ -182,6 +199,7 @@ export default function MobileOrderDetailPage() {
         return;
       }
 
+      console.log('주문 상세 정보 요청 시작:', orderId);
       const response = await fetch(`/api/orders/${orderId}`, {
         headers: {
           ...authHeader
@@ -198,15 +216,18 @@ export default function MobileOrderDetailPage() {
       }
 
       const responseData = await response.json();
+      console.log('주문 상세 API 응답:', JSON.stringify(responseData, null, 2));
       
-      if (responseData.order) {
-        setOrderInfo(responseData.order);
-        if (Array.isArray(responseData.items)) {
-          setOrderItems(responseData.items);
-        }
+      // 주문 정보 설정
+      setOrderInfo(responseData);
+      
+      // 응답에 items 배열이 있는 경우 처리
+      if (Array.isArray(responseData.items)) {
+        console.log('API에서 주문 상품 정보 받음:', responseData.items.length, '개');
+        setOrderItems(responseData.items);
       } else {
-        setOrderInfo(responseData);
-        
+        console.log('API 응답에 주문 상품 정보가 없음. 별도로 요청합니다.');
+        // 주문 상품 정보를 별도로 요청
         try {
           const itemsResponse = await fetch(`/api/orders/${orderId}/items`, {
             headers: {
@@ -216,9 +237,14 @@ export default function MobileOrderDetailPage() {
 
           if (itemsResponse.ok) {
             const itemsData = await itemsResponse.json();
+            console.log('주문 상품 API 응답:', JSON.stringify(itemsData, null, 2));
             if (Array.isArray(itemsData)) {
               setOrderItems(itemsData);
+            } else {
+              console.error('주문 상품 API 응답이 배열이 아님');
             }
+          } else {
+            console.error('주문 상품 API 요청 실패:', itemsResponse.status);
           }
         } catch (itemsError) {
           console.error('주문 상품 API 오류:', itemsError);
@@ -280,6 +306,8 @@ export default function MobileOrderDetailPage() {
     );
   }
 
+  console.log('렌더링 중인 주문 정보:', JSON.stringify(orderInfo, null, 2));
+
   const orderDate = orderInfo.created_at 
     ? new Date(orderInfo.created_at).toLocaleString('ko-KR', {
         year: 'numeric',
@@ -296,19 +324,23 @@ export default function MobileOrderDetailPage() {
         minute: '2-digit'
       });
 
+  // 배송 정보에서 DB 필드명을 먼저 확인하고, 없으면 객체 내부 필드 확인
   const shippingInfo = {
-    name: orderInfo.shipping_name || orderInfo.shipping?.name || '-',
-    phone: orderInfo.shipping_phone || orderInfo.shipping?.phone || '-',
-    address: orderInfo.shipping_address || orderInfo.shipping?.address || '-',
-    detailAddress: orderInfo.shipping_detail_address || orderInfo.shipping?.detailAddress || '',
-    memo: orderInfo.shipping_memo || orderInfo.shipping?.memo || ''
+    name: orderInfo.shipping_name || (orderInfo.shipping && orderInfo.shipping.name) || '-',
+    phone: orderInfo.shipping_phone || (orderInfo.shipping && orderInfo.shipping.phone) || '-',
+    address: orderInfo.shipping_address || (orderInfo.shipping && orderInfo.shipping.address) || '-',
+    detailAddress: orderInfo.shipping_detail_address || (orderInfo.shipping && orderInfo.shipping.detailAddress) || '',
+    memo: orderInfo.shipping_memo || (orderInfo.shipping && orderInfo.shipping.memo) || ''
   };
 
   const paymentInfo = {
-    method: orderInfo.payment_method || orderInfo.paymentMethod || '-',
+    method: orderInfo.payment_method || (orderInfo.payment && orderInfo.payment.method) || '-',
     status: orderInfo.status || 'pending',
-    totalAmount: orderInfo.total_amount || orderInfo.totalAmount || 0
+    totalAmount: orderInfo.total_amount || (orderInfo.payment && orderInfo.payment.totalAmount) || 0
   };
+
+  // 주문번호는 order_number를 우선적으로 사용
+  const displayOrderNumber = orderInfo.order_number || orderInfo.orderNumber || orderId;
 
   return (
     <div className="pb-20">
@@ -332,7 +364,7 @@ export default function MobileOrderDetailPage() {
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <div className="flex justify-between items-center mb-3">
             <div>
-              <h2 className="text-base font-medium">주문번호: {orderInfo.order_number || orderId}</h2>
+              <h2 className="text-base font-medium">주문번호: {displayOrderNumber}</h2>
               <p className="text-sm text-gray-600">주문일: {orderDate}</p>
             </div>
             <OrderStatusBadge status={paymentInfo.status} />
@@ -364,20 +396,23 @@ export default function MobileOrderDetailPage() {
                   
                   {group.items.length > 0 && (
                     <div className="mt-1 text-xs text-gray-500">
-                      <span>옵션: </span>
                       {group.items.map((item, itemIndex) => (
-                        <span key={`item-${itemIndex}`}>
-                          {item.options && (
-                            <span className="font-medium">
-                              {typeof item.options === 'object' && item.options.name ? 
-                                `${item.options.name}: ${item.options.value}` : 
-                                (typeof item.options === 'string' ? item.options : '기본 상품')}
+                        <div key={`item-${itemIndex}`} className="mb-1">
+                          <div className="text-gray-600">
+                            {item.options && typeof item.options === 'object' ? (
+                              <span>
+                                {item.options.option_name && item.options.option_value ? 
+                                  `${item.options.option_name}: ${item.options.option_value}` : 
+                                  (item.options.name ? item.options.name : '기본 상품')}
+                              </span>
+                            ) : (
+                              <span>기본 상품</span>
+                            )}
+                            <span className="ml-2">
+                              {item.quantity}개 × {formatPrice(item.price)} = {formatPrice(item.price * item.quantity)}
                             </span>
-                          )}
-                          {(!item.options || Object.keys(item.options).length === 0) && (
-                            <span className="text-gray-700">기본 상품</span>
-                          )}
-                        </span>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}

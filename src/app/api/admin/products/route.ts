@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || '';
     const offset = (page - 1) * limit;
 
+    // 기본 상품 데이터 가져오기
     let query = supabase
       .from('products')
       .select('*', { count: 'exact' })
@@ -35,8 +36,44 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
+    // 각 상품에 대한 재고 정보 가져오기
+    if (products && products.length > 0) {
+      const productIds = products.map(product => product.id);
+      
+      // 각 상품의 모든 옵션에서 총 재고 가져오기
+      const { data: optionsData, error: optionsError } = await supabase
+        .from('product_options')
+        .select('product_id, stock')
+        .in('product_id', productIds);
+        
+      if (optionsError) {
+        throw optionsError;
+      }
+      
+      // 각 상품별 총 재고 계산
+      const productStocks: { [key: string]: number } = {};
+      optionsData?.forEach(option => {
+        const productId = option.product_id;
+        if (!productStocks[productId]) {
+          productStocks[productId] = 0;
+        }
+        productStocks[productId] += option.stock;
+      });
+      
+      // 상품 데이터에 재고 정보 추가
+      const productsWithStock = products.map(product => ({
+        ...product,
+        stock: productStocks[product.id] || 0
+      }));
+      
+      return NextResponse.json({
+        products: productsWithStock,
+        total: count || 0,
+      });
+    }
+
     return NextResponse.json({
-      products,
+      products: products || [],
       total: count || 0,
     });
   } catch (error) {
@@ -65,9 +102,7 @@ export async function POST(request: NextRequest) {
       name: productData.name,
       description: productData.description || '',
       price: productData.price ? Number(productData.price) : 0,
-      stock: productData.stock ? Number(productData.stock) : 0,
       status: productData.status || 'active',
-      category_id: productData.category_id || null,
       thumbnail_url: productData.thumbnail_url || null,
       origin: productData.origin || null,
       harvest_date: productData.harvest_date || null,

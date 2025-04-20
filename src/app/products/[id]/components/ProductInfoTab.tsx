@@ -31,7 +31,7 @@ export default function ProductInfoTab({
         <table className="w-full">
           <tbody>
             <tr className="border-b">
-              <td className="bg-gray-50 p-4 font-medium w-1/4">원산지</td>
+              <td className="bg-gray-50 p-4 font-medium">원산지</td>
               <td className="p-4">{origin || '국내산'}</td>
             </tr>
             {harvestDate && (
@@ -43,7 +43,7 @@ export default function ProductInfoTab({
             {storageMethod && (
               <tr className="border-b">
                 <td className="bg-gray-50 p-4 font-medium">보관방법</td>
-                <td className="p-4">{storageMethod}</td>
+                <td className="p-4">{storageMethod || '상품 패키지에 표시'}</td>
               </tr>
             )}
             <tr className="border-b">
@@ -53,10 +53,6 @@ export default function ProductInfoTab({
             <tr className="border-b">
               <td className="bg-gray-50 p-4 font-medium">배송방법</td>
               <td className="p-4">택배배송</td>
-            </tr>
-            <tr>
-              <td className="bg-gray-50 p-4 font-medium">배송비</td>
-              <td className="p-4">3,000원 (30,000원 이상 구매 시 무료배송)</td>
             </tr>
           </tbody>
         </table>

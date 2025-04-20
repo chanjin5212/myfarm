@@ -67,8 +67,7 @@ export async function GET(request: NextRequest) {
         option: item.option_name && item.option_value ? {
           name: item.option_name,
           value: item.option_value
-        } : null,
-        shippingFee: item.shipping_fee
+        } : null
       }));
       
       // 대표 상품 이미지 및 이름 추출

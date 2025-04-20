@@ -11,7 +11,8 @@ export async function GET(
   { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = (await params).productId;
+    const resolvedParams = await params;
+    const productId = resolvedParams.productId;
 
     // 상품 정보 조회
     const { data: product, error } = await supabase
@@ -42,7 +43,8 @@ export async function DELETE(
   { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = (await params).productId;
+    const resolvedParams = await params;
+    const productId = resolvedParams.productId;
 
     // 상품 삭제 (CASCADE 설정으로 인해 관련된 모든 데이터도 함께 삭제됨)
     const { error } = await supabase
@@ -69,7 +71,8 @@ export async function PATCH(
   { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const productId = (await params).productId;
+    const resolvedParams = await params;
+    const productId = resolvedParams.productId;
     const productData = await request.json();
 
     // 빈 문자열 필드를 null로 변환
@@ -79,9 +82,7 @@ export async function PATCH(
     if (productData.name !== undefined) processedData.name = productData.name;
     if (productData.description !== undefined) processedData.description = productData.description;
     if (productData.price !== undefined) processedData.price = Number(productData.price);
-    if (productData.stock !== undefined) processedData.stock = Number(productData.stock);
     if (productData.status !== undefined) processedData.status = productData.status;
-    if (productData.category_id !== undefined) processedData.category_id = productData.category_id;
     if (productData.thumbnail_url !== undefined) processedData.thumbnail_url = productData.thumbnail_url;
     if (productData.origin !== undefined) processedData.origin = productData.origin;
     if (productData.harvest_date !== undefined) processedData.harvest_date = productData.harvest_date;

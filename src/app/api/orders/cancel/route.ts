@@ -85,6 +85,46 @@ export async function POST(request: NextRequest) {
     
     // 주문 항목 삭제 시도
     try {
+      // 먼저 주문 항목 정보를 가져옴
+      const { data: orderItems, error: itemsFetchError } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId);
+
+      if (itemsFetchError) {
+        console.error('주문 항목 조회 오류:', itemsFetchError);
+      } else if (orderItems && orderItems.length > 0) {
+        // 각 주문 항목의 재고를 복구
+        for (const item of orderItems) {
+          if (item.product_option_id) {
+            // 먼저 현재 재고를 조회
+            const { data: currentOption, error: fetchError } = await supabase
+              .from('product_options')
+              .select('stock')
+              .eq('id', item.product_option_id)
+              .single();
+
+            if (fetchError) {
+              console.error('옵션 재고 조회 오류:', fetchError);
+              continue;
+            }
+
+            // 재고 증가
+            const { error: optionStockError } = await supabase
+              .from('product_options')
+              .update({ 
+                stock: (currentOption.stock || 0) + item.quantity
+              })
+              .eq('id', item.product_option_id);
+
+            if (optionStockError) {
+              console.error('옵션 재고 복구 오류:', optionStockError);
+            }
+          }
+        }
+      }
+
+      // 주문 항목 삭제
       const { error: itemsDeleteError } = await supabase
         .from('order_items')
         .delete()

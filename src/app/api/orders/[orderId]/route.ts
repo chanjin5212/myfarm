@@ -62,55 +62,44 @@ export async function GET(
     
     console.log('DB에서 조회한 주문 상품 데이터:', orderItemsData);
     
-    // 상품 정보를 보기 좋게 변환
-    const items = orderItemsData.map(item => ({
-      id: item.id,
-      productId: item.product_id,
-      name: item.product_name || '상품명 없음',
-      price: item.price || 0,
-      quantity: item.quantity || 1,
-      image: item.image || null,
-      option: item.option_name && item.option_value ? {
-        name: item.option_name,
-        value: item.option_value
-      } : null,
-      options: item.options || null,
-      shippingFee: item.shipping_fee || 0
-    }));
-    
-    // 주문 정보를 보기 좋게 변환 (DB 컬럼 이름 그대로 유지)
-    const response = {
+    // 주문 상세 정보
+    const orderDetails = {
       id: orderData.id,
-      order_number: orderData.order_number || orderId,
-      user_id: orderData.user_id,
-      status: orderData.status || 'pending',
-      shipping_name: orderData.shipping_name || '',
-      shipping_phone: orderData.shipping_phone || '',
-      shipping_address: orderData.shipping_address || '',
-      shipping_detail_address: orderData.shipping_detail_address || '',
-      shipping_memo: orderData.shipping_memo || '',
-      payment_method: orderData.payment_method || '',
-      total_amount: orderData.total_amount || 0,
-      created_at: orderData.created_at || new Date().toISOString(),
-      updated_at: orderData.updated_at || new Date().toISOString(),
-      
-      // 중첩된 객체로도 접근할 수 있도록 추가
+      order_number: orderData.order_number,
+      created_at: orderData.created_at,
+      status: orderData.status,
+      total_amount: orderData.total_amount,
+      payment_method: orderData.payment_method,
+      shipping_name: orderData.shipping_name,
+      shipping_phone: orderData.shipping_phone,
+      shipping_address: orderData.shipping_address,
+      shipping_detail_address: orderData.shipping_detail_address,
+      shipping_memo: orderData.shipping_memo,
+      // 호환성을 위한 중첩 객체도 함께 제공
       shipping: {
-        name: orderData.shipping_name || '',
-        phone: orderData.shipping_phone || '',
-        address: orderData.shipping_address || '',
-        detailAddress: orderData.shipping_detail_address || '',
-        memo: orderData.shipping_memo || ''
+        name: orderData.shipping_name,
+        phone: orderData.shipping_phone,
+        address: orderData.shipping_address,
+        detailAddress: orderData.shipping_detail_address,
+        memo: orderData.shipping_memo
       },
       payment: {
-        method: orderData.payment_method || '',
-        totalAmount: orderData.total_amount || 0
+        method: orderData.payment_method,
+        totalAmount: orderData.total_amount
       },
-      items: items
+      items: orderItemsData.map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        name: item.options?.name || '',
+        price: item.price,
+        quantity: item.quantity,
+        image: item.options?.image || '',
+        options: item.options || {}
+      }))
     };
     
-    console.log('클라이언트로 전송할 응답:', response);
-    return NextResponse.json(response);
+    console.log('클라이언트로 전송할 응답:', orderDetails);
+    return NextResponse.json(orderDetails);
     
   } catch (error) {
     console.error('주문 조회 오류:', error);

@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
   try {
     // URL 파라미터 처리
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category');
     const search = searchParams.get('search');
     const sort = searchParams.get('sort') || 'newest';
     const minPrice = searchParams.get('min_price');
@@ -20,16 +19,11 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const offset = (page - 1) * limit;
     
-    // 쿼리 작성 - 상품 데이터 + 카테고리 정보
+    // 쿼리 작성 - 상품 데이터만 조회
     let query = supabase
       .from('products')
-      .select('*, categories(name)')
+      .select('*')
       .eq('status', 'active');
-    
-    // 카테고리 필터
-    if (category) {
-      query = query.eq('category_id', category);
-    }
     
     // 검색어 필터
     if (search) {
@@ -58,8 +52,9 @@ export async function GET(request: NextRequest) {
     } else if (sort === 'price_high') {
       query = query.order('price', { ascending: false });
     } else if (sort === 'popular') {
-      // 임시로 판매량순
-      query = query.order('sales_count', { ascending: false }).order('created_at', { ascending: false });
+      // 주문 수를 기준으로 정렬
+      query = query.order('order_count', { ascending: false })
+        .order('created_at', { ascending: false });
     }
     
     // 먼저 전체 카운트를 확인
@@ -69,7 +64,6 @@ export async function GET(request: NextRequest) {
       .eq('status', 'active');
     
     // 동일한 필터 조건 적용
-    if (category) countQuery.eq('category_id', category);
     if (search) countQuery.ilike('name', `%${search}%`);
     if (minPrice) countQuery.gte('price', parseInt(minPrice));
     if (maxPrice) countQuery.lte('price', parseInt(maxPrice));
@@ -98,8 +92,7 @@ export async function GET(request: NextRequest) {
       price: product.price,
       discount_price: product.discount_price,
       thumbnail_url: product.thumbnail_url,
-      is_organic: product.is_organic,
-      category_name: product.categories?.name
+      is_organic: product.is_organic
     }));
     
     // 모바일 페이지 형식에 맞게 응답

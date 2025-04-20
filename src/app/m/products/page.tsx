@@ -13,12 +13,6 @@ interface Product {
   discount_price?: number;
   thumbnail_url?: string;
   is_organic?: boolean;
-  category_name?: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
 }
 
 // URL 파라미터를 처리하는 컴포넌트
@@ -26,12 +20,7 @@ function ProductParamsHandler({
   setInitialFilters 
 }: { 
   setInitialFilters: (params: { 
-    categoryId: string | null, 
-    searchQuery: string | null,
     sortOption: string,
-    minPrice: string | null,
-    maxPrice: string | null,
-    isOrganic: string | null,
     pageParam: string | null
   }) => void 
 }) {
@@ -39,21 +28,11 @@ function ProductParamsHandler({
   
   useEffect(() => {
     // URL 쿼리 파라미터
-    const categoryId = searchParams.get('category');
-    const searchQuery = searchParams.get('query');
-    const sortOption = searchParams.get('sort') || 'newest';
-    const minPrice = searchParams.get('min_price');
-    const maxPrice = searchParams.get('max_price');
-    const isOrganic = searchParams.get('organic');
-    const pageParam = searchParams.get('page');
+    const sortOption = searchParams?.get('sort') ?? 'newest';
+    const pageParam = searchParams?.get('page') ?? null;
     
     setInitialFilters({
-      categoryId,
-      searchQuery,
       sortOption,
-      minPrice,
-      maxPrice,
-      isOrganic,
       pageParam
     });
   }, [searchParams, setInitialFilters]);
@@ -66,42 +45,26 @@ function MobileProductsPage() {
   
   // 초기 필터 값 저장용 상태
   const [initialFilters, setInitialFilters] = useState({
-    categoryId: null as string | null,
-    searchQuery: null as string | null,
     sortOption: 'newest',
-    minPrice: null as string | null,
-    maxPrice: null as string | null,
-    isOrganic: null as string | null,
     pageParam: null as string | null
   });
   
   // 상태 관리
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   
   // 필터 상태
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedSort, setSelectedSort] = useState<string>('newest');
-  const [priceRange, setPriceRange] = useState<{min?: number, max?: number}>({});
-  const [organicOnly, setOrganicOnly] = useState<boolean>(false);
   
   // initialFilters가 설정되면 실제 상태에 적용
   useEffect(() => {
     // 페이지 로드 시 초기 필터 적용
-    setSelectedCategory(initialFilters.categoryId);
-    setPriceRange({
-      min: initialFilters.minPrice ? parseInt(initialFilters.minPrice) : undefined,
-      max: initialFilters.maxPrice ? parseInt(initialFilters.maxPrice) : undefined
-    });
     setSelectedSort(initialFilters.sortOption);
-    setOrganicOnly(initialFilters.isOrganic === 'true');
     setPage(initialFilters.pageParam ? parseInt(initialFilters.pageParam) : 1);
     
     // 초기 필터 설정 완료 플래그
@@ -109,57 +72,35 @@ function MobileProductsPage() {
   }, [initialFilters]);
   
   // URL 쿼리 업데이트 함수
-  const updateQueryParams = useCallback(() => {
+  const updateQueryParams = useCallback((newSort: string, newPage: number) => {
     const params = new URLSearchParams();
     
-    if (selectedCategory) params.set('category', selectedCategory);
-    if (initialFilters.searchQuery) params.set('query', initialFilters.searchQuery);
-    if (selectedSort) params.set('sort', selectedSort);
-    if (priceRange.min) params.set('min_price', priceRange.min.toString());
-    if (priceRange.max) params.set('max_price', priceRange.max.toString());
-    if (organicOnly) params.set('organic', 'true');
-    if (page > 1) params.set('page', page.toString());
+    if (newSort) params.set('sort', newSort);
+    if (newPage > 1) params.set('page', newPage.toString());
     
     router.push(`/m/products?${params.toString()}`);
-  }, [selectedCategory, initialFilters.searchQuery, selectedSort, priceRange, organicOnly, page, router]);
+  }, [router]);
   
-  // 필터 적용 핸들러
-  const applyFilters = () => {
+  // 정렬 변경 핸들러
+  const handleSortChange = useCallback((newSort: string) => {
+    setSelectedSort(newSort);
     setPage(1);
-    setShowFilters(false);
-    updateQueryParams();
-  };
-  
-  // 필터 초기화 핸들러
-  const resetFilters = () => {
-    setSelectedCategory(null);
-    setSelectedSort('newest');
-    setPriceRange({ min: undefined, max: undefined });
-    setOrganicOnly(false);
-    setPage(1);
-    
-    router.push('/m/products');
-  };
+    updateQueryParams(newSort, 1);
+  }, [updateQueryParams]);
   
   // 상품 목록 가져오기
   useEffect(() => {
+    if (!initialLoadDone) return;
+    
     const fetchProducts = async () => {
-      // initialLoadDone이 false여도 기본 데이터는 불러옴
       setLoading(true);
       setError(null);
       
       try {
         const params = new URLSearchParams();
-        if (selectedCategory) params.append('category', selectedCategory);
-        if (initialFilters.searchQuery) params.append('search', initialFilters.searchQuery);
         if (selectedSort) params.append('sort', selectedSort);
-        if (priceRange.min) params.append('min_price', priceRange.min.toString());
-        if (priceRange.max) params.append('max_price', priceRange.max.toString());
-        if (organicOnly) params.append('organic', 'true');
         params.append('page', page.toString());
         params.append('limit', '10');
-        
-        console.log('Fetching products with params:', params.toString());
         
         const response = await fetch(`/api/products?${params.toString()}`);
         
@@ -168,9 +109,7 @@ function MobileProductsPage() {
         }
         
         const data = await response.json();
-        console.log('Products loaded:', data);
         
-        // 첫 페이지이면 목록 초기화, 아니면 기존 목록에 추가
         if (page === 1) {
           setProducts(data.products || []);
         } else {
@@ -188,27 +127,7 @@ function MobileProductsPage() {
     };
     
     fetchProducts();
-  }, [selectedCategory, initialFilters.searchQuery, selectedSort, priceRange, organicOnly, page]);
-  
-  // 카테고리 가져오기
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch('/api/categories');
-        
-        if (!response.ok) {
-          throw new Error(`카테고리 정보를 불러오는데 실패했습니다. (상태 코드: ${response.status})`);
-        }
-        
-        const data = await response.json();
-        setCategories(data.categories || []);
-      } catch (error) {
-        console.error('카테고리 로딩 오류:', error);
-      }
-    };
-    
-    fetchCategories();
-  }, []);
+  }, [selectedSort, page, initialLoadDone]);
   
   // 상품 카드 컴포넌트
   const ProductCard = ({ product }: { product: Product }) => {
@@ -217,14 +136,14 @@ function MobileProductsPage() {
       : 0;
     
     return (
-      <Link href={`/m/products/${product.id}`} className="block">
-        <div className="flex border-b pb-3">
-          <div className="w-24 h-24 rounded-md overflow-hidden flex-shrink-0 relative">
+      <Link href={`/m/products/${product.id}`} className="block w-full">
+        <div className="flex flex-col">
+          <div className="aspect-square rounded-lg overflow-hidden relative">
             <Image
               src={product.thumbnail_url || '/images/default-product.jpg'}
               alt={product.name}
               fill
-              sizes="96px"
+              sizes="(max-width: 768px) 33vw"
               className="object-cover"
             />
             {product.is_organic && (
@@ -233,20 +152,19 @@ function MobileProductsPage() {
               </div>
             )}
           </div>
-          <div className="ml-3 flex-grow">
-            {product.category_name && (
-              <span className="text-xs text-gray-500">{product.category_name}</span>
-            )}
-            <h3 className="font-medium text-sm line-clamp-2">{product.name}</h3>
-            <div className="mt-1">
+          <div className="mt-1.5">
+            <h3 className="text-xs line-clamp-2">{product.name}</h3>
+            <div className="mt-0.5">
               {product.discount_price ? (
-                <div className="flex items-baseline space-x-1">
-                  <span className="line-through text-gray-400 text-xs">{product.price.toLocaleString()}원</span>
-                  <span className="text-red-500 font-semibold text-xs">{discount}%</span>
-                  <span className="font-bold">{product.discount_price.toLocaleString()}원</span>
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-1">
+                    <span className="text-red-500 font-bold text-xs">{discount}%</span>
+                    <span className="line-through text-gray-400 text-[10px]">{product.price.toLocaleString()}원</span>
+                  </div>
+                  <div className="font-bold text-sm">{product.discount_price.toLocaleString()}원</div>
                 </div>
               ) : (
-                <span className="font-bold">{product.price.toLocaleString()}원</span>
+                <div className="font-bold text-sm">{product.price.toLocaleString()}원</div>
               )}
             </div>
           </div>
@@ -260,42 +178,13 @@ function MobileProductsPage() {
       {/* ProductParamsHandler 추가 */}
       <ProductParamsHandler setInitialFilters={setInitialFilters} />
       
-      {/* 검색 및 필터 헤더 */}
+      {/* 헤더 */}
       <div className="sticky top-12 z-10 bg-white shadow-sm">
         <div className="flex items-center p-2 border-b">
-          {/* 검색창 */}
-          <div className="flex-grow mx-1">
-            <div className="relative">
-              <Link href="/m/search" className="block">
-                <div className="bg-gray-100 rounded-full px-4 py-2 flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-gray-500 mr-2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                  </svg>
-                  <span className="text-gray-500 text-sm">상품 검색</span>
-                </div>
-              </Link>
-            </div>
-          </div>
-          
-          {/* 필터 버튼 */}
-          <button
-            onClick={() => setShowFilters(true)}
-            className="flex items-center text-gray-700 px-2 py-1 text-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-1">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-            </svg>
-            필터
-          </button>
-          
           {/* 정렬 드롭다운 */}
           <select 
             value={selectedSort}
-            onChange={(e) => {
-              setSelectedSort(e.target.value);
-              setPage(1);
-              setTimeout(updateQueryParams, 0);
-            }}
+            onChange={(e) => handleSortChange(e.target.value)}
             className="bg-transparent text-sm border-none text-gray-700 px-2 py-1 focus:outline-none"
           >
             <option value="newest">최신순</option>
@@ -304,80 +193,12 @@ function MobileProductsPage() {
             <option value="popular">인기순</option>
           </select>
         </div>
-        
-        {/* 선택된 필터 표시 */}
-        {(selectedCategory || priceRange.min || priceRange.max || organicOnly) && (
-          <div className="bg-gray-50 px-3 py-2 flex items-center overflow-x-auto whitespace-nowrap">
-            {selectedCategory && (
-              <div className="bg-green-100 text-green-800 rounded-full px-2 py-1 text-xs flex items-center mr-2">
-                {categories.find(c => c.id === selectedCategory)?.name || '카테고리'}
-                <button 
-                  onClick={() => {
-                    setSelectedCategory(null);
-                    setTimeout(updateQueryParams, 0);
-                  }}
-                  className="ml-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
-            
-            {(priceRange.min || priceRange.max) && (
-              <div className="bg-green-100 text-green-800 rounded-full px-2 py-1 text-xs flex items-center mr-2">
-                {priceRange.min && priceRange.max 
-                  ? `${priceRange.min.toLocaleString()}원-${priceRange.max.toLocaleString()}원`
-                  : priceRange.min
-                  ? `${priceRange.min.toLocaleString()}원 이상`
-                  : `${priceRange.max?.toLocaleString()}원 이하`
-                }
-                <button 
-                  onClick={() => {
-                    setPriceRange({ min: undefined, max: undefined });
-                    setTimeout(updateQueryParams, 0);
-                  }}
-                  className="ml-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
-            
-            {organicOnly && (
-              <div className="bg-green-100 text-green-800 rounded-full px-2 py-1 text-xs flex items-center mr-2">
-                유기농
-                <button 
-                  onClick={() => {
-                    setOrganicOnly(false);
-                    setTimeout(updateQueryParams, 0);
-                  }}
-                  className="ml-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
-            
-            <button 
-              onClick={resetFilters}
-              className="text-gray-500 text-xs"
-            >
-              필터 초기화
-            </button>
-          </div>
-        )}
       </div>
       
       {/* 상품 목록 섹션 */}
-      <div className="px-4 pt-3">
+      <div className="px-2 pt-3">
         {/* 상품 수 표시 */}
-        <p className="text-sm text-gray-500 mb-3">
+        <p className="text-sm text-gray-500 mb-3 px-1">
           총 {totalCount}개 상품
         </p>
         
@@ -389,7 +210,7 @@ function MobileProductsPage() {
         )}
         
         {/* 상품 목록 */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-2">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
@@ -421,106 +242,10 @@ function MobileProductsPage() {
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 text-gray-300 mb-3">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
-            <p className="text-gray-500">검색 결과가 없습니다</p>
+            <p className="text-gray-500">상품이 없습니다</p>
           </div>
         )}
       </div>
-      
-      {/* 필터 팝업 오버레이 */}
-      {showFilters && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex">
-          <div className="bg-white w-4/5 max-w-xs h-full ml-auto flex flex-col">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h2 className="font-bold text-lg">필터</h2>
-              <button onClick={() => setShowFilters(false)} className="text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <div className="flex-grow overflow-y-auto p-4">
-              {/* 카테고리 섹션 */}
-              <div className="mb-6">
-                <h3 className="font-medium mb-2">카테고리</h3>
-                <div className="space-y-2">
-                  {categories.map((category) => (
-                    <div key={category.id} className="flex items-center">
-                      <input
-                        type="radio"
-                        id={`category-${category.id}`}
-                        name="category"
-                        value={category.id}
-                        checked={selectedCategory === category.id}
-                        onChange={() => setSelectedCategory(category.id)}
-                        className="mr-2"
-                      />
-                      <label htmlFor={`category-${category.id}`} className="text-sm">
-                        {category.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* 가격 범위 섹션 */}
-              <div className="mb-6">
-                <h3 className="font-medium mb-2">가격 범위</h3>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="number"
-                    placeholder="최소"
-                    value={priceRange.min || ''}
-                    onChange={(e) => setPriceRange({...priceRange, min: e.target.value ? parseInt(e.target.value) : undefined})}
-                    className="w-1/2 border p-2 rounded-md text-sm"
-                  />
-                  <span>~</span>
-                  <input
-                    type="number"
-                    placeholder="최대"
-                    value={priceRange.max || ''}
-                    onChange={(e) => setPriceRange({...priceRange, max: e.target.value ? parseInt(e.target.value) : undefined})}
-                    className="w-1/2 border p-2 rounded-md text-sm"
-                  />
-                </div>
-              </div>
-              
-              {/* 유기농 필터 */}
-              <div className="mb-6">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="organic-filter"
-                    checked={organicOnly}
-                    onChange={(e) => setOrganicOnly(e.target.checked)}
-                    className="mr-2"
-                  />
-                  <label htmlFor="organic-filter" className="text-sm">
-                    유기농 상품만 보기
-                  </label>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 border-t">
-              <div className="flex space-x-2">
-                <button
-                  onClick={resetFilters}
-                  className="flex-1 border border-gray-300 rounded-md py-2 text-sm"
-                >
-                  초기화
-                </button>
-                <button
-                  onClick={applyFilters}
-                  className="flex-1 bg-green-600 text-white rounded-md py-2 text-sm"
-                >
-                  적용하기
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

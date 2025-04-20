@@ -101,10 +101,7 @@ CREATE TABLE products (
 	name varchar(255) NOT NULL,
 	description text NULL,
 	price int4 NOT NULL,
-	-- discount_price int4 NULL,
-	stock int4 NOT NULL DEFAULT 0,
 	"status" varchar(20) NOT NULL DEFAULT 'active'::character varying,
-	category_id uuid NULL,
 	thumbnail_url text NULL,
 	origin varchar(100) NULL,
 	harvest_date date NULL,
@@ -180,6 +177,7 @@ CREATE TABLE product_options (
 	option_value varchar(100) NOT NULL,
 	additional_price int4 DEFAULT 0 NULL,
 	stock int4 DEFAULT 0 NULL,
+	is_default BOOLEAN DEFAULT FALSE,
 	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
 	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL,
 	CONSTRAINT product_options_pkey PRIMARY KEY (id),
@@ -200,6 +198,7 @@ CREATE TABLE IF NOT EXISTS product_reviews (
     order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     content TEXT NOT NULL,
+    image_url TEXT,  -- 리뷰 이미지 URL 추가
     status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

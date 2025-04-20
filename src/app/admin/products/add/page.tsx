@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, Button, Input, Select, Textarea, Checkbox } from '@/components/ui/CommonStyles';
 import MultipleImageUpload, { ProductImage, uploadProductImages } from '@/components/ui/MultipleImageUpload';
 import { toast } from 'react-hot-toast';
+import { v4 as uuidv4 } from 'uuid';
 
 // 상품 옵션 타입 정의
 interface ProductOption {
@@ -12,6 +13,7 @@ interface ProductOption {
   option_value: string;
   additional_price: string;
   stock: string;
+  is_default: boolean;
   id?: string; // 신규 옵션은 id가 없음
 }
 
@@ -21,10 +23,8 @@ export default function AddProductPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    price: '', // 기본 가격을 입력받을 수 있도록 빈 문자열로 유지
-    stock: '', // 재고량도 입력 받을 수 있도록 변경
+    price: '',
     status: 'active',
-    category_id: '',
     thumbnail_url: '',
     origin: '',
     harvest_date: '',
@@ -33,32 +33,44 @@ export default function AddProductPage() {
   });
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
-  const [optionForm, setOptionForm] = useState<ProductOption>({
+  const [newOption, setNewOption] = useState<ProductOption>({
     option_name: '',
     option_value: '',
     additional_price: '0',
     stock: '0',
+    is_default: false
   });
+  const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      setLoading(true);
-      
       // 상품 데이터 유효성 검사
       if (!formData.name || !formData.price) {
         toast.error('상품명과 기본 가격은 필수 입력 항목입니다.');
-        setLoading(false);
         return;
       }
 
+      // 옵션 검사
+      if (productOptions.length === 0) {
+        toast.error('최소 1개의 옵션을 추가해주세요.');
+        return;
+      }
+
+      // 기본 옵션 검사
+      const hasDefaultOption = productOptions.some(option => option.is_default);
+      if (!hasDefaultOption) {
+        toast.error('기본 옵션을 설정해주세요.');
+        return;
+      }
+
+      setLoading(true);
+      
       // 데이터 정리 - 빈 문자열을 null로 변환
       const cleanedData = {
         ...formData,
-        price: formData.price ? Number(formData.price) : 0,
-        stock: formData.stock ? Number(formData.stock) : 0,
-        category_id: formData.category_id.trim() !== '' ? formData.category_id : null,
+        price: parseInt(formData.price) || 0,
         origin: formData.origin.trim() !== '' ? formData.origin : null,
         harvest_date: formData.harvest_date.trim() !== '' ? formData.harvest_date : null,
         storage_method: formData.storage_method.trim() !== '' ? formData.storage_method : null,
@@ -107,35 +119,39 @@ export default function AddProductPage() {
         }
       }
       
-      // 기본 상품 옵션 추가
-      const defaultOption = {
-        product_id: productId,
-        option_name: '기본 상품',
-        option_value: '기본',
-        additional_price: 0,
-        stock: parseInt(formData.stock) || 0,
-      };
+      // 사용자가 추가한 옵션이 없으면 기본 옵션 추가
+      let processedOptions = productOptions;
       
-      // 상품 옵션 저장 - 옵션이 있는 경우 사용자 옵션도 추가
-      const processedOptions = productOptions.length > 0 
-        ? [
-            defaultOption,
-            ...productOptions.map(option => ({
-              product_id: productId,
-              option_name: option.option_name,
-              option_value: option.option_value,
-              additional_price: parseInt(option.additional_price) || 0,
-              stock: parseInt(option.stock) || 0,
-            }))
-          ]
-        : [defaultOption]; // 옵션이 없으면 기본 상품만 추가
+      if (productOptions.length === 0) {
+        // 기본 옵션 추가
+        processedOptions = [
+          {
+            option_name: '옵션',
+            option_value: '기본 상품',
+            additional_price: '0',
+            stock: '0',
+            is_default: true,
+            id: uuidv4()
+          }
+        ];
+      }
+      
+      // 옵션 정보 전송
+      const finalOptions = processedOptions.map(option => ({
+        product_id: productId,
+        option_name: option.option_name,
+        option_value: option.option_value,
+        additional_price: parseInt(option.additional_price) || 0,
+        stock: parseInt(option.stock) || 0,
+        is_default: option.is_default
+      }));
       
       const optionsResponse = await fetch(`/api/admin/products/${productId}/options`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ options: processedOptions }),
+        body: JSON.stringify({ options: finalOptions }),
       });
       
       if (!optionsResponse.ok) {
@@ -179,38 +195,117 @@ export default function AddProductPage() {
     }));
   };
   
-  // 옵션 폼 입력 처리
-  const handleOptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setOptionForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-  
-  // 옵션 추가
-  const handleAddOption = () => {
-    // 기본 유효성 검사
-    if (!optionForm.option_name || !optionForm.option_value) {
-      toast.error('옵션명과 옵션값은 필수 입력 항목입니다.');
+  // 옵션 수정 핸들러
+  const handleUpdateOption = () => {
+    if (!editingOptionId) return;
+
+    // Validation for option
+    if (!newOption.option_name || !newOption.option_value) {
+      toast.error('옵션명과 옵션값을 입력해주세요.');
       return;
     }
-    
-    // 새 옵션 추가
-    setProductOptions(prev => [...prev, { ...optionForm }]);
-    
-    // 옵션 폼 초기화
-    setOptionForm({
+
+    // Check for duplicate option names (excluding the current editing option)
+    if (
+      productOptions.some(
+        opt => 
+          opt.id !== editingOptionId && 
+          opt.option_name === newOption.option_name && 
+          opt.option_value === newOption.option_value
+      )
+    ) {
+      toast.error('이미 동일한 옵션이 존재합니다.');
+      return;
+    }
+
+    const updatedOption = {
+      ...newOption,
+      id: editingOptionId
+    };
+
+    // If this is set as the default option, unset any existing default
+    if (updatedOption.is_default) {
+      setProductOptions(prevOptions =>
+        prevOptions.map(opt => ({
+          ...opt,
+          is_default: opt.id === editingOptionId ? true : false
+        }))
+      );
+    }
+
+    setProductOptions(
+      productOptions.map(opt =>
+        opt.id === editingOptionId ? updatedOption : opt
+      )
+    );
+
+    setNewOption({
       option_name: '',
       option_value: '',
       additional_price: '0',
       stock: '0',
+      is_default: false
     });
+
+    setEditingOptionId(null);
+    toast.success('옵션이 수정되었습니다.');
+  };
+  
+  // 수정 취소
+  const handleCancelEdit = () => {
+    setEditingOptionId(null);
+    setNewOption({
+      option_name: '',
+      option_value: '',
+      additional_price: '0',
+      stock: '0',
+      is_default: false
+    });
+  };
+  
+  // 옵션 추가
+  const handleAddOption = () => {
+    // Validation for option
+    if (!newOption.option_name || !newOption.option_value) {
+      toast.error('옵션명과 옵션값을 입력해주세요.');
+      return;
+    }
+    
+    // Check for duplicate option names
+    if (productOptions.some(opt => opt.option_name === newOption.option_name && opt.option_value === newOption.option_value)) {
+      toast.error('이미 동일한 옵션이 존재합니다.');
+      return;
+    }
+    
+    // 새 옵션 추가
+    setProductOptions(prev => [...prev, { ...newOption, id: uuidv4() }]);
+    
+    // 입력 필드 초기화
+    setNewOption({
+      option_name: '',
+      option_value: '',
+      additional_price: '0',
+      stock: '0',
+      is_default: false
+    });
+    
+    toast.success('옵션이 추가되었습니다.');
   };
   
   // 옵션 삭제
   const handleRemoveOption = (index: number) => {
     setProductOptions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 기본 옵션으로 설정
+  const handleSetDefaultOption = (index: number) => {
+    setProductOptions(prev => 
+      prev.map((option, i) => ({
+        ...option,
+        is_default: i === index  // 선택한 옵션만 기본 옵션으로 설정
+      }))
+    );
+    toast.success('기본 옵션이 설정되었습니다.');
   };
 
   return (
@@ -258,27 +353,6 @@ export default function AddProductPage() {
             />
             
             <Input
-              label="재고 수량"
-              name="stock"
-              type="number"
-              value={formData.stock}
-              onChange={handleChange}
-              required
-            />
-            
-            <Select
-              label="상태"
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              options={[
-                { value: 'active', label: '판매중' },
-                { value: 'out_of_stock', label: '품절' },
-                { value: 'inactive', label: '판매중지' }
-              ]}
-            />
-            
-            <Input
               label="원산지"
               name="origin"
               value={formData.origin}
@@ -319,139 +393,167 @@ export default function AddProductPage() {
             />
             
             {/* 상품 옵션 섹션 */}
-            <div className="md:col-span-2 mt-6">
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-medium mb-3">상품 옵션 (선택사항)</h3>
-                <p className="text-sm text-gray-500 mb-3">
-                  상품에 옵션을 추가하지 않으면 기본 상품으로만 판매됩니다.
-                </p>
-                
-                {/* 옵션 미리보기 */}
-                {productOptions.length > 0 && (
-                  <div className="mb-4 bg-gray-50 p-4 rounded-lg">
-                    <h4 className="text-md font-medium mb-2">옵션 미리보기</h4>
-                    <div className="border rounded-lg bg-white p-4">
-                      <div className="mb-2">
-                        <span className="font-medium">상품명:</span> {formData.name || '상품명을 입력해주세요'}
-                      </div>
-                      <div className="mb-2">
-                        <span className="font-medium">기본 가격:</span> {formData.price ? Number(formData.price).toLocaleString() : 0}원
-                      </div>
-                      <div className="mb-2">
-                        <span className="font-medium">옵션 선택:</span>
-                        <select className="ml-2 border rounded-md p-1.5 text-sm">
-                          <option value="default">
-                            기본 상품: 기본 {formData.price ? `(${Number(formData.price).toLocaleString()}원)` : ''}
-                          </option>
-                          {productOptions.map((option, index) => (
-                            <option key={index} value={index}>
-                              {option.option_name}: {option.option_value} {parseInt(option.additional_price) > 0 ? `(+${parseInt(option.additional_price).toLocaleString()}원)` : ''}
+            <div className="md:col-span-2">
+              <h3 className="text-lg font-medium mb-4">상품 옵션</h3>
+              
+              {/* 옵션 미리보기 */}
+              {productOptions.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="font-medium mb-2">옵션 미리보기</h4>
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <div className="mb-3">
+                      <span className="font-medium">옵션 선택:</span>
+                      <select className="ml-2 border rounded-md p-1.5 text-sm">
+                        {[...productOptions]
+                          .sort((a, b) => (a.is_default ? -1 : 0) - (b.is_default ? -1 : 0))
+                          .map((option, index) => {
+                          const optionPrice = parseInt(formData.price || '0') + parseInt(option.additional_price);
+                          return (
+                            <option key={option.id || index} value={index}>
+                              {option.option_name}: {option.option_value} ({optionPrice.toLocaleString()}원)
+                              {option.is_default ? ' [기본]' : ''}
                             </option>
-                          ))}
-                        </select>
-                      </div>
+                          );
+                        })}
+                      </select>
                     </div>
                   </div>
-                )}
-                
-                {/* 옵션 입력 폼 */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
-                  <Input
-                    label="옵션명"
-                    name="option_name"
-                    value={optionForm.option_name}
-                    onChange={handleOptionChange}
-                    placeholder="예: 크기"
-                  />
-                  <Input
-                    label="옵션값"
-                    name="option_value"
-                    value={optionForm.option_value}
-                    onChange={handleOptionChange}
-                    placeholder="예: 대"
-                  />
-                  <Input
-                    label="추가 가격 (원)"
-                    name="additional_price"
-                    type="number"
-                    value={optionForm.additional_price}
-                    onChange={handleOptionChange}
-                  />
-                  <Input
-                    label="재고 수량"
-                    name="stock"
-                    type="number"
-                    value={optionForm.stock}
-                    onChange={handleOptionChange}
-                  />
                 </div>
-                
-                <div className="flex justify-end mb-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddOption}
-                  >
-                    옵션 추가
-                  </Button>
-                </div>
-                
-                {/* 옵션 목록 */}
-                {productOptions.length > 0 && (
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            옵션명
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            옵션값
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            추가 가격
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            재고
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            작업
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {productOptions.map((option, index) => (
-                          <tr key={index}>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">{option.option_name}</div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{option.option_value}</div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{parseInt(option.additional_price).toLocaleString()}원</div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{option.stock}</div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex space-x-2 justify-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveOption(index)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              )}
+              
+              {/* 옵션 목록 */}
+              {productOptions.length > 0 && (
+                <div className="bg-white p-4 rounded-lg shadow mb-4">
+                  <h4 className="font-medium mb-2">옵션 목록</h4>
+                  <div className="space-y-3">
+                    {[...productOptions]
+                      .sort((a, b) => (a.is_default ? -1 : 0) - (b.is_default ? -1 : 0))
+                      .map((option, index) => (
+                      <div key={option.id || index} className={`border rounded-lg p-3 ${option.is_default ? 'bg-blue-50 border-blue-200' : ''}`}>
+                        <div className="flex flex-col space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{option.option_name}:</span>
+                              <span>{option.option_value}</span>
+                              {option.is_default && (
+                                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">기본 옵션</span>
+                              )}
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingOptionId(option.id || '');
+                                  setNewOption(option);
+                                }}
+                                className="text-indigo-600 hover:text-indigo-900 text-sm"
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOption(index)}
+                                className="text-red-600 hover:text-red-900 text-sm"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-gray-500">추가 가격:</span>
+                              <span className="ml-2">{Number(option.additional_price).toLocaleString()}원</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">재고량:</span>
+                              <span className="ml-2">{option.stock}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center">
+                            <input 
+                              type="radio" 
+                              checked={option.is_default} 
+                              onChange={() => handleSetDefaultOption(index)}
+                              className="h-4 w-4 mr-2"
+                            />
+                            <label className="text-sm text-gray-600">기본 옵션으로 설정</label>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
+              
+              {/* 옵션 추가/수정 */}
+              <div className="bg-white p-4 rounded-lg shadow">
+                <h4 className="font-medium mb-2">{editingOptionId ? '옵션 수정' : '옵션 추가'}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                  <div className="md:col-span-1">
+                    <Input
+                      label="옵션명"
+                      name="option_name"
+                      value={newOption.option_name}
+                      onChange={e => setNewOption({ ...newOption, option_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Input
+                      label="옵션값"
+                      name="option_value"
+                      value={newOption.option_value}
+                      onChange={e => setNewOption({ ...newOption, option_value: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Input
+                      label="추가 가격"
+                      name="additional_price"
+                      type="number"
+                      value={newOption.additional_price}
+                      onChange={e => setNewOption({ ...newOption, additional_price: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Input
+                      label="재고량"
+                      name="stock"
+                      type="number"
+                      value={newOption.stock}
+                      onChange={e => setNewOption({ ...newOption, stock: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-1 flex items-end">
+                    <div className="flex items-center h-10 ml-2">
+                      <input 
+                        type="checkbox" 
+                        id="isDefault" 
+                        checked={newOption.is_default}
+                        onChange={e => setNewOption({ ...newOption, is_default: e.target.checked })}
+                        className="h-4 w-4 mr-2" 
+                      />
+                      <label htmlFor="isDefault">기본 옵션</label>
+                    </div>
+                    <div className="flex space-x-2 ml-auto">
+                      {editingOptionId && (
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+                        >
+                          취소
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={editingOptionId ? handleUpdateOption : handleAddOption}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        {editingOptionId ? '수정' : '추가'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { checkToken, getAuthHeader, User } from '@/utils/auth';
+import { toast } from 'react-hot-toast';
 
 interface CartItem {
   id: string;
@@ -84,7 +85,6 @@ export default function CartPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [shippingFee, setShippingFee] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
   const [groupedCartItems, setGroupedCartItems] = useState<GroupedCartItem[]>([]);
@@ -353,90 +353,60 @@ export default function CartPage() {
     }
   };
 
-  const handleCheckout = () => {
-    if (cartItems.length === 0) {
-      alert('장바구니가 비어있습니다.');
-      return;
-    }
+  // 선택된 상품의 총 가격 계산
+  const calculateTotalPrice = () => {
+    let total = 0;
     
-    setActionLoading(true);
-    
-    if (!user) {
-      if (confirm('로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?')) {
-        router.push('/auth');
-      } else {
-        setActionLoading(false);
+    cartItems.forEach(item => {
+      if (selectedItems.includes(item.id)) {
+        const basePrice = item.product.price;
+        const optionPrice = item.product_option ? item.product_option.additional_price : 0;
+        total += (basePrice + optionPrice) * item.quantity;
       }
+    });
+    
+    return total;
+  };
+  
+  // 선택된 상품 기반으로 가격 업데이트
+  useEffect(() => {
+    const productTotal = calculateTotalPrice();
+    setTotalPrice(productTotal);
+    setFinalPrice(productTotal);
+  }, [cartItems, selectedItems]);
+
+  const handleCheckout = () => {
+    if (selectedItems.length === 0) {
+      toast.error('선택된 상품이 없습니다');
       return;
     }
     
-    try {
-      // 선택된 상품이 있으면 선택된 상품만, 없으면 모든 상품
-      const itemsToCheckout = selectedItems.length > 0
-        ? cartItems.filter(item => selectedItems.includes(item.id))
-        : cartItems;
-      // 주문 정보 구성 - CartItem 형태로 변환
-      const checkoutItems = itemsToCheckout.map(item => ({
+    const selectedCartItems = cartItems.filter(item => selectedItems.includes(item.id));
+    const checkoutItems = selectedCartItems.map(item => {
+      const basePrice = item.product.price;
+      const optionPrice = item.product_option ? item.product_option.additional_price : 0;
+      const itemPrice = basePrice + optionPrice;
+      
+      return {
         id: item.id,
         productId: item.product_id,
-        productOptionId: item.product_option_id || null,
+        productOptionId: item.product_option ? item.product_option.id : null,
         name: item.product.name,
-        price: item.product_option 
-          ? (item.product.discount_price || item.product.price) + (item.product_option.additional_price || 0)
-          : (item.product.discount_price || item.product.price),
+        price: itemPrice,
         quantity: item.quantity,
-        image: item.product.thumbnail_url || '/images/default-product.png',
+        image: item.product.thumbnail_url || '/images/default-product.jpg',
         option: item.product_option ? {
           name: item.product_option.option_name,
-          value: item.product_option.option_value
+          value: item.product_option.option_value,
+          additional_price: item.product_option.additional_price
         } : undefined,
-        shippingFee: calculateShippingFee(
-          item.quantity * (
-            (item.product.discount_price || item.product.price) + 
-            (item.product_option ? (item.product_option.additional_price || 0) : 0)
-          )
-        )
-      }));
-      
-      // 체크아웃 아이템 로컬 스토리지에 저장
-      localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
-      
-      // 체크아웃 페이지로 이동
-      router.push('/checkout');
-    } catch (error) {
-      console.error('체크아웃 처리 오류:', error);
-      alert('주문 처리 중 오류가 발생했습니다.');
-      setActionLoading(false);
-    }
+        totalPrice: itemPrice * item.quantity
+      };
+    });
+    
+    localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
+    router.push('/checkout');
   };
-
-  // 총 상품 금액 계산 함수 수정
-  const calculateTotalPrice = () => {
-    // 그룹화된 장바구니 기준으로 총합 계산
-    return groupedCartItems.reduce((total, group) => {
-      return total + group.totalPrice;
-    }, 0);
-  };
-
-  // 각 상품별 배송비 계산
-  const calculateShippingFee = (itemTotalPrice: number) => {
-    return itemTotalPrice >= 30000 ? 0 : 3000;
-  };
-
-  // 총 배송비 계산 함수 추가
-  const calculateTotalShippingFee = () => {
-    // 각 상품 그룹별 배송비 합산
-    return groupedCartItems.reduce((total, group) => {
-      return total + calculateShippingFee(group.totalPrice);
-    }, 0);
-  };
-
-  // useEffect 추가 - 계산된 가격 정보를 상태에 업데이트
-  useEffect(() => {
-    setTotalPrice(calculateTotalPrice());
-    setShippingFee(calculateTotalShippingFee());
-    setFinalPrice(calculateTotalPrice() + calculateTotalShippingFee());
-  }, [groupedCartItems]);
 
   // 모든 아이템 선택/해제
   const handleSelectAll = (isSelected: boolean) => {
@@ -703,7 +673,6 @@ export default function CartPage() {
                   </div>
                   <div className="flex-grow">상품 정보</div>
                   <div className="w-28 text-center">금액</div>
-                  <div className="w-28 text-center">배송비</div>
                   <div className="w-24 text-center">관리</div>
                 </div>
               </div>
@@ -786,17 +755,6 @@ export default function CartPage() {
                       </div>
                     </div>
                     
-                    <div className="w-28 text-center">
-                      {calculateShippingFee(groupItem.totalPrice) > 0 ? (
-                        <div className="text-gray-600">
-                          <p>{calculateShippingFee(groupItem.totalPrice).toLocaleString()}원</p>
-                          <p className="text-xs">3만원 이상 무료배송</p>
-                        </div>
-                      ) : (
-                        <span className="text-green-600 font-medium">무료배송</span>
-                      )}
-                    </div>
-                    
                     <div className="w-24 text-center">
                       <button
                         className="text-blue-500 hover:text-blue-700 text-sm underline flex items-center justify-center"
@@ -836,41 +794,27 @@ export default function CartPage() {
           
           {/* 주문 요약 */}
           <div className="lg:w-1/3">
-            <div className="bg-white rounded-lg shadow p-6 sticky top-6">
-              <h2 className="text-xl font-bold mb-6 pb-4 border-b">주문 요약</h2>
-              <div className="space-y-3">
+            <div className="bg-white p-6 rounded-md shadow-md border border-gray-200 sticky top-8">
+              <h3 className="text-lg font-semibold mb-4">주문 요약</h3>
+              <div className="space-y-3 border-b border-gray-200 pb-3 mb-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">상품 금액</span>
-                  <span className="font-semibold">{totalPrice.toLocaleString()}원</span>
+                  <span className="text-gray-600">총 상품가격</span>
+                  <span>{totalPrice.toLocaleString()}원</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">배송비</span>
-                  <span className="font-semibold">
-                    {shippingFee > 0 ? `${shippingFee.toLocaleString()}원` : '무료'}
-                  </span>
+                <div className="flex justify-between pt-3 mb-2 font-semibold text-lg">
+                  <span>총 주문금액</span>
+                  <span className="text-red-600">{finalPrice.toLocaleString()}원</span>
                 </div>
-                {shippingFee > 0 && (
-                  <div className="text-sm text-gray-500">
-                    *개별 상품당 30,000원 이상 구매 시 무료배송
-                  </div>
-                )}
-                <div className="pt-4 border-t mt-4 flex justify-between">
-                  <span className="text-lg font-semibold">총 결제 금액</span>
-                  <span className="text-xl font-bold text-green-600">{finalPrice.toLocaleString()}원</span>
-                </div>
-                <button
-                  className={`w-full py-3 mt-6 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold flex items-center justify-center ${actionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                  onClick={handleCheckout}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <>
-                      <span className="inline-block w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      처리 중...
-                    </>
-                  ) : '주문하기'}
-                </button>
               </div>
+              <button
+                onClick={handleCheckout}
+                disabled={selectedItems.length === 0}
+                className={`w-full py-3 text-white rounded-md font-medium ${
+                  selectedItems.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {selectedItems.length === 0 ? '상품을 선택해주세요' : '주문하기'}
+              </button>
             </div>
           </div>
         </div>

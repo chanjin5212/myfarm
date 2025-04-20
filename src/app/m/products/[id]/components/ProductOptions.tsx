@@ -24,7 +24,6 @@ interface ProductOptionsProps {
     id: string;
     name: string;
     price: number;
-    discount_price?: number;
     stock: number;
   };
   options: ProductOption[];
@@ -42,8 +41,8 @@ export default function MobileProductOptions({
   quantity,
   setQuantity
 }: ProductOptionsProps) {
-  // 실제 판매 가격 (할인가 또는 정상가)
-  const actualPrice = product.discount_price || product.price;
+  // 실제 판매 가격
+  const actualPrice = product.price;
   
   // 총 금액 계산
   const calculateTotalPrice = () => {
