@@ -186,11 +186,7 @@ export default function MobileProductDetailPage() {
               // Check if there's a default option with stock
               const defaultOption = options.find(opt => opt.is_default);
               if (!defaultOption || defaultOption.stock <= 0) {
-                toast({
-                  title: "재고 부족",
-                  description: "상품의 재고가 부족합니다.",
-                  variant: "destructive",
-                });
+                toast.error("상품의 재고가 부족합니다.");
                 return;
               }
             }
