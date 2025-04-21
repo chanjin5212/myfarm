@@ -13,6 +13,15 @@ function isMobileDevice(userAgent: string): boolean {
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const userAgent = request.headers.get('user-agent') || '';
+  const isMobile = isMobileDevice(userAgent);
+  
+  // 모바일 기기이고 /m으로 시작하지 않는 경로인 경우
+  if (isMobile && !pathname.startsWith('/m') && !pathname.startsWith('/admin')) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/m${pathname}`;
+    return NextResponse.redirect(url);
+  }
   
   // Admin 경로 처리
   if (pathname === '/admin' || pathname === '/admin/') {

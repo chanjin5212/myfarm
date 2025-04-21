@@ -93,7 +93,7 @@ export default function MobileOrderDetailPage() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<{id: string, name: string} | null>(null);
   const [reviewedProducts, setReviewedProducts] = useState<{[key: string]: boolean}>({});
-  const [loadingReviewStatus, setLoadingReviewStatus] = useState(true);
+  const [loadingReviewStatus, setLoadingReviewStatus] = useState(false);
 
   useEffect(() => {
     fetchOrderDetails();
@@ -149,25 +149,33 @@ export default function MobileOrderDetailPage() {
       setGroupedOrderItems(grouped);
       
       if (orderInfo && orderInfo.status === 'delivered') {
+        // 리뷰 상태 확인 시작 - loading 상태는 여기서 유지
+        setLoadingReviewStatus(true);
         checkReviewStatus(grouped, orderId);
+      } else {
+        // 배송 완료가 아닌 경우 로딩 상태 해제
+        setLoading(false);
       }
+    } else if (orderInfo) {
+      // 주문 아이템이 없는 경우에도 로딩 상태 해제
+      setLoading(false);
     }
-  }, [orderItems, orderInfo]);
+  }, [orderItems, orderInfo, orderId]);
 
   // 리뷰 작성 여부를 확인하는 함수
   const checkReviewStatus = async (items: GroupedOrderItem[], orderId: string) => {
     try {
-      setLoadingReviewStatus(true);
       const authHeader = getAuthHeader();
       
       if (!authHeader.Authorization) {
+        setLoading(false);
         return;
       }
       
       const reviewStatus: {[key: string]: boolean} = {};
       
       const reviewPromises = items.map(async (item) => {
-        const response = await fetch(`/api/reviews/check?product_id=${item.product_id}&order_id=${orderId}`, {
+        const response = await fetch(`/api/reviews/check?product_id=${item.product_id}`, {
           headers: {
             ...authHeader
           }
@@ -184,7 +192,10 @@ export default function MobileOrderDetailPage() {
     } catch (error) {
       console.error('리뷰 상태 확인 오류:', error);
     } finally {
+      // 리뷰 상태 로딩 완료
       setLoadingReviewStatus(false);
+      // 전체 페이지 로딩 완료
+      setLoading(false);
     }
   };
 
@@ -212,6 +223,7 @@ export default function MobileOrderDetailPage() {
         } else {
           setError('주문 정보를 불러오는데 실패했습니다.');
         }
+        setLoading(false);
         return;
       }
 
@@ -242,20 +254,24 @@ export default function MobileOrderDetailPage() {
               setOrderItems(itemsData);
             } else {
               console.error('주문 상품 API 응답이 배열이 아님');
+              setLoading(false);
             }
           } else {
             console.error('주문 상품 API 요청 실패:', itemsResponse.status);
+            setLoading(false);
           }
         } catch (itemsError) {
           console.error('주문 상품 API 오류:', itemsError);
+          setLoading(false);
         }
       }
     } catch (error) {
       console.error('주문 정보 로딩 오류:', error);
       setError('주문 정보를 불러오는 중 오류가 발생했습니다.');
-    } finally {
       setLoading(false);
     }
+    // 여기서는 finally를 제거하여 setLoading(false)를 호출하지 않음
+    // 데이터 로딩 완료와 리뷰 상태 확인이 모두 끝난 후 로딩 상태 해제
   };
   
   const handleOpenReviewModal = (productId: string, productName: string) => {
@@ -268,14 +284,16 @@ export default function MobileOrderDetailPage() {
     setSelectedProduct(null);
     
     if (orderInfo && orderInfo.status === 'delivered' && groupedOrderItems.length > 0) {
+      setLoadingReviewStatus(true);
       checkReviewStatus(groupedOrderItems, orderId);
     }
   };
 
-  if (loading) {
+  if (loading || loadingReviewStatus) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Spinner size="lg" />
+        <p className="ml-4 text-gray-600">주문 정보를 불러오는 중...</p>
       </div>
     );
   }

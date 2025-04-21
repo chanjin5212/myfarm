@@ -454,3 +454,41 @@ CREATE POLICY payments_insert_policy ON payments
 -- 모든 사용자가 결제 정보를 수정할 수 있도록 설정 (임시)
 CREATE POLICY payments_update_policy ON payments
   FOR UPDATE USING (true); 
+
+-- 배송 정보 관리를 위한 테이블
+CREATE TABLE IF NOT EXISTS shipments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  tracking_number VARCHAR(50) NOT NULL,
+  carrier VARCHAR(50) NOT NULL,  -- 택배사 정보 (CJ대한통운, 우체국택배 등)
+  status VARCHAR(30) NOT NULL DEFAULT 'ready',  -- 배송 상태 (ready, in_transit, delivered, failed 등)
+  shipped_at TIMESTAMP WITH TIME ZONE,  -- 발송 일시
+  delivered_at TIMESTAMP WITH TIME ZONE,  -- 배송 완료 일시
+  tracking_details JSONB,  -- 배송 추적 정보 (API 응답 저장)
+  last_updated TIMESTAMP WITH TIME ZONE,  -- 배송 정보 마지막 업데이트 시간
+  admin_notes TEXT,  -- 관리자 메모
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스 생성
+CREATE INDEX idx_shipments_order_id ON shipments(order_id);
+CREATE INDEX idx_shipments_tracking_number ON shipments(tracking_number);
+CREATE INDEX idx_shipments_status ON shipments(status);
+
+-- RLS 정책 설정
+ALTER TABLE shipments ENABLE ROW LEVEL SECURITY;
+
+-- 모든 사용자가 배송 정보를 조회할 수 있도록 설정 (임시)
+CREATE POLICY shipments_select_policy ON shipments
+  FOR SELECT USING (true);
+
+-- 관리자만 배송 정보를 추가/수정/삭제할 수 있도록 설정 (실제 구현 필요)
+CREATE POLICY shipments_insert_policy ON shipments
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY shipments_update_policy ON shipments
+  FOR UPDATE USING (true);
+
+CREATE POLICY shipments_delete_policy ON shipments
+  FOR DELETE USING (true); 

@@ -16,6 +16,8 @@ export default function Header() {
   
   // 모바일 경로 확인
   const isMobilePath = pathname?.startsWith('/m');
+  // 관리자 경로 확인
+  const isAdminPath = pathname?.startsWith('/admin');
 
   useEffect(() => {
     setIsMounted(true);
@@ -50,13 +52,13 @@ export default function Header() {
     router.push('/');
   };
 
-  // 모바일 경로에서 헤더를 표시하지 않음
+  // 모바일 경로나 관리자 경로에서 헤더를 표시하지 않음
   if (!isMounted) {
     return null; // 초기 마운트 전에는 아무것도 렌더링하지 않음
   }
   
-  if (isMobilePath) {
-    return null; // 모바일 경로에서는 헤더를 렌더링하지 않음
+  if (isMobilePath || isAdminPath) {
+    return null; // 모바일 경로나 관리자 경로에서는 헤더를 렌더링하지 않음
   }
 
   return (

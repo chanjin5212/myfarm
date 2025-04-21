@@ -50,12 +50,9 @@ interface OrderHistory {
     product_name: string;
     quantity: number;
     price: number;
-    options: {
-      name: string;
-      value: string;
-      additional_price: number;
-    };
+    options: any; // 문자열 또는 객체일 수 있음
     product_image?: string;
+    thumbnail_url?: string; // 상품 이미지 URL 추가
   }>;
 }
 
@@ -160,7 +157,42 @@ function MobileMyPageContent() {
 
           if (ordersResponse.ok) {
             const ordersData = await ordersResponse.json();
-            setOrderHistory(ordersData);
+            
+            // 주문에 있는 각 상품에 대한 추가 정보(이미지 등) 가져오기
+            const updatedOrdersData = await Promise.all(
+              ordersData.map(async (order: OrderHistory) => {
+                const updatedItems = await Promise.all(
+                  order.items.map(async (item) => {
+                    try {
+                      // 상품 정보 요청
+                      const productResponse = await fetch(`/api/products/${item.product_id}`, {
+                        headers: authHeader
+                      });
+                      
+                      if (productResponse.ok) {
+                        const productData = await productResponse.json();
+                        return {
+                          ...item,
+                          thumbnail_url: productData.product?.thumbnail_url || null,
+                          product_image: productData.product?.thumbnail_url || null
+                        };
+                      }
+                      return item;
+                    } catch (error) {
+                      console.error('상품 정보 로딩 오류:', error);
+                      return item;
+                    }
+                  })
+                );
+                
+                return {
+                  ...order,
+                  items: updatedItems
+                };
+              })
+            );
+            
+            setOrderHistory(updatedOrdersData);
           } else {
             setOrderHistory([]);
           }
@@ -398,6 +430,7 @@ function MobileMyPageContent() {
                     acc[item.product_id] = {
                       product_name: item.product_name,
                       product_image: item.product_image,
+                      thumbnail_url: item.thumbnail_url,
                       total_quantity: 0,
                       total_price: 0,
                       options: []
@@ -420,8 +453,8 @@ function MobileMyPageContent() {
                   // options가 객체이면 옵션 정보를 추가
                   if (typeof options === 'object' && options !== null) {
                     acc[item.product_id].options.push({
-                      option_name: options.name || '기본',
-                      option_value: options.value || '옵션 없음',
+                      option_name: options.option_name || options.name || '기본',
+                      option_value: options.option_value || options.value || '옵션 없음',
                       additional_price: options.additional_price || 0,
                       quantity: item.quantity,
                       price: item.price
@@ -432,6 +465,7 @@ function MobileMyPageContent() {
                 }, {} as Record<string, {
                   product_name: string;
                   product_image?: string;
+                  thumbnail_url?: string;
                   total_quantity: number;
                   total_price: number;
                   options: Array<{
@@ -458,9 +492,9 @@ function MobileMyPageContent() {
                         <div key={productId} className="py-3 border-b last:border-0">
                           <div className="flex gap-3 mb-3">
                             <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                              {product.product_image ? (
+                              {product.thumbnail_url || product.product_image ? (
                                 <Image
-                                  src={product.product_image}
+                                  src={product.thumbnail_url || product.product_image || '/images/default-product.jpg'}
                                   alt={product.product_name}
                                   width={80}
                                   height={80}
@@ -499,7 +533,7 @@ function MobileMyPageContent() {
                                       )}
                                     </span>
                                     <span className="text-gray-800">
-                                      {option.price.toLocaleString()}원
+                                      {(option.price * option.quantity).toLocaleString()}원
                                     </span>
                                   </div>
                                 ))}
@@ -525,20 +559,11 @@ function MobileMyPageContent() {
                     
                     <div className="bg-gray-50 p-3 flex justify-end space-x-2">
                       <Link
-                        href={`/m/mypage/orders/${order.id}`}
+                        href={`/m/orders/${order.id}/detail`}
                         className="px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         주문 상세
                       </Link>
-                      
-                      {order.status === 'delivered' && (
-                        <Link
-                          href={`/m/mypage/write-review?order=${order.id}`}
-                          className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                        >
-                          리뷰 작성
-                        </Link>
-                      )}
                     </div>
                   </div>
                 );

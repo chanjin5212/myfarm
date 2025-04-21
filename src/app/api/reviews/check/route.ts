@@ -13,15 +13,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 
 export async function GET(request: NextRequest) {
   try {
-    // 쿼리 파라미터에서 product_id와 order_id 가져오기
+    // 쿼리 파라미터에서 product_id 가져오기
     const url = new URL(request.url);
     const productId = url.searchParams.get('product_id');
-    const orderId = url.searchParams.get('order_id');
 
-    // product_id와 order_id가 필요함
-    if (!productId || !orderId) {
+    // product_id가 필요함
+    if (!productId) {
       return NextResponse.json({ 
-        error: 'Missing required parameters: product_id and order_id are required' 
+        error: 'Missing required parameter: product_id is required' 
       }, { status: 400 });
     }
 
@@ -61,12 +60,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '사용자를 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    // 사용자가 해당 상품과 주문에 대한 리뷰를 작성했는지 확인
+    // 사용자가 해당 상품에 대한 리뷰를 작성했는지 확인
     const { data: reviews, error: reviewError } = await supabase
       .from('product_reviews')
       .select('*')
       .eq('product_id', productId)
-      .eq('order_id', orderId)
       .eq('user_id', userId)
       .limit(1);
 

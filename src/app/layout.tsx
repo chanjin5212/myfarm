@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from 'react-hot-toast';
+import Header from '@/components/Header';
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="ko" className="light">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
+        <Header />
         <Toaster position="top-center" />
         {children}
       </body>
