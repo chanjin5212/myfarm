@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { Card, Button, Input, Select, Textarea, Checkbox, Spinner } from '@/components/ui/CommonStyles';
 import ImageUpload from '@/components/ui/ImageUpload';
 import MultipleImageUpload, { ProductImage, uploadProductImages } from '@/components/ui/MultipleImageUpload';
@@ -32,12 +32,13 @@ interface ProductOption {
 }
 
 interface PageProps {
-  params: { productId: string };
+  params: Promise<{ productId: string }>;
   searchParams: Record<string, string | string[] | undefined>;
 }
 
 export default function EditProductPage({ params }: PageProps) {
   const router = useRouter();
+  const routeParams = useParams();
   const [loading, setLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [productId, setProductId] = useState<string>('');
@@ -65,11 +66,12 @@ export default function EditProductPage({ params }: PageProps) {
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (params.productId) {
-      setProductId(params.productId);
-      initProductData(params.productId);
+    const id = routeParams.productId as string;
+    if (id) {
+      setProductId(id);
+      initProductData(id);
     }
-  }, [params.productId]);
+  }, [routeParams]);
 
   // 상품 데이터 초기화
   const initProductData = async (productId: string) => {
@@ -132,7 +134,7 @@ export default function EditProductPage({ params }: PageProps) {
     
     try {
       setLoading(true);
-      const productId = params.productId;
+      const productId = routeParams.productId as string;
       
       // 상품 데이터 유효성 검사
       if (!formData.name || !formData.price) {
@@ -407,7 +409,7 @@ export default function EditProductPage({ params }: PageProps) {
   // 옵션 삭제 핸들러
   const handleRemoveOption = async (optionId: string) => {
     try {
-      const response = await fetch(`/api/admin/products/${params.productId}/options`, {
+      const response = await fetch(`/api/admin/products/${routeParams.productId}/options`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
