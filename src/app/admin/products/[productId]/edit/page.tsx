@@ -34,7 +34,7 @@ interface ProductOption {
 
 interface PageProps {
   params: Promise<{ productId: string }>;
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<any>;
 }
 
 export default function EditProductPage({ params }: PageProps) {
