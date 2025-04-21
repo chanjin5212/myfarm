@@ -39,7 +39,7 @@ async function verifyAdminToken(request: NextRequest) {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 관리자 인증
@@ -51,7 +51,7 @@ export async function POST(
       );
     }
 
-    const orderId = params.id;
+    const orderId = await params;
     
     if (!orderId) {
       return NextResponse.json(
