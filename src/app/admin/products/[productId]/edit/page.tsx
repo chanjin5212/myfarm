@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { Card, Button, Input, Select, Textarea, Checkbox, Spinner } from '@/components/ui/CommonStyles';
 import ImageUpload from '@/components/ui/ImageUpload';
 import MultipleImageUpload, { ProductImage, uploadProductImages } from '@/components/ui/MultipleImageUpload';
@@ -33,12 +33,13 @@ interface ProductOption {
 
 interface PageProps {
   params: Promise<{ productId: string }>;
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default function EditProductPage({ params }: PageProps) {
+export default function EditProductPage({ params, searchParams }: PageProps) {
   const router = useRouter();
   const routeParams = useParams();
+  const routeSearchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [productId, setProductId] = useState<string>('');
