@@ -7,7 +7,6 @@ import ImageUpload from '@/components/ui/ImageUpload';
 import MultipleImageUpload, { ProductImage, uploadProductImages } from '@/components/ui/MultipleImageUpload';
 import { toast } from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
-import { use } from 'react';
 
 interface ProductData {
   id?: string;
@@ -33,8 +32,8 @@ interface ProductOption {
 }
 
 interface PageProps {
-  params: Promise<{ productId: string }>;
-  searchParams: Promise<any>;
+  params: { productId: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }
 
 export default function EditProductPage({ params }: PageProps) {
@@ -65,14 +64,12 @@ export default function EditProductPage({ params }: PageProps) {
   });
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
 
-  const resolvedParams = use(params);
-
   useEffect(() => {
-    if (resolvedParams.productId) {
-      setProductId(resolvedParams.productId);
-      initProductData(resolvedParams.productId);
+    if (params.productId) {
+      setProductId(params.productId);
+      initProductData(params.productId);
     }
-  }, [resolvedParams]);
+  }, [params.productId]);
 
   // 상품 데이터 초기화
   const initProductData = async (productId: string) => {
@@ -135,7 +132,7 @@ export default function EditProductPage({ params }: PageProps) {
     
     try {
       setLoading(true);
-      const productId = resolvedParams.productId;
+      const productId = params.productId;
       
       // 상품 데이터 유효성 검사
       if (!formData.name || !formData.price) {
@@ -410,7 +407,7 @@ export default function EditProductPage({ params }: PageProps) {
   // 옵션 삭제 핸들러
   const handleRemoveOption = async (optionId: string) => {
     try {
-      const response = await fetch(`/api/admin/products/${resolvedParams.productId}/options`, {
+      const response = await fetch(`/api/admin/products/${params.productId}/options`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
