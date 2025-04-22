@@ -93,12 +93,29 @@ export default function TrackingModal({
   const [trackingData, setTrackingData] = useState<any>(null);
   const [isLoadingTracking, setIsLoadingTracking] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<number[]>([]);
 
   useEffect(() => {
     if (isOpen && shipment) {
       fetchTrackingInfo(shipment);
     }
   }, [isOpen, shipment]);
+
+  // 행 확장/축소 토글 함수
+  const toggleRowExpand = (index: number) => {
+    setExpandedRows(prev => 
+      prev.includes(index) 
+        ? prev.filter(i => i !== index) 
+        : [...prev, index]
+    );
+  };
+  
+  // 텍스트 길이에 따라 축약 표시하는 함수
+  const truncateText = (text: string, maxLength: number = 30) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return `${text.substring(0, maxLength)}...`;
+  };
 
   // 배송 상세 정보 조회 함수
   const fetchTrackingInfo = async (shipment: ShipmentType) => {
@@ -221,47 +238,82 @@ export default function TrackingModal({
             </div>
           ) : trackingData?.track ? (
             <div>
-              <div className="mb-6">
-                <div className="text-sm font-semibold text-gray-600 mb-2">현재 상태</div>
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                  <div className="font-bold text-blue-700 mb-1">
-                    {trackingData.track.lastEvent.status.name || deliveryStatusMap[trackingData.track.lastEvent.status.code]}
-                  </div>
-                  <div className="text-sm mb-2">
-                    {trackingData.track.lastEvent.description}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {formatDate(trackingData.track.lastEvent.time)} 
-                    ({formatRelativeTime(trackingData.track.lastEvent.time)})
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="text-sm font-semibold text-gray-600 mb-2">배송 추적</div>
-                <div className="space-y-4">
-                  {[...trackingData.track.events.edges]
-                    .sort((a, b) => new Date(b.node.time).getTime() - new Date(a.node.time).getTime())
-                    .map((edge: any, index: number) => (
-                      <div 
-                        key={index} 
-                        className={`p-3 rounded-lg border ${
-                          index === 0 ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-100'
-                        }`}
-                      >
-                        <div className="font-medium mb-1">
-                          {edge.node.status.name || deliveryStatusMap[edge.node.status.code]}
-                        </div>
-                        <div className="text-sm mb-1">
-                          {edge.node.description}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatDate(edge.node.time)} 
-                          ({formatRelativeTime(edge.node.time)})
-                        </div>
-                      </div>
-                    ))}
-                </div>
+              <div className="text-sm font-semibold text-gray-600 mb-2">배송 추적</div>
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="py-2 px-3 text-left font-medium text-gray-700 w-1/3">시간</th>
+                      <th className="py-2 px-3 text-left font-medium text-gray-700 w-1/3">상태</th>
+                      <th className="py-2 px-3 text-left font-medium text-gray-700">상세</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* 현재 상태(마지막 이벤트)를 가장 위에 하이라이트로 표시 */}
+                    <tr className="border-b border-blue-100 bg-blue-50">
+                      <td className="py-2 px-3 text-xs text-gray-600">
+                        {formatDate(trackingData.track.lastEvent.time)}
+                      </td>
+                      <td className="py-2 px-3 font-bold text-blue-700">
+                        {trackingData.track.lastEvent.status.name || deliveryStatusMap[trackingData.track.lastEvent.status.code]}
+                      </td>
+                      <td className="py-2 px-3">
+                        {trackingData.track.lastEvent.description}
+                      </td>
+                    </tr>
+                    
+                    {/* 나머지 이벤트 목록 */}
+                    {[...trackingData.track.events.edges]
+                      .sort((a, b) => new Date(b.node.time).getTime() - new Date(a.node.time).getTime())
+                      // 마지막 이벤트와 중복 이벤트 제거 (시간과 상태가 동일한 경우)
+                      .filter(edge => {
+                        const lastEventTime = new Date(trackingData.track.lastEvent.time).getTime();
+                        const edgeTime = new Date(edge.node.time).getTime();
+                        const lastEventStatus = trackingData.track.lastEvent.status.code;
+                        const edgeStatus = edge.node.status.code;
+                        
+                        // 시간과 상태가 모두 같으면 필터링
+                        return !(lastEventTime === edgeTime && lastEventStatus === edgeStatus);
+                      })
+                      .map((edge: any, index: number) => {
+                        const isExpanded = expandedRows.includes(index);
+                        const hasLongDesc = edge.node.description && edge.node.description.length > 30;
+                        
+                        return (
+                          <tr 
+                            key={index} 
+                            className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} cursor-pointer hover:bg-gray-100`}
+                            onClick={() => hasLongDesc && toggleRowExpand(index)}
+                          >
+                            <td className="py-2 px-3 text-xs text-gray-600">
+                              {formatDate(edge.node.time)}
+                            </td>
+                            <td className="py-2 px-3 font-medium">
+                              {edge.node.status.name || deliveryStatusMap[edge.node.status.code]}
+                            </td>
+                            <td className="py-2 px-3">
+                              {hasLongDesc ? (
+                                <div>
+                                  {isExpanded ? edge.node.description : truncateText(edge.node.description)}
+                                  {hasLongDesc && (
+                                    <button 
+                                      className="ml-1 text-blue-500 text-xs font-medium"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleRowExpand(index);
+                                      }}
+                                    >
+                                      {isExpanded ? '접기' : '펼치기'}
+                                    </button>
+                                  )}
+                                </div>
+                              ) : edge.node.description}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
               </div>
             </div>
           ) : (
