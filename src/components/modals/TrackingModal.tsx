@@ -97,7 +97,7 @@ export default function TrackingModal({
 
   useEffect(() => {
     if (isOpen && shipment) {
-      trackShipment();
+      fetchTrackingInfo(shipment);
     }
   }, [isOpen, shipment]);
 
@@ -117,36 +117,63 @@ export default function TrackingModal({
     return `${text.substring(0, maxLength)}...`;
   };
 
-  // 배송 추적 정보 가져오기
-  const trackShipment = async () => {
-    if (!shipment || !shipment.carrier || !shipment.tracking_number) {
-      return;
-    }
-
-    setIsLoadingTracking(true);
-    setTrackingData(null);
-    setTrackingError(null);
+  // 배송 상세 정보 조회 함수
+  const fetchTrackingInfo = async (shipment: ShipmentType) => {
+    if (!shipment) return;
 
     try {
-      // 택배사 정보 확인
-      const carrierId = shipment.carrier;
-      const trackingNumber = shipment.tracking_number;
-
-      // Delivery Tracker 클라이언트 초기화
+      setIsLoadingTracking(true);
+      setTrackingError(null);
+      
       const client = new DeliveryTrackerGraphQLClient(
         process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID || "",
         process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET || ""
       );
-
-      // 배송 추적 API 호출
-      const response: any = await client.request(TRACK_QUERY, {
-        carrierId,
-        trackingNumber
-      });
-
-      setTrackingData(response.track);
-    } catch (requestError: any) {
-      setTrackingError('배송 추적 정보를 가져오는데 실패했습니다.');
+      
+      try {
+        const response: any = await client.request(TRACK_QUERY, {
+          carrierId: shipment.carrier,
+          trackingNumber: shipment.tracking_number
+        });
+        
+        console.log('[트래킹 모달] API 응답:', JSON.stringify(response, null, 2));
+        console.log('[트래킹 모달] 현재 상태:', response?.track?.lastEvent?.status);
+        console.log('[트래킹 모달] 이벤트 목록:', response?.track?.events?.edges);
+        
+        // GraphQL 응답에 데이터가 있는 경우
+        if (response?.track) {
+          setTrackingData(response);
+        } else {
+          // 데이터가 없지만 에러가 명시적으로 반환되지 않은 경우
+          setTrackingError('배송 정보를 찾을 수 없습니다');
+        }
+      } catch (requestError: any) {
+        console.error('배송 추적 GraphQL 오류:', requestError);
+        
+        // GraphQL 응답 에러 추출 시도
+        let errorMessage = '배송 추적 정보를 불러오는데 실패했습니다';
+        
+        if (requestError.response?.errors && requestError.response.errors.length > 0) {
+          const graphqlError = requestError.response.errors[0];
+          errorMessage = graphqlError.message || errorMessage;
+          
+          // 특정 에러 메시지 패턴 감지 및 사용자 친화적 메시지로 변환
+          if (
+            errorMessage.includes('운송장 미등록') || 
+            errorMessage.includes('상품을 준비중') || 
+            (graphqlError.extensions?.code === 'NOT_FOUND')
+          ) {
+            errorMessage = '아직 배송이 시작되지 않았거나 운송장이 등록되지 않았습니다.';
+          }
+        } else if (requestError.message) {
+          errorMessage = requestError.message;
+        }
+        
+        setTrackingError(errorMessage);
+      }
+    } catch (error: any) {
+      console.error('배송 추적 정보 처리 오류:', error);
+      setTrackingError('배송 정보를 불러오는데 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLoadingTracking(false);
     }
