@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { getAuthHeader, checkToken } from '@/utils/auth';
 import ProductInfoTab from './components/ProductInfoTab';
 import ReviewTab from './components/ReviewTab';
+import { toast } from 'react-hot-toast';
 
 interface ProductDetail {
   id: string;
@@ -103,35 +104,28 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     const fetchProductDetails = async () => {
-      console.log('fetchProductDetails 함수 실행됨');
-      setLoading(true);
-      setError('');
-
       try {
-        // 상품 상세 정보 가져오기
+        setLoading(true);
+        setError(null);
+        
         const apiUrl = `/api/products/${params?.id}`;
-        console.log('API 요청 URL:', apiUrl);
         
         const response = await fetch(apiUrl);
+        
         if (!response.ok) {
-          throw new Error('상품 정보를 불러오는데 실패했습니다.');
+          throw new Error(`상품 정보를 불러오지 못했습니다 (${response.status})`);
         }
-        console.log('API 응답 성공');
         
         const data = await response.json();
-        console.log('API 응답 데이터:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
+        
+        // 상품 데이터가 존재하는지 확인
+        if (!data.product) {
+          throw new Error('상품 정보를 찾을 수 없습니다');
+        }
         
         setProductDetails(data.product);
         setImages(data.images || []);
         setOptions(data.options || []);
-        
-        // 디버깅: 받아온 상품 데이터 로깅
-        console.log('상품 데이터:', data.product);
-        console.log('이미지 데이터:', data.images);
-        console.log('이미지 URL 존재 여부:', {
-          'product.thumbnail_url': !!data.product?.thumbnail_url,
-          'images[0]?.image_url': !!(data.images && data.images.length > 0 && data.images[0]?.image_url)
-        });
         
         // 대표 이미지 설정
         if (data.images && data.images.length > 0) {
@@ -141,8 +135,7 @@ export default function ProductDetailPage() {
           setSelectedImage(data.product.thumbnail_url);
         }
       } catch (error) {
-        console.error('상품 정보 로딩 오류:', error);
-        setError('상품 정보를 불러오는데 실패했습니다.');
+        setError('상품 정보를 불러오는데 실패했습니다');
       } finally {
         setLoading(false);
       }
@@ -269,17 +262,15 @@ export default function ProductDetailPage() {
     }
     
     try {
-      // 로딩 상태 시작
       setIsAddingToCart(true);
       
-      // 로그인 여부 확인
       const { isLoggedIn } = checkToken();
       
       if (isLoggedIn) {
         // 로그인 상태라면 서버 API 호출
         try {
           // 인증 헤더 가져오기
-          const authHeader = getAuthHeader();
+          const authHeader = await getAuthHeader();
           
           if (selectedOptions.length > 0) {
             // 옵션 있는 상품
@@ -310,8 +301,6 @@ export default function ProductDetailPage() {
               quantity: quantity
             };
             
-            console.log('옵션 없는 상품 장바구니 추가 요청:', requestBody);
-            
             await fetch(`${window.location.origin}/api/cart`, {
               method: 'POST',
               headers: {
@@ -322,11 +311,9 @@ export default function ProductDetailPage() {
             });
           }
           
-          // 성공 팝업 표시
-          setCartSuccessPopup(true);
+          toast.success('상품이 장바구니에 추가되었습니다');
         } catch (error) {
-          console.error('장바구니 추가 오류:', error);
-          alert('장바구니에 추가하는데 실패했습니다.');
+          toast.error('장바구니에 추가하지 못했습니다');
         }
       } else {
         // 비로그인 상태라면 로컬 스토리지에 장바구니 정보 저장
@@ -389,14 +376,11 @@ export default function ProductDetailPage() {
         // 로컬 스토리지에 장바구니 정보 저장
         localStorage.setItem('cart', JSON.stringify(localCart));
         
-        // 성공 팝업 표시
-        setCartSuccessPopup(true);
+        toast.success('상품이 장바구니에 추가되었습니다');
       }
     } catch (error) {
-      console.error('장바구니 추가 오류:', error);
-      alert('장바구니에 추가하는데 실패했습니다.');
+      toast.error('장바구니에 추가하지 못했습니다');
     } finally {
-      // 로딩 상태 종료
       setIsAddingToCart(false);
     }
   };
@@ -478,8 +462,7 @@ export default function ProductDetailPage() {
       // 체크아웃 페이지로 이동
       router.push('/checkout?direct=true');
     } catch (error) {
-      console.error('바로 구매하기 실패:', error);
-      alert('주문 처리 중 오류가 발생했습니다.');
+      toast.error('주문 처리 중 오류가 발생했습니다');
     } finally {
       setIsBuyingNow(false);
     }
@@ -543,8 +526,7 @@ export default function ProductDetailPage() {
         setReviews(prev => [...prev, ...(data.reviews || [])]);
       }
     } catch (error) {
-      console.error('상품 리뷰 로딩 오류:', error);
-      setError('상품 리뷰를 불러오는데 실패했습니다.');
+      toast.error('상품 리뷰를 불러오는데 실패했습니다');
     } finally {
       setReviewsLoading(false);
     }

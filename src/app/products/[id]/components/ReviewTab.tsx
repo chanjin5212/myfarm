@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline';
@@ -86,111 +86,48 @@ export default function ReviewTab({ productId }: ReviewTabProps) {
   }, []);
 
   // 리뷰 가져오기
-  useEffect(() => {
-    if (validProductId) {
-      console.log("리뷰 가져오기 시작 - 상품 ID:", productId);
-      fetchReviews();
-    }
-  }, [productId, page, sortBy, validProductId]);
-
-  // 리뷰 작성 가능 여부 확인
-  useEffect(() => {
-    if (validProductId && isLoggedIn) {
-      console.log("리뷰 작성 가능 여부 확인 - 상품 ID:", productId);
-      checkCanReview();
-    }
-  }, [productId, isLoggedIn, validProductId]);
-
-  const fetchReviews = async () => {
-    if (!productId) {
-      setError('상품 정보가 없습니다.');
-      return;
-    }
-
+  const fetchReviews = useCallback(async (page = 1, sortBy = 'newest') => {
+    if (!productId) return;
+    
+    setIsLoading(true);
+    
     try {
-      setIsLoading(true);
-      console.log(`리뷰 요청 시작: /api/products/${productId}/reviews - 페이지: ${page}, 정렬: ${sortBy}`);
-      
-      // API 요청 실패 시 5초 후 타임아웃 처리
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('요청 시간 초과')), 5000);
+      const response = await axios.get(`/api/products/${productId}/reviews`, {
+        params: {
+          page,
+          sort: sortBy
+        }
       });
       
-      // 실제 API 요청
-      const fetchPromise = axios.get(`/api/products/${productId}/reviews`, {
-        params: { page, limit: 5, sort: sortBy }
-      });
-      
-      // 둘 중 먼저 완료되는 프로미스 처리
-      const response = await Promise.race([fetchPromise, timeoutPromise]) as any;
-      
-      console.log('리뷰 응답 데이터:', response.data);
-      
-      if (page === 1) {
+      if (response.status === 200) {
         setReviews(response.data.reviews || []);
-      } else {
-        setReviews(prev => [...prev, ...(response.data.reviews || [])]);
+        setReviewsCount(response.data.totalCount || 0);
+        setAverageRating(response.data.averageRating || 0);
+        setHasMore(response.data.hasMore || false);
       }
-      
-      setHasMore(response.data.hasMore || false);
-      setReviewsCount(response.data.total || 0);
-      setAverageRating(response.data.averageRating || 0);
-      setError(null);
-    } catch (err: any) {
-      console.error('리뷰 불러오기 오류:', err);
-      console.error('오류 상태:', err.response?.status);
-      console.error('오류 데이터:', err.response?.data);
-      setError(`리뷰를 불러오는 데 실패했습니다: ${err.response?.data?.error || err.message}`);
-      
-      // API 요청이 실패한 경우 테스트용 더미 데이터 표시 (개발용)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('개발 모드에서 테스트 데이터 표시');
-        setReviews([
-          {
-            id: 1,
-            product_id: Number(productId),
-            user_id: 1,
-            order_item_id: 1,
-            rating: 5,
-            title: '테스트 리뷰 제목',
-            content: '이것은 테스트 리뷰입니다. API 오류 시 표시됩니다.',
-            created_at: new Date().toISOString(),
-            status: 'active',
-            username: '테스트 사용자'
-          }
-        ]);
-        setHasMore(false);
-        setReviewsCount(1);
-        setAverageRating(5);
-      } else {
-        setReviews([]);
-      }
+    } catch (err) {
+      setError('리뷰를 불러오는데 실패했습니다');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [productId]);
 
   // 리뷰 작성 가능 여부 확인
-  const checkCanReview = async () => {
-    if (!isLoggedIn || !productId) {
-      setCanReview(false);
-      return;
-    }
-
+  const checkCanReview = useCallback(async () => {
+    if (!productId || !isLoggedIn) return;
+    
     try {
-      // 인증 헤더 추가
-      const headers = getAuthHeader();
-      
-      // API 경로 수정
-      const response = await axios.get(`/api/users/me/can-review/${productId}`, { 
-        headers 
+      const response = await axios.get(`/api/products/${productId}/reviews/can-review`, {
+        headers: await getAuthHeader()
       });
-      setCanReview(response.data.canReview);
+      
+      if (response.status === 200) {
+        setCanReview(response.data.canReview);
+      }
     } catch (err) {
-      console.error('리뷰 작성 가능 여부 확인 오류:', err);
       setCanReview(false);
     }
-  };
+  }, [productId, isLoggedIn, getAuthHeader]);
 
   // 리뷰 작성 제출
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -225,21 +162,23 @@ export default function ReviewTab({ productId }: ReviewTabProps) {
 
       // 인증 헤더를 포함하여 요청
       const headers = {
-        ...getAuthHeader(),
+        ...await getAuthHeader(),
         'Content-Type': 'multipart/form-data'
       };
 
-      await axios.post('/api/reviews', formData, { headers });
+      const response = await axios.post('/api/reviews', formData, { headers });
 
-      toast.success('리뷰가 등록되었습니다.');
-      setShowReviewForm(false);
-      setRating(5);
-      setTitle('');
-      setContent('');
-      setReviewImages([]);
-      setPage(1);
-      fetchReviews();
-      checkCanReview();
+      if (response.status === 201) {
+        toast.success('리뷰가 등록되었습니다.');
+        setShowReviewForm(false);
+        setRating(5);
+        setTitle('');
+        setContent('');
+        setReviewImages([]);
+        setPage(1);
+        fetchReviews();
+        checkCanReview();
+      }
     } catch (err) {
       toast.error('리뷰 등록에 실패했습니다.');
       console.error('리뷰 등록 오류:', err);
