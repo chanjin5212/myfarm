@@ -6,22 +6,33 @@ import Link from 'next/link';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
+import { gql } from "graphql-request";
+import { DeliveryTrackerGraphQLClient } from "@/lib/DeliveryTrackerGraphQLClient";
+import { formatDistanceToNow } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import TrackingModal from '@/components/modals/TrackingModal';
+import { ORDER_STATUS_MAP, DELIVERY_STATUS_MAP } from '@/constants/orderStatus';
 
-// 주문 상태 맵
-const orderStatusMap: Record<string, { color: string; text: string }> = {
-  pending: { color: 'bg-yellow-100 text-yellow-800', text: '주문 대기중' },
-  payment_pending: { color: 'bg-blue-100 text-blue-800', text: '결제 진행중' },
-  paid: { color: 'bg-green-100 text-green-800', text: '결제 완료' },
-  preparing: { color: 'bg-indigo-100 text-indigo-800', text: '상품 준비중' },
-  shipping: { color: 'bg-purple-100 text-purple-800', text: '배송중' },
-  delivered: { color: 'bg-green-100 text-green-800', text: '배송 완료' },
-  canceled: { color: 'bg-red-100 text-red-800', text: '주문 취소' },
-  cancelled: { color: 'bg-red-100 text-red-800', text: '주문 취소' },
-  refunded: { color: 'bg-gray-100 text-gray-800', text: '환불 완료' },
-};
+// 택배사 목록 쿼리
+const CARRIER_LIST_QUERY = gql`
+  query CarrierList($after: String, $countryCode: String) {
+    carriers(first: 100, after: $after, countryCode: $countryCode) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
 
-// 택배사 목록
-const carrierOptions = [
+// 고정 택배사 목록은 백업용으로 유지
+const fallbackCarrierOptions = [
   { value: 'cj', label: 'CJ대한통운' },
   { value: 'lotte', label: '롯데택배' },
   { value: 'hanjin', label: '한진택배' },
@@ -48,6 +59,68 @@ const formatPrice = (price: number) => {
   return price?.toLocaleString('ko-KR') + '원' || '0원';
 };
 
+// 택배사 목록 API 응답 타입 정의
+interface CarrierNode {
+  id: string;
+  name: string;
+}
+
+interface CarrierEdge {
+  node: CarrierNode;
+}
+
+interface PageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+interface CarriersResponse {
+  carriers: {
+    pageInfo: PageInfo;
+    edges: CarrierEdge[];
+  };
+}
+
+// 택배사 객체 타입 정의
+interface CarrierOption {
+  value: string;
+  label: string;
+}
+
+// 배송 추적 쿼리
+const TRACK_QUERY = gql`
+  query Track(
+    $carrierId: ID!,
+    $trackingNumber: String!
+  ) {
+    track(
+      carrierId: $carrierId,
+      trackingNumber: $trackingNumber
+    ) {
+      lastEvent {
+        time
+        status {
+          code
+          name
+        }
+        description
+      }
+      events(last: 10) {
+        edges {
+          node {
+            time
+            status {
+              code
+              name
+            }
+            description
+          }
+        }
+      }
+    }
+  }
+`;
+
 export default function AdminOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -73,10 +146,78 @@ export default function AdminOrderDetailPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
 
+  // 택배사 목록 상태 추가
+  const [carrierOptions, setCarrierOptions] = useState(fallbackCarrierOptions);
+  const [isLoadingCarriers, setIsLoadingCarriers] = useState(true);
+
+  // 배송 상세 모달 상태
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [selectedShipment, setSelectedShipment] = useState<any>(null);
+
   // 주문 정보 가져오기
   useEffect(() => {
     fetchOrderDetails();
+    fetchCarrierList();
   }, [orderId]);
+
+  // 택배사 목록 가져오기
+  const fetchCarrierList = async () => {
+    try {
+      setIsLoadingCarriers(true);
+      
+      const client = new DeliveryTrackerGraphQLClient(
+        process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID || "",
+        process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET || ""
+      );
+      
+      let allCarriers: any[] = [];
+      let hasNextPage = true;
+      let endCursor: string | null = null;
+
+      while (hasNextPage) {
+        const response = await client.request(CARRIER_LIST_QUERY, { 
+          after: endCursor,
+          countryCode: 'KR'  // 한국 택배사만 조회
+        }) as CarriersResponse;
+        
+        if (response?.carriers?.edges?.length > 0) {
+          const carriers = response.carriers.edges.map(edge => ({
+            value: edge.node.id,
+            label: edge.node.name
+          }));
+          
+          allCarriers = [...allCarriers, ...carriers];
+        }
+
+        hasNextPage = response.carriers.pageInfo.hasNextPage;
+        endCursor = response.carriers.pageInfo.endCursor;
+      }
+      
+      // 개발용 택배사 추가
+      allCarriers.push({
+        value: 'dev.track.dummy',
+        label: '개발용'
+      });
+      
+      if (allCarriers.length > 0) {
+        setCarrierOptions(allCarriers);
+      } else {
+        // 한국 택배사가 없으면 기본 목록 사용
+        setCarrierOptions(fallbackCarrierOptions);
+      }
+    } catch (error) {
+      console.error('택배사 목록 로딩 오류:', error);
+      
+      // 에러 발생 시에도 개발용 택배사는 추가
+      const fallbackWithDevCarrier = [
+        ...fallbackCarrierOptions,
+        { value: 'dev.track.dummy', label: '개발용' }
+      ];
+      setCarrierOptions(fallbackWithDevCarrier);
+    } finally {
+      setIsLoadingCarriers(false);
+    }
+  };
 
   const fetchOrderDetails = async () => {
     try {
@@ -108,6 +249,13 @@ export default function AdminOrderDetailPage() {
       // 현재 주문 상태 설정
       if (data.order) {
         setSelectedStatus(data.order.status);
+      }
+
+      // 송장 정보가 있는 경우 입력 폼에 미리 표시
+      if (data.shipments && data.shipments.length > 0) {
+        const latestShipment = data.shipments[0];
+        setCarrier(latestShipment.carrier);
+        setTrackingNumber(latestShipment.tracking_number);
       }
     } catch (error) {
       console.error('주문 상세 로딩 오류:', error);
@@ -161,7 +309,7 @@ export default function AdminOrderDetailPage() {
     }
 
     if (!carrier) {
-      toast.error('택배사를 선택해주세요');
+      toast.error('택배사를 입력해주세요');
       return;
     }
 
@@ -175,6 +323,11 @@ export default function AdminOrderDetailPage() {
         return;
       }
 
+      console.log(`[송장 정보 추가] 시작 - 택배사: ${carrier}, 송장번호: ${trackingNumber}`);
+      
+      // 택배사 이름 가져오기
+      const carrierName = carrierOptions.find(option => option.value === carrier)?.label || carrier;
+      
       const response = await fetch(`/api/admin/orders/${orderId}/shipment`, {
         method: 'POST',
         headers: {
@@ -183,35 +336,32 @@ export default function AdminOrderDetailPage() {
         },
         body: JSON.stringify({
           tracking_number: trackingNumber,
-          carrier,
+          carrier: carrier,
+          carrier_name: carrierName,
           status: 'shipped',
-          order_id: orderId
+          order_id: orderId.toString()
         })
       });
 
+      const data = await response.json();
+      console.log('[송장 정보 추가] API 응답:', data);
+      
       if (!response.ok) {
-        throw new Error('송장 정보 추가에 실패했습니다');
+        throw new Error(data.error || '송장 정보 처리에 실패했습니다');
       }
 
-      toast.success('송장 정보가 추가되었습니다');
+      toast.success(data.message);
       
-      // 송장을 추가했다면 주문 상태도 배송중으로 업데이트
-      await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`
-        },
-        body: JSON.stringify({ status: 'shipping' })
-      });
+      // 주문 상태는 API에서 자동으로 설정됨
+      console.log(`[송장 정보 추가] 완료 - 배송 상태 코드: ${data.delivery_status?.code}, 주문 상태: ${data.delivery_status?.order_status}`);
       
       setCarrier('');
       setTrackingNumber('');
       setIsAddingShipment(false);
       fetchOrderDetails();
     } catch (error) {
-      console.error('송장 정보 추가 오류:', error);
-      toast.error('송장 정보 추가에 실패했습니다');
+      console.error('[송장 정보 추가] 오류:', error);
+      toast.error(error instanceof Error ? error.message : '송장 정보 처리에 실패했습니다');
       setIsAddingShipment(false);
     }
   };
@@ -255,6 +405,25 @@ export default function AdminOrderDetailPage() {
       toast.error('결제 취소에 실패했습니다');
       setIsCancelling(false);
     }
+  };
+
+  // 배송 상세 모달 열기
+  const openTrackingModal = (shipment: any) => {
+    setSelectedShipment(shipment);
+    setShowTrackingModal(true);
+  };
+
+  // 배송 상세 모달 닫기
+  const closeTrackingModal = () => {
+    setShowTrackingModal(false);
+    setSelectedShipment(null);
+  };
+
+  // 날짜 포맷팅 함수 (상대적 시간)
+  const formatRelativeTime = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return formatDistanceToNow(date, { addSuffix: true, locale: ko });
   };
 
   // 페이지 내용 렌더링
@@ -301,9 +470,9 @@ export default function AdminOrderDetailPage() {
                 className="block w-full p-2 border border-gray-300 rounded-md mb-2"
                 disabled={isUpdating}
               >
-                {Object.keys(orderStatusMap).map((status) => (
+                {Object.keys(ORDER_STATUS_MAP).map((status) => (
                   <option key={status} value={status}>
-                    {orderStatusMap[status].text}
+                    {ORDER_STATUS_MAP[status].text}
                   </option>
                 ))}
               </select>
@@ -320,20 +489,24 @@ export default function AdminOrderDetailPage() {
 
           {/* 송장 입력 */}
           <div className="border rounded-md p-4">
-            <h3 className="font-medium mb-2">송장 정보 입력</h3>
+            <h3 className="font-medium mb-2">송장 정보 {shipments.length > 0 ? '수정' : '입력'}</h3>
             <div className="mb-2">
               <select
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
                 className="block w-full p-2 border border-gray-300 rounded-md mb-2"
-                disabled={isAddingShipment}
+                disabled={isAddingShipment || isLoadingCarriers}
               >
                 <option value="">택배사 선택</option>
-                {carrierOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                {isLoadingCarriers ? (
+                  <option value="" disabled>택배사 목록 로딩중...</option>
+                ) : (
+                  carrierOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))
+                )}
               </select>
               <input
                 type="text"
@@ -346,10 +519,10 @@ export default function AdminOrderDetailPage() {
               <Button
                 variant="primary"
                 onClick={addShipment}
-                disabled={isAddingShipment || !trackingNumber || !carrier}
+                disabled={isAddingShipment || !trackingNumber || !carrier || isLoadingCarriers}
                 className="w-full"
               >
-                {isAddingShipment ? <Spinner size="sm" /> : '송장 정보 추가'}
+                {isAddingShipment ? <Spinner size="sm" /> : shipments.length > 0 ? '송장 정보 수정' : '송장 정보 추가'}
               </Button>
             </div>
           </div>
@@ -431,9 +604,9 @@ export default function AdminOrderDetailPage() {
                   <td className="py-2 font-medium text-gray-600 w-1/3">주문 상태</td>
                   <td className="py-2">
                     <span className={`px-2 py-1 text-xs rounded-full ${
-                      orderStatusMap[orderInfo.status]?.color || 'bg-gray-100 text-gray-800'
+                      ORDER_STATUS_MAP[orderInfo.status]?.color || 'bg-gray-100 text-gray-800'
                     }`}>
-                      {orderStatusMap[orderInfo.status]?.text || orderInfo.status}
+                      {ORDER_STATUS_MAP[orderInfo.status]?.text || orderInfo.status}
                     </span>
                   </td>
                 </tr>
@@ -477,83 +650,78 @@ export default function AdminOrderDetailPage() {
         </div>
       </div>
 
-      {/* 송장 정보 */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+      {/* 배송 정보 */}
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
         <h2 className="text-lg font-semibold mb-4">배송 정보</h2>
         {shipments.length > 0 ? (
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  택배사
-                </th>
-                <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  송장번호
-                </th>
-                <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  상태
-                </th>
-                <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  등록일
-                </th>
-                <th className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  조회
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {shipments.map((shipment) => {
-                // 택배사별 배송 조회 URL
-                const trackingUrl = shipment.carrier === 'cj' 
-                  ? `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${shipment.tracking_number}`
-                  : shipment.carrier === 'lotte'
-                  ? `https://www.lotteglogis.com/home/reservation/tracking/index?InvNo=${shipment.tracking_number}`
-                  : shipment.carrier === 'hanjin'
-                  ? `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText=${shipment.tracking_number}`
-                  : shipment.carrier === 'post'
-                  ? `https://service.epost.go.kr/trace.RetrieveRegiPrclDeliv.postal?sid1=${shipment.tracking_number}`
-                  : shipment.carrier === 'logen'
-                  ? `https://www.ilogen.com/web/personal/trace/${shipment.tracking_number}`
-                  : shipment.carrier === 'epost'
-                  ? `https://service.epost.go.kr/trace.RetrieveEmsTrace.postal?ems_gubun=E&POST_CODE=${shipment.tracking_number}`
-                  : '';
+          <div className="space-y-4">
+            {shipments.map((shipment) => {
+              // 택배사별 배송 조회 URL
+              const trackingUrl = shipment.carrier === 'cj' 
+                ? `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${shipment.tracking_number}`
+                : shipment.carrier === 'lotte'
+                ? `https://www.lotteglogis.com/home/reservation/tracking/index?InvNo=${shipment.tracking_number}`
+                : shipment.carrier === 'hanjin'
+                ? `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText=${shipment.tracking_number}`
+                : shipment.carrier === 'post'
+                ? `https://service.epost.go.kr/trace.RetrieveRegiPrclDeliv.postal?sid1=${shipment.tracking_number}`
+                : shipment.carrier === 'logen'
+                ? `https://www.ilogen.com/web/personal/trace/${shipment.tracking_number}`
+                : shipment.carrier === 'epost'
+                ? `https://service.epost.go.kr/trace.RetrieveEmsTrace.postal?ems_gubun=E&POST_CODE=${shipment.tracking_number}`
+                : '';
 
-                const carrierName = carrierOptions.find(option => option.value === shipment.carrier)?.label || shipment.carrier;
-                
-                return (
-                  <tr key={shipment.id} className="hover:bg-gray-50">
-                    <td className="py-4 px-4 text-sm text-gray-900">
-                      {carrierName}
-                    </td>
-                    <td className="py-4 px-4 text-sm text-gray-900">
-                      {shipment.tracking_number}
-                    </td>
-                    <td className="py-4 px-4 text-sm text-gray-900">
-                      {shipment.status === 'shipped' ? '배송중' : 
-                       shipment.status === 'delivered' ? '배송완료' : shipment.status}
-                    </td>
-                    <td className="py-4 px-4 text-sm text-gray-500">
-                      {formatDate(shipment.created_at)}
-                    </td>
-                    <td className="py-4 px-4 text-sm text-center">
-                      {trackingUrl ? (
-                        <a
-                          href={trackingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline"
-                        >
-                          배송조회
-                        </a>
-                      ) : (
-                        '배송조회 불가'
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+              const carrierName = carrierOptions.find(option => option.value === shipment.carrier)?.label || shipment.carrier;
+              
+              return (
+                <div key={shipment.id} className="border rounded-lg p-4 bg-gray-50">
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div>
+                      <div className="text-xs text-gray-500">택배사</div>
+                      <div className="font-medium">{carrierName}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">송장번호</div>
+                      <div className="font-medium">{shipment.tracking_number}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div>
+                      <div className="text-xs text-gray-500">상태</div>
+                      <div className="font-medium">
+                        {DELIVERY_STATUS_MAP[shipment.status] || shipment.status}
+                        {shipment.status_name && (
+                          <span className="ml-1 text-gray-500">({shipment.status_name})</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">등록일</div>
+                      <div className="font-medium">{formatDate(shipment.created_at)}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {trackingUrl && (
+                      <a
+                        href={trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-center py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        배송조회
+                      </a>
+                    )}
+                    <button
+                      onClick={() => openTrackingModal(shipment)}
+                      className="block text-center py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      상세정보
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
             등록된 배송 정보가 없습니다
@@ -562,98 +730,58 @@ export default function AdminOrderDetailPage() {
       </div>
 
       {/* 주문 상품 목록 */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
         <h2 className="text-lg font-semibold mb-4">주문 상품</h2>
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                상품정보
-              </th>
-              <th className="py-3 px-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                수량
-              </th>
-              <th className="py-3 px-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                가격
-              </th>
-              <th className="py-3 px-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                총 금액
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {orderItems.length > 0 ? (
-              orderItems.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="py-4 px-4">
-                    <div className="flex items-center">
-                      <div className="h-16 w-16 flex-shrink-0 relative overflow-hidden rounded border border-gray-200 mr-4">
-                        {item.product_image || (item.options && item.options.image_url) ? (
-                          <Image
-                            src={item.product_image || (item.options && item.options.image_url) || '/images/default-product.jpg'}
-                            alt={item.product_name || '상품 이미지'}
-                            fill
-                            sizes="64px"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center bg-gray-100">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{item.product_name}</div>
-                        {item.options && (
-                          <div className="text-sm text-gray-500">
-                            {item.options.option_name || item.options.name ? (
-                              <span>
-                                {`${item.options.option_name || item.options.name}: ${item.options.option_value || item.options.value}`}
-                                {item.options.additional_price > 0 && (
-                                  <span className="ml-1">(+{item.options.additional_price.toLocaleString()}원)</span>
-                                )}
-                              </span>
-                            ) : (
-                              <span>기본 상품</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+        {orderItems.length > 0 ? (
+          <div className="space-y-4">
+            {orderItems.map((item) => (
+              <div key={item.id} className="border rounded-lg p-4 bg-gray-50">
+                <div className="mb-3">
+                  <div className="font-medium text-gray-900 mb-1">{item.product_name}</div>
+                  {item.options && (
+                    <div className="text-sm text-gray-500 mb-2">
+                      {item.options.option_name || item.options.name ? (
+                        <span>
+                          {`${item.options.option_name || item.options.name}: ${item.options.option_value || item.options.value}`}
+                          {item.options.additional_price > 0 && (
+                            <span className="ml-1">(+{item.options.additional_price.toLocaleString()}원)</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span>기본 상품</span>
+                      )}
                     </div>
-                  </td>
-                  <td className="py-4 px-4 text-right text-sm text-gray-500">
-                    {item.quantity}개
-                  </td>
-                  <td className="py-4 px-4 text-right text-sm text-gray-500">
-                    {formatPrice(item.price)}
-                  </td>
-                  <td className="py-4 px-4 text-right text-sm font-medium text-gray-900">
-                    {formatPrice(item.price * item.quantity)}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-gray-500">
-                  주문 상품이 없습니다
-                </td>
-              </tr>
-            )}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-gray-200">
-              <td colSpan={3} className="py-4 px-4 text-right font-medium">
-                총 결제금액
-              </td>
-              <td className="py-4 px-4 text-right font-bold text-lg text-gray-900">
-                {formatPrice(orderInfo.total_amount)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+                  )}
+                  <div className="text-sm text-gray-500">
+                    {item.quantity}개 × {formatPrice(item.price)}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-3 border-t">
+                  <span className="text-sm text-gray-500">총 금액</span>
+                  <span className="font-medium">{formatPrice(item.price * item.quantity)}</span>
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-between items-center pt-4 border-t">
+              <span className="font-medium">총 결제금액</span>
+              <span className="font-bold text-lg">{formatPrice(orderInfo.total_amount)}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            주문 상품이 없습니다
+          </div>
+        )}
       </div>
+
+      {/* 배송 추적 모달 */}
+      <TrackingModal 
+        isOpen={showTrackingModal} 
+        onClose={closeTrackingModal} 
+        shipment={selectedShipment} 
+        carrierOptions={carrierOptions}
+        deliveryStatusMap={DELIVERY_STATUS_MAP}
+      />
     </div>
   );
 } 

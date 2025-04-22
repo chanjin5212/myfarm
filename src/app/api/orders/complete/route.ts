@@ -157,6 +157,52 @@ export async function POST(req: NextRequest) {
         console.error('결제 정보 저장 오류:', paymentError);
         // 결제 정보 저장 실패해도 계속 진행
       }
+
+      // 4. 상품 재고 업데이트
+      for (const item of orderData.items) {
+        if (!item.productOptionId) {
+          continue; // 옵션이 없는 상품은 건너뛰기
+        }
+        
+        // 상품 옵션 정보 조회
+        const { data: productOption, error: productOptionError } = await supabase
+          .from('product_options')
+          .select('stock')
+          .eq('id', item.productOptionId)
+          .single();
+
+        if (productOptionError || !productOption) {
+          console.error('상품 옵션 조회 오류:', productOptionError);
+          // 주문 삭제
+          await supabase
+            .from('orders')
+            .delete()
+            .eq('id', order.id);
+          return NextResponse.json(
+            { message: '상품 옵션 정보를 찾을 수 없습니다.' },
+            { status: 500 }
+          );
+        }
+
+        // 재고 업데이트
+        const { error: stockError } = await supabase
+          .from('product_options')
+          .update({ stock: productOption.stock - item.quantity })
+          .eq('id', item.productOptionId);
+
+        if (stockError) {
+          console.error('재고 업데이트 오류:', stockError);
+          // 주문 삭제
+          await supabase
+            .from('orders')
+            .delete()
+            .eq('id', order.id);
+          return NextResponse.json(
+            { message: '재고 업데이트에 실패했습니다.' },
+            { status: 500 }
+          );
+        }
+      }
       
       return NextResponse.json({
         status: 'success',

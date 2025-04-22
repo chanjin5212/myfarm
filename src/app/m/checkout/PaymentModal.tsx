@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Spinner } from '@/components/ui/CommonStyles';
 import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
+import { getAuthHeader } from '@/utils/auth';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -107,6 +108,28 @@ export default function PaymentModal({
     renderPaymentWidgets();
   }, [widgets, amount]);
   
+  // 주문 취소
+  const cancelOrder = async () => {
+    try {
+      console.log("주문 취소 시도:", orderId);
+      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('주문 취소 API 오류:', await response.text());
+      } else {
+        console.log('주문이 취소되었습니다.');
+      }
+    } catch (error) {
+      console.error('주문 취소 중 오류 발생:', error);
+    }
+  };
+  
   // 결제 요청
   const processPayment = async () => {
     if (!widgets) {
@@ -122,6 +145,12 @@ export default function PaymentModal({
     
     try {
       console.log("결제 요청 시작");
+      
+      // 팝업 차단 경고 추가
+      alert('결제 진행을 위해 팝업이 열릴 예정입니다. 팝업 차단이 설정되어 있다면 허용해주세요.');
+      
+      // 주문 ID 저장
+      localStorage.setItem('currentOrderId', orderId);
       
       await widgets.requestPayment({
         orderId: orderId,
@@ -142,16 +171,24 @@ export default function PaymentModal({
           error.message.includes('취소')) {
         // 결제 취소된 경우
         console.log("결제 취소됨");
+        // 주문 취소 API 호출
+        await cancelOrder();
         onClose();
       } else {
         setError('결제 처리 중 오류가 발생했습니다: ' + error.message);
+        // 주문 취소 API 호출
+        await cancelOrder();
         onPaymentFail(error);
       }
     }
   };
   
   // 모달이 닫힐 때 처리
-  const handleClose = () => {
+  const handleClose = async () => {
+    // 모달을 닫을 때 주문 취소
+    if (orderId) {
+      await cancelOrder();
+    }
     onClose();
   };
   

@@ -460,6 +460,7 @@ CREATE TABLE IF NOT EXISTS shipments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   tracking_number VARCHAR(50) NOT NULL,
+  carrier_name VARCHAR(100) NULL,
   carrier VARCHAR(50) NOT NULL,  -- 택배사 정보 (CJ대한통운, 우체국택배 등)
   status VARCHAR(30) NOT NULL DEFAULT 'ready',  -- 배송 상태 (ready, in_transit, delivered, failed 등)
   shipped_at TIMESTAMP WITH TIME ZONE,  -- 발송 일시

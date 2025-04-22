@@ -11,6 +11,7 @@ import { getAuthHeader, checkToken } from '@/utils/auth';
 import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
 import { Noto_Sans_Lao_Looped } from 'next/font/google';
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
 
 interface User {
   id: string;
@@ -221,27 +222,77 @@ export default function MobileCheckoutPage() {
         
         const buyNowItem = JSON.parse(buyNowData);
         const basePrice = parseInt(buyNowItem.product.price) || 0;
-        const additionalPrice = buyNowItem.option ? parseInt(buyNowItem.option.additionalPrice) || 0 : 0;
-        const totalUnitPrice = basePrice + additionalPrice;
         
-        directItems = [{
-          id: `direct_${Date.now()}`,
-          product_id: buyNowItem.product.id,
-          product_option_id: buyNowItem.option ? buyNowItem.option.id : null,
-          quantity: buyNowItem.quantity,
-          product: {
-            id: buyNowItem.product.id,
-            name: buyNowItem.product.name,
-            price: basePrice,
-            thumbnail_url: buyNowItem.product.thumbnail_url
-          },
-          product_option: buyNowItem.option ? {
-            id: buyNowItem.option.id,
-            option_name: buyNowItem.option.name,
-            option_value: buyNowItem.option.value,
-            additional_price: additionalPrice,
-          } : null,
-        }];
+        console.log('buyNowItem 데이터:', buyNowItem); // 디버깅용 로그 추가
+        
+        // 모든 옵션 정보가 있을 경우 (새 형식)
+        if (buyNowItem.allOptions && buyNowItem.allOptions.length > 0) {
+          // 각 옵션별로 아이템 생성
+          directItems = buyNowItem.allOptions.map((option: any) => {
+            const additionalPrice = parseInt(option.additionalPrice) || 0;
+            const totalUnitPrice = basePrice + additionalPrice;
+            
+            return {
+              id: `direct_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              product_id: buyNowItem.product.id,
+              product_option_id: option.id,
+              quantity: option.quantity,
+              product: {
+                id: buyNowItem.product.id,
+                name: buyNowItem.product.name,
+                price: basePrice,
+                thumbnail_url: buyNowItem.product.thumbnail_url
+              },
+              product_option: {
+                id: option.id,
+                option_name: option.name,
+                option_value: option.value,
+                additional_price: additionalPrice,
+              },
+              total_price: totalUnitPrice * option.quantity // 총 가격 추가
+            };
+          });
+        } else {
+          // 기존 형식 (단일 옵션 또는 옵션 없음)
+          const additionalPrice = buyNowItem.option ? parseInt(buyNowItem.option.additionalPrice) || 0 : 0;
+          const totalUnitPrice = basePrice + additionalPrice;
+          
+          // buyNowItem에 totalPrice가 있으면 그것을 사용
+          const itemTotalPrice = buyNowItem.totalPrice || (totalUnitPrice * buyNowItem.quantity);
+          
+          directItems = [{
+            id: `direct_${Date.now()}`,
+            product_id: buyNowItem.product.id,
+            product_option_id: buyNowItem.option ? buyNowItem.option.id : null,
+            quantity: buyNowItem.quantity,
+            product: {
+              id: buyNowItem.product.id,
+              name: buyNowItem.product.name,
+              price: basePrice,
+              thumbnail_url: buyNowItem.product.thumbnail_url
+            },
+            product_option: buyNowItem.option ? {
+              id: buyNowItem.option.id,
+              option_name: buyNowItem.option.name,
+              option_value: buyNowItem.option.value,
+              additional_price: additionalPrice,
+            } : null,
+            total_price: itemTotalPrice // buyNowItem의 총 가격 사용
+          }];
+        }
+        
+        // 디버깅용 로그 추가
+        console.log('체크아웃용 아이템:', directItems);
+        
+        // 상품 여러 개를 즉시 구매할 수 있도록 아이템 설정
+        setCartItems(directItems);
+        
+        // 그룹화된 상품 정보 생성
+        const grouped = groupItemsByProduct(directItems);
+        setGroupedItems(grouped);
+        
+        // 총 가격 계산
+        calculateTotalProductPrice(grouped);
       } else {
         const checkoutData = localStorage.getItem('checkoutItems');
         if (!checkoutData) {
@@ -285,6 +336,7 @@ export default function MobileCheckoutPage() {
       setFinalPrice(productTotal);
       
     } catch (error) {
+      console.error('주문 정보 로딩 에러:', error);
       setErrorMessage('주문 정보를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
@@ -308,34 +360,41 @@ export default function MobileCheckoutPage() {
         };
       }
       
-      // 장바구니에서 넘어온 가격 그대로 사용
-      const itemTotalPrice = parseInt(item.product.price) * item.quantity;
+      // 기본 가격과 추가 가격을 분리하여 처리
+      const basePrice = parseInt(item.product.price) || 0;
+      const additionalPrice = item.product_option ? (parseInt(item.product_option.additional_price) || 0) : 0;
+      
+      // total_price가 이미 계산되어 있으면 그 값을 사용, 없으면 계산
+      const itemTotalPrice = item.total_price || ((basePrice + additionalPrice) * item.quantity);
       
       // 옵션 정보 저장
       groupedItems[productId].options.push({
         id: item.product_option ? item.product_option.id : 'base',
         option_name: item.product_option ? item.product_option.option_name : '기본',
         option_value: item.product_option ? item.product_option.option_value : '옵션 없음',
-        additional_price: 0,
+        additional_price: additionalPrice,
         quantity: item.quantity,
-        price: parseInt(item.product.price) // 각 옵션의 가격 저장
+        price: basePrice + additionalPrice
       });
       
-      // 그룹의 총 수량과 가격 갱신
+      // 그룹 전체의 수량 및 가격 합산
       groupedItems[productId].totalQuantity += item.quantity;
       groupedItems[productId].totalPrice += itemTotalPrice;
-      
     });
-    
+
     return Object.values(groupedItems);
   };
 
-  // 총 상품 금액 계산
-  const calculateTotalProductPrice = (groupedItems: any[]) => {
+  // 총 상품 가격 계산
+  const calculateTotalProductPrice = (groupedItems: GroupedCartItem[]) => {
     const total = groupedItems.reduce((total, group) => {
-      // 각 그룹의 totalPrice를 그대로 사용
+      // 그룹의 totalPrice 값이 이미 올바르게 계산되어 있으므로 이를 사용
       return total + group.totalPrice;
     }, 0);
+    
+    // 계산된 가격 설정
+    setTotalPrice(total);
+    setFinalPrice(total);
     
     return total;
   };
@@ -345,7 +404,7 @@ export default function MobileCheckoutPage() {
     e.preventDefault();
     
     if (!agreeToTerms) {
-      alert('주문 및 결제 정보 수집 동의가 필요합니다.');
+      toast.error('주문 및 결제 정보 수집 동의가 필요합니다.');
       return;
     }
     
@@ -389,7 +448,72 @@ export default function MobileCheckoutPage() {
       // UUID 형식의 주문 ID 생성
       const tempOrderId = uuidv4();
       
-      setOrderIdForPayment(tempOrderId);
+      // API를 호출하여 주문 생성 (DB에 저장)
+      const checkoutItems = JSON.parse(localStorage.getItem('checkoutItems') || '[]');
+      
+      // 안전한 문자열 처리 함수
+      const safeString = (str: string) => {
+        if (!str) return '';
+        return str.normalize('NFC');
+      };
+      
+      // 주문 데이터 생성
+      const orderData = {
+        userId: user?.id,
+        items: checkoutItems.map((item: any) => ({
+          productId: item.productId,
+          productOptionId: item.productOptionId || null,
+          name: safeString(item.name),
+          price: item.price,
+          originalPrice: item.price,
+          additionalPrice: item.option?.additionalPrice || 0,
+          totalPrice: item.price * item.quantity,
+          quantity: item.quantity,
+          image: item.image || '/images/default-product.png',
+          selectedOptions: item.option ? {
+            name: safeString(item.option.name),
+            value: safeString(item.option.value),
+            additional_price: item.option.additionalPrice || 0
+          } : null
+        })),
+        shipping: {
+          name: safeString(shippingInfo.name),
+          phone: shippingInfo.phone,
+          address: safeString(shippingInfo.address),
+          detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
+          memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
+        },
+        payment: {
+          method: 'toss',
+          totalAmount: finalPrice
+        }
+      };
+      
+      // 주문 생성 API 호출
+      const createOrderResponse = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify({
+          orderId: tempOrderId,
+          orderData
+        })
+      });
+      
+      if (!createOrderResponse.ok) {
+        const errorData = await createOrderResponse.json();
+        throw new Error(errorData.error || errorData.message || '주문 생성에 실패했습니다.');
+      }
+      
+      const createOrderResult = await createOrderResponse.json();
+      console.log('주문 생성 성공:', createOrderResult);
+      
+      // 생성된 주문 ID 사용
+      const finalOrderId = createOrderResult.id || tempOrderId;
+      
+      setOrderIdForPayment(finalOrderId);
       setOrderNameForPayment(orderName);
       setShowPaymentModal(true);
       setOrderProcessing(false);
@@ -488,15 +612,15 @@ export default function MobileCheckoutPage() {
   // 배송 정보 유효성 검사
   const validateShippingInfo = () => {
     if (!shippingInfo.name) {
-      alert('받는 사람 이름을 입력해주세요.');
+      toast.error('받는 사람 이름을 입력해주세요.');
       return false;
     }
     if (!shippingInfo.phone) {
-      alert('연락처를 입력해주세요.');
+      toast.error('연락처를 입력해주세요.');
       return false;
     }
     if (!shippingInfo.address) {
-      alert('주소를 입력해주세요.');
+      toast.error('주소를 입력해주세요.');
       return false;
     }
     return true;

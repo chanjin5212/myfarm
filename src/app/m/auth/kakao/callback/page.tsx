@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { triggerLoginEvent } from '@/utils/auth';
 import { Spinner } from '@/components/ui/CommonStyles';
+import toast from 'react-hot-toast';
 
 export default function MobileKakaoCallbackPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isProcessing = useRef(false);
 
   useEffect(() => {
@@ -37,8 +39,8 @@ export default function MobileKakaoCallbackPage() {
         }
 
         if (!code) {
-          alert('인증 코드가 없습니다.');
-          router.replace('/m/auth');
+          toast.error('인증 코드가 없습니다.');
+          router.push('/m/auth/login');
           return;
         }
 
@@ -123,9 +125,9 @@ export default function MobileKakaoCallbackPage() {
           router.replace('/m/auth/terms');
         }
       } catch (error) {
-        console.error('로그인 과정 오류:', error);
-        alert('카카오 로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
-        router.replace('/m/auth');
+        console.error('Kakao login error:', error);
+        toast.error('로그인 처리 중 오류가 발생했습니다.');
+        router.push('/m/auth/login');
       } finally {
         isProcessing.current = false;
       }

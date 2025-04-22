@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from 'react-hot-toast';
 import Header from '@/components/Header';
+import { headers } from 'next/headers';
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -19,15 +20,19 @@ export const metadata: Metadata = {
   description: "쇼핑몰 웹사이트",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const headersList = await headers();
+  const pathname = headersList.get('x-pathname') || '';
+  const isAdminPath = pathname.startsWith('/admin');
+
   return (
     <html lang="ko" className="light">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
-        <Header />
+        {!isAdminPath && <Header />}
         <Toaster position="top-center" />
         {children}
       </body>

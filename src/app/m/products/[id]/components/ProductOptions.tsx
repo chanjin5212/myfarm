@@ -1,4 +1,5 @@
 import React from 'react';
+import toast from 'react-hot-toast';
 
 interface ProductOption {
   id: string;
@@ -68,7 +69,7 @@ export default function MobileProductOptions({
     );
     
     if (isAlreadySelected) {
-      alert('이미 선택된 옵션입니다.');
+      toast.error('이미 선택된 옵션입니다.');
       e.target.value = '';
       return;
     }
@@ -79,7 +80,7 @@ export default function MobileProductOptions({
     
     // 재고 확인
     if (selectedOption.stock < 1) {
-      alert('품절된 상품입니다.');
+      toast.error('품절된 상품입니다.');
       e.target.value = '';
       return;
     }
@@ -106,7 +107,7 @@ export default function MobileProductOptions({
   const handleOptionQuantityChange = (optionId: string, newQuantity: number) => {
     // 수량은 최소 1 이상이어야 함
     if (newQuantity < 1) {
-      alert('최소 수량은 1개입니다.');
+      toast.error('최소 수량은 1개입니다.');
       return;
     }
     
@@ -116,7 +117,7 @@ export default function MobileProductOptions({
     
     // 재고 확인
     if (newQuantity > option.stock) {
-      alert(`최대 ${option.stock}개까지 구매 가능합니다.`);
+      toast.error(`최대 ${option.stock}개까지 구매 가능합니다.`);
       return;
     }
     
@@ -131,12 +132,12 @@ export default function MobileProductOptions({
   // 기본 수량 변경 핸들러 (옵션이 없는 상품용)
   const handleBaseQuantityChange = (newQuantity: number) => {
     if (newQuantity < 1) {
-      alert('최소 수량은 1개입니다.');
+      toast.error('최소 수량은 1개입니다.');
       return;
     }
     
     if (product.stock && newQuantity > product.stock) {
-      alert(`최대 ${product.stock}개까지 구매 가능합니다.`);
+      toast.error(`최대 ${product.stock}개까지 구매 가능합니다.`);
       return;
     }
     

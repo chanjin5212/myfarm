@@ -18,11 +18,11 @@ export default function CheckoutSuccessPage() {
     const paymentKey = searchParams?.get('paymentKey');
     const orderId = searchParams?.get('orderId');
     const amount = searchParams?.get('amount');
-
-    const createOrder = async () => {
+    
+    const processPayment = async () => {
       // 이미 처리 중이면 중복 실행 방지
       if (isProcessing.current) {
-        console.log('이미 주문 처리 중입니다.');
+        console.log('이미 결제 처리 중입니다.');
         return;
       }
 
@@ -56,112 +56,44 @@ export default function CheckoutSuccessPage() {
         const userId = user.id;
         const authHeader = getAuthHeader();
 
-        // 로컬 스토리지에서 체크아웃 정보 가져오기
-        const checkoutDataString = localStorage.getItem('checkoutItems');
-        if (!checkoutDataString) {
-          setError('주문 정보를 찾을 수 없습니다.');
-          setLoading(false);
-          return;
-        }
-
-        const checkoutItems = JSON.parse(checkoutDataString);
-        const shippingInfoString = localStorage.getItem('checkoutShippingInfo');
-        if (!shippingInfoString) {
-          setError('배송 정보를 찾을 수 없습니다.');
-          setLoading(false);
-          return;
-        }
-
-        const shippingInfo = JSON.parse(shippingInfoString);
+        // 토스페이먼츠 결제 승인 API 호출
+        console.log('토스페이먼츠 결제 승인 요청:', { paymentKey, orderId, amount });
         
-        // 안전한 문자열 처리
-        const safeString = (str: string) => {
-          if (!str) return '';
-          return str.normalize('NFC');
-        };
-
-        // 주문 데이터 생성
-        const orderData = {
-          userId,
-          paymentKey,
-          items: checkoutItems.map((item: any) => ({
-            productId: item.productId,
-            productOptionId: item.productOptionId || null,
-            name: safeString(item.name),
-            price: item.price,
-            originalPrice: item.price,
-            additionalPrice: 0,
-            totalPrice: item.price * item.quantity,
-            quantity: item.quantity,
-            image: item.image || '/images/default-product.png',
-            selectedOptions: item.option ? {
-              name: safeString(item.option.name),
-              value: safeString(item.option.value),
-              additional_price: 0
-            } : null
-          })),
-          shipping: {
-            name: safeString(shippingInfo.name),
-            phone: shippingInfo.phone,
-            address: safeString(shippingInfo.address),
-            detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
-            memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
-          },
-          payment: {
-            method: 'toss',
-            totalAmount: parseInt(amount)
-          }
-        };
-
-        // 서버에 주문 생성 요청
-        const createOrderResponse = await fetch('/api/orders/complete', {
+        const paymentResponse = await fetch('/api/payments/toss', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...authHeader
           },
           body: JSON.stringify({
-            orderId,
             paymentKey,
-            amount: parseInt(amount),
-            orderData
+            orderId,
+            amount: parseInt(amount)
           })
         });
 
-        if (!createOrderResponse.ok) {
-          const errorData = await createOrderResponse.json();
-          throw new Error(errorData.error || errorData.message || '주문 처리에 실패했습니다.');
+        if (!paymentResponse.ok) {
+          const errorData = await paymentResponse.json();
+          throw new Error(errorData.error || errorData.message || '결제 승인에 실패했습니다.');
         }
 
-        // 성공적으로 주문이 생성됨
-        const result = await createOrderResponse.json();
-        const orderNumber = result.order_number || result.orderNumber;
-        setOrderId(orderNumber || orderId);
-        setOrderCompleted(true);
-        
+        const paymentResult = await paymentResponse.json();
+        console.log('결제 승인 성공:', paymentResult);
+
         // 로컬 스토리지 정리
         localStorage.removeItem('checkoutItems');
         localStorage.removeItem('checkoutShippingInfo');
         localStorage.removeItem('buyNowItem');
         
-        // 장바구니 비우기 - 항상 장바구니를 비움
-        try {
-          await fetch('/api/cart/clear', {
-            method: 'DELETE',  // POST가 아닌 DELETE 메소드 사용
-            headers: authHeader
-          });
-          console.log('장바구니 비우기 성공');
-        } catch (error) {
-          console.error('장바구니 비우기 실패:', error);
-        }
-
-        // 주문 처리가 완료되면 주문 상세 페이지로 리디렉션
-        const redirectOrderId = result.id || orderId;
+        setOrderCompleted(true);
+        
+        // 주문 상세 페이지로 리디렉션
+        const redirectOrderId = paymentResult.orderId || orderId;
         router.push(`/m/orders/${redirectOrderId}/detail`);
 
       } catch (error) {
-        console.error('주문 처리 오류:', error);
-        setError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
+        console.error('결제 처리 오류:', error);
+        setError(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
         // 처리 완료 후 플래그 해제
@@ -169,15 +101,15 @@ export default function CheckoutSuccessPage() {
       }
     };
 
-    // 결제가 성공적으로 완료되면 주문 생성
-    createOrder();
+    // 결제 성공 페이지가 로드되면 바로 결제 처리 시작
+    processPayment();
   }, [searchParams, router]);
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4">
         <Spinner size="lg" />
-        <p className="mt-4 text-gray-500">주문을 완료하는 중입니다...</p>
+        <p className="mt-4 text-gray-500">결제를 완료하는 중입니다...</p>
       </div>
     );
   }
@@ -186,7 +118,7 @@ export default function CheckoutSuccessPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4">
         <div className="bg-red-100 p-4 rounded-lg mb-6 w-full max-w-md">
-          <h2 className="text-xl font-semibold text-red-700 mb-2">주문 처리 오류</h2>
+          <h2 className="text-xl font-semibold text-red-700 mb-2">결제 처리 오류</h2>
           <p className="text-red-600">{error}</p>
         </div>
         <Button 
@@ -219,7 +151,7 @@ export default function CheckoutSuccessPage() {
             />
           </svg>
           <h2 className="text-2xl font-bold text-green-800 mb-2">
-            주문이 완료되었습니다!
+            결제가 완료되었습니다!
           </h2>
           <p className="text-green-700 mb-1">
             주문번호: <span className="font-medium">{orderId}</span>

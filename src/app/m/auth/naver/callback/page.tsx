@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { triggerLoginEvent } from '@/utils/auth';
 import { Spinner } from '@/components/ui/CommonStyles';
+import toast from 'react-hot-toast';
 
 export default function MobileNaverCallbackPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -24,13 +26,13 @@ export default function MobileNaverCallbackPage() {
 
       // state 검증
       if (!state || state !== savedState) {
-        alert('잘못된 요청입니다.');
+        toast.error('잘못된 요청입니다.');
         router.push('/m/auth');
         return;
       }
 
       if (!code) {
-        alert('인증 코드가 없습니다.');
+        toast.error('인증 코드가 없습니다.');
         router.push('/m/auth');
         return;
       }
@@ -118,7 +120,7 @@ export default function MobileNaverCallbackPage() {
         }
       } catch (error) {
         console.error('로그인 과정 오류:', error);
-        alert('네이버 로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
+        toast.error('네이버 로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
         router.push('/m/auth');
       }
     };

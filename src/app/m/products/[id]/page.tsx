@@ -82,7 +82,6 @@ export default function MobileProductDetailPage() {
   const [cartSuccessPopup, setCartSuccessPopup] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
   const [currentImage, setCurrentImage] = useState<number>(0);
-  const [addToCartSuccess, setAddToCartSuccess] = useState<boolean>(false);
 
   // 상품 정보 가져오기
   useEffect(() => {
@@ -124,12 +123,12 @@ export default function MobileProductDetailPage() {
   const handleAddToCart = async () => {
     // 옵션이 있는 상품인데 옵션을 선택하지 않은 경우
     if (options.length > 0 && selectedOptions.length === 0) {
-      alert('옵션을 선택해주세요.');
+      toast.error('옵션을 선택해주세요.');
       return;
     }
     
     if (!productDetails) {
-      alert('상품 정보를 찾을 수 없습니다.');
+      toast.error('상품 정보를 찾을 수 없습니다.');
       return;
     }
 
@@ -147,15 +146,18 @@ export default function MobileProductDetailPage() {
           const authHeader = getAuthHeader();
           
           if (!authHeader.Authorization) {
-            alert('로그인 정보가 만료되었습니다. 다시 로그인해주세요.');
+            toast.error('로그인 정보가 만료되었습니다. 다시 로그인해주세요.');
             router.push('/m/auth');
             return;
           }
           
           if (selectedOptions.length > 0) {
-            // 옵션 있는 상품
-            const results = await Promise.all(
-              selectedOptions.map(async option => {
+            // 옵션 있는 상품 - 순차적으로 처리하여 안정성 향상
+            const successfulOptions = [];
+            const failedOptions = [];
+            
+            for (const option of selectedOptions) {
+              try {
                 const response = await fetch(`${window.location.origin}/api/cart`, {
                   method: 'POST',
                   headers: {
@@ -174,11 +176,25 @@ export default function MobileProductDetailPage() {
                   throw new Error(errorData.message || '장바구니 추가에 실패했습니다.');
                 }
                 
-                return await response.json();
-              })
-            );
+                const result = await response.json();
+                successfulOptions.push(option.optionValue);
+              } catch (err) {
+                console.error(`옵션 [${option.optionValue}] 추가 실패:`, err);
+                failedOptions.push(option.optionValue);
+              }
+            }
             
-            console.log('장바구니 추가 결과:', results);
+            // 결과 처리
+            if (successfulOptions.length > 0) {
+              if (failedOptions.length > 0) {
+                toast.success(`일부 옵션이 장바구니에 추가되었습니다. (${successfulOptions.join(', ')})`);
+                toast.error(`일부 옵션 추가 실패: ${failedOptions.join(', ')}`);
+              } else {
+                toast.success("장바구니에 상품이 추가되었습니다.");
+              }
+            } else {
+              toast.error("장바구니에 상품을 추가하지 못했습니다.");
+            }
             
           } else {
             // 옵션이 없는 상품인데 재고가 부족한 경우
@@ -214,14 +230,16 @@ export default function MobileProductDetailPage() {
             
             const result = await response.json();
             console.log('장바구니 추가 결과:', result);
+            
+            // 성공 처리
+            toast.success("장바구니에 상품이 추가되었습니다.");
           }
           
           // 성공 팝업 표시
           setCartSuccessPopup(true);
-          setAddToCartSuccess(true);
         } catch (error) {
           console.error('장바구니 추가 오류:', error);
-          alert(error instanceof Error ? error.message : '장바구니에 추가하는데 실패했습니다.');
+          toast.error(error instanceof Error ? error.message : '장바구니에 추가하는데 실패했습니다.');
         }
       } else {
         // 비로그인 상태라면 로컬 스토리지에 장바구니 정보 저장
@@ -287,11 +305,11 @@ export default function MobileProductDetailPage() {
         
         // 성공 팝업 표시
         setCartSuccessPopup(true);
-        setAddToCartSuccess(true);
+        toast.success("장바구니에 상품이 추가되었습니다.");
       }
     } catch (error) {
       console.error('장바구니 추가 오류:', error);
-      alert(error instanceof Error ? error.message : '장바구니에 추가하는데 실패했습니다.');
+      toast.error(error instanceof Error ? error.message : '장바구니에 추가하는데 실패했습니다.');
     } finally {
       // 로딩 상태 종료
       setIsAddingToCart(false);
@@ -322,30 +340,68 @@ export default function MobileProductDetailPage() {
       return;
     }
 
-    // 즉시 구매를 위한 상품 정보 생성
-    const productForCart: CartProduct = {
-      id: productDetails.id,
-      name: productDetails.name,
-      price: productDetails.price,
-      thumbnail_url: productDetails.thumbnail_url || ""
-    };
+    // 체크아웃 페이지로 전달할 데이터
+    let buyNowData: any;
 
-    // 옵션 정보
-    const optionInfo = selectedOptions.length > 0 ? {
-      id: selectedOptions[0].optionId,
-      name: selectedOptions[0].optionName,
-      value: selectedOptions[0].optionValue,
-      additionalPrice: selectedOptions[0].additionalPrice,
-    } : null;
+    if (selectedOptions.length > 0) {
+      // 여러 옵션이 선택된 경우
+      // 기존 API와 호환성 유지를 위해 첫 번째 옵션만 option으로 설정
+      const firstOption = {
+        id: selectedOptions[0].optionId,
+        name: selectedOptions[0].optionName,
+        value: selectedOptions[0].optionValue,
+        additionalPrice: selectedOptions[0].additionalPrice,
+      };
+
+      // 모든 선택된 옵션 정보를 배열로 저장
+      const allOptions = selectedOptions.map(opt => ({
+        id: opt.optionId,
+        name: opt.optionName,
+        value: opt.optionValue,
+        additionalPrice: opt.additionalPrice,
+        quantity: opt.quantity
+      }));
+
+      // 옵션이 있는 상품의 경우 각 옵션별 최종 가격 계산 (기본 가격 + 추가 가격)
+      const productForCart: CartProduct = {
+        id: productDetails.id,
+        name: productDetails.name,
+        price: productDetails.price, // 기본 가격은 그대로 저장
+        thumbnail_url: productDetails.thumbnail_url || ""
+      };
+
+      buyNowData = {
+        product: productForCart,
+        // 총 구매 수량 (모든 옵션의 수량 합계)
+        quantity: selectedOptions.reduce((total, opt) => total + opt.quantity, 0),
+        // 첫 번째 옵션 (기존 코드와의 호환성)
+        option: firstOption,
+        // 모든 옵션 배열
+        allOptions: allOptions,
+        // 총 금액 계산하여 추가 (각 옵션별 [기본가격 + 추가가격] × 수량의 합계)
+        totalPrice: selectedOptions.reduce((total, opt) => 
+          total + ((productDetails.price + opt.additionalPrice) * opt.quantity), 0)
+      };
+    } else {
+      // 옵션이 없는 상품
+      const productForCart: CartProduct = {
+        id: productDetails.id,
+        name: productDetails.name,
+        price: productDetails.price,
+        thumbnail_url: productDetails.thumbnail_url || ""
+      };
+
+      buyNowData = {
+        product: productForCart,
+        quantity: quantity,
+        option: null,
+        allOptions: null,
+        totalPrice: productDetails.price * quantity // 옵션 없는 상품의 총 금액
+      };
+    }
 
     // 로컬 스토리지에 즉시 구매 정보 저장
-    const buyNowItem = {
-      product: productForCart,
-      quantity,
-      option: optionInfo,
-    };
-
-    localStorage.setItem("buyNowItem", JSON.stringify(buyNowItem));
+    localStorage.setItem("buyNowItem", JSON.stringify(buyNowData));
     router.push("/m/checkout?type=buy-now");
   };
 
@@ -358,13 +414,6 @@ export default function MobileProductDetailPage() {
   const goToCart = () => {
     router.push('/m/cart');
   };
-
-  useEffect(() => {
-    if (addToCartSuccess) {
-      toast.success("상품이 장바구니에 추가되었습니다.");
-      setAddToCartSuccess(false);
-    }
-  }, [addToCartSuccess]);
 
   if (loading) {
     return (

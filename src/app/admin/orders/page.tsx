@@ -5,19 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import toast from 'react-hot-toast';
-
-// 주문 상태 색상 및 텍스트
-const orderStatusMap: Record<string, { color: string; text: string }> = {
-  pending: { color: 'bg-yellow-100 text-yellow-800', text: '주문 대기중' },
-  payment_pending: { color: 'bg-blue-100 text-blue-800', text: '결제 진행중' },
-  paid: { color: 'bg-green-100 text-green-800', text: '결제 완료' },
-  preparing: { color: 'bg-indigo-100 text-indigo-800', text: '상품 준비중' },
-  shipping: { color: 'bg-purple-100 text-purple-800', text: '배송중' },
-  delivered: { color: 'bg-green-100 text-green-800', text: '배송 완료' },
-  canceled: { color: 'bg-red-100 text-red-800', text: '주문 취소' },
-  cancelled: { color: 'bg-red-100 text-red-800', text: '주문 취소' },
-  refunded: { color: 'bg-gray-100 text-gray-800', text: '환불 완료' },
-};
+import { ORDER_STATUS_MAP } from '@/constants/orderStatus';
 
 // 날짜 포맷팅 함수
 const formatDate = (dateString: string) => {
@@ -377,9 +365,9 @@ export default function AdminOrdersPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs rounded-full ${
-                        orderStatusMap[order.status]?.color || 'bg-gray-100 text-gray-800'
+                        ORDER_STATUS_MAP[order.status]?.color || 'bg-gray-100 text-gray-800'
                       }`}>
-                        {orderStatusMap[order.status]?.text || order.status}
+                        {ORDER_STATUS_MAP[order.status]?.text || order.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -388,7 +376,7 @@ export default function AdminOrdersPage() {
                     <td className="px-4 py-4 whitespace-nowrap">
                       {order.shipments && order.shipments.length > 0 ? (
                         <div className="text-sm">
-                          <div className="font-medium text-gray-900">{order.shipments[0].carrier}</div>
+                          <div className="font-medium text-gray-900">{order.shipments[0].carrier_name || order.shipments[0].carrier}</div>
                           <div className="text-gray-500">{order.shipments[0].tracking_number}</div>
                         </div>
                       ) : (
@@ -419,9 +407,9 @@ export default function AdminOrdersPage() {
                     <div className="text-xs text-gray-500">{formatDate(order.created_at)}</div>
                   </div>
                   <span className={`px-2 py-1 text-xs rounded-full ${
-                    orderStatusMap[order.status]?.color || 'bg-gray-100 text-gray-800'
+                    ORDER_STATUS_MAP[order.status]?.color || 'bg-gray-100 text-gray-800'
                   }`}>
-                    {orderStatusMap[order.status]?.text || order.status}
+                    {ORDER_STATUS_MAP[order.status]?.text || order.status}
                   </span>
                 </div>
                 
@@ -446,7 +434,7 @@ export default function AdminOrdersPage() {
                   <div className="text-xs mb-3">
                     <div className="font-medium text-gray-500">배송정보</div>
                     <div className="grid grid-cols-2 gap-1">
-                      <div>택배사: {order.shipments[0].carrier}</div>
+                      <div>택배사: {order.shipments[0].carrier_name || order.shipments[0].carrier}</div>
                       <div>송장번호: {order.shipments[0].tracking_number}</div>
                     </div>
                   </div>
