@@ -119,8 +119,9 @@ export async function POST(request: NextRequest) {
       .from('shipments')
       .update({
         status: statusCode,
-        status_name: response?.track?.lastEvent?.status?.name || null,
-        last_status_description: response?.track?.lastEvent?.description || null,
+        tracking_details: response?.track ? {
+          lastEvent: response.track.lastEvent
+        } : null,
         updated_at: new Date().toISOString()
       })
       .eq('id', shipments[0].id);
