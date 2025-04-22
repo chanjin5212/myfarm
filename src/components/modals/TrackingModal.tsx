@@ -136,10 +136,6 @@ export default function TrackingModal({
           trackingNumber: shipment.tracking_number
         });
         
-        console.log('[트래킹 모달] API 응답:', JSON.stringify(response, null, 2));
-        console.log('[트래킹 모달] 현재 상태:', response?.track?.lastEvent?.status);
-        console.log('[트래킹 모달] 이벤트 목록:', response?.track?.events?.edges);
-        
         // GraphQL 응답에 데이터가 있는 경우
         if (response?.track) {
           setTrackingData(response);
