@@ -8,10 +8,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const orderId = params.orderId;
+    const orderId = (await params).orderId;
     
     if (!orderId) {
       return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
@@ -77,28 +77,25 @@ export async function POST(
       // 계속 진행
     }
     
-    // 주문 상태 업데이트
-    const { data: updateData, error: updateError } = await supabase
+    // 주문 완전 삭제
+    const { data: deleteData, error: deleteError } = await supabase
       .from('orders')
-      .update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      })
+      .delete()
       .eq('id', orderId)
       .select()
       .single();
     
-    if (updateError) {
-      console.error('주문 상태 업데이트 오류:', updateError);
-      return NextResponse.json({ error: '주문 취소에 실패했습니다.' }, { status: 500 });
+    if (deleteError) {
+      console.error('주문 삭제 오류:', deleteError);
+      return NextResponse.json({ error: '주문 삭제에 실패했습니다.' }, { status: 500 });
     }
     
-    console.log('주문 취소 완료:', orderId);
+    console.log('주문 삭제 완료:', orderId);
     
     return NextResponse.json({ 
       success: true, 
-      message: '주문이 성공적으로 취소되었습니다.',
-      order: updateData
+      message: '주문이 성공적으로 삭제되었습니다.',
+      order: deleteData
     });
     
   } catch (error) {

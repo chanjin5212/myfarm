@@ -111,7 +111,7 @@ export default function PaymentModal({
   // 주문 취소
   const cancelOrder = async () => {
     try {
-      console.log("주문 취소 시도:", orderId);
+      console.log("주문 삭제 시도:", orderId);
       const response = await fetch(`/api/orders/${orderId}/cancel`, {
         method: 'POST',
         headers: {
@@ -121,12 +121,12 @@ export default function PaymentModal({
       });
       
       if (!response.ok) {
-        console.error('주문 취소 API 오류:', await response.text());
+        console.error('주문 삭제 API 오류:', await response.text());
       } else {
-        console.log('주문이 취소되었습니다.');
+        console.log('주문이 삭제되었습니다.');
       }
     } catch (error) {
-      console.error('주문 취소 중 오류 발생:', error);
+      console.error('주문 삭제 중 오류 발생:', error);
     }
   };
   
@@ -144,11 +144,6 @@ export default function PaymentModal({
     }
     
     try {
-      console.log("결제 요청 시작");
-      
-      // 팝업 차단 경고 추가
-      alert('결제 진행을 위해 팝업이 열릴 예정입니다. 팝업 차단이 설정되어 있다면 허용해주세요.');
-      
       // 주문 ID 저장
       localStorage.setItem('currentOrderId', orderId);
       

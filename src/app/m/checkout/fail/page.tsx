@@ -27,7 +27,7 @@ export default function CheckoutFailPage() {
       }
       
       try {
-        // 주문 취소 API 호출
+        // 주문 삭제 API 호출
         const response = await fetch(`/api/orders/${orderId}/cancel`, {
           method: 'POST',
           headers: {
@@ -37,9 +37,9 @@ export default function CheckoutFailPage() {
         });
         
         if (!response.ok) {
-          console.error('주문 취소 실패:', await response.text());
+          console.error('주문 삭제 실패:', await response.text());
         } else {
-          console.log('주문이 취소되었습니다.');
+          console.log('주문이 삭제되었습니다.');
         }
         
         // 로컬 스토리지 정리
@@ -48,7 +48,7 @@ export default function CheckoutFailPage() {
         setError(errorMessage);
         setLoading(false);
       } catch (error) {
-        console.error('주문 취소 중 오류 발생:', error);
+        console.error('주문 삭제 중 오류 발생:', error);
         setError('결제에 실패했습니다.');
         setLoading(false);
       }
@@ -61,7 +61,7 @@ export default function CheckoutFailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white p-4">
         <Spinner size="lg" />
-        <p className="mt-4 text-gray-500">주문을 취소하는 중입니다...</p>
+        <p className="mt-4 text-gray-500">주문을 삭제하는 중입니다...</p>
       </div>
     );
   }
