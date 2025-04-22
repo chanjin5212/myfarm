@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as jwt from 'jsonwebtoken';
 import { gql } from "graphql-request";
 import { DeliveryTrackerGraphQLClient } from "@/lib/DeliveryTrackerGraphQLClient";
+import { addDays } from 'date-fns';
 
 // Supabase 클라이언트 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -33,6 +34,15 @@ const TRACK_QUERY = gql`
   }
 `;
 
+// 배송 상태 웹훅 등록 쿼리
+const REGISTER_WEBHOOK_QUERY = gql`
+  mutation RegisterTrackWebhook(
+    $input: RegisterTrackWebhookInput!
+  ) {
+    registerTrackWebhook(input: $input)
+  }
+`;
+
 // 배송 상태 코드를 시스템 상태로 변환
 const mapDeliveryStatusToOrderStatus = (statusCode: string): string => {
   switch (statusCode) {
@@ -51,6 +61,52 @@ const mapDeliveryStatusToOrderStatus = (statusCode: string): string => {
       return 'preparing';
     default:
       return 'preparing';
+  }
+};
+
+// 48시간 후의 ISO8601 형식 날짜-시간 문자열 생성
+const getExpirationTime = (): string => {
+  const expirationDate = addDays(new Date(), 2); // 현재로부터 48시간(2일) 후
+  return expirationDate.toISOString();
+};
+
+// 웹훅 등록 함수
+const registerWebhook = async (carrierId: string, trackingNumber: string): Promise<boolean> => {
+  try {
+    console.log(`[웹훅 등록] 시작 - 택배사: ${carrierId}, 송장번호: ${trackingNumber}`);
+    
+    const clientId = process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID;
+    const clientSecret = process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET;
+    const webhookUrl = process.env.DELIVERY_TRACKER_WEBHOOK_URL;
+    
+    if (!clientId || !clientSecret || !webhookUrl) {
+      console.error('[웹훅 등록] 환경 변수 누락:', { 
+        hasClientId: !!clientId, 
+        hasClientSecret: !!clientSecret, 
+        hasWebhookUrl: !!webhookUrl 
+      });
+      return false;
+    }
+    
+    const client = new DeliveryTrackerGraphQLClient(clientId, clientSecret);
+    
+    // 웹훅 만료 시간 (48시간 후)
+    const expirationTime = getExpirationTime();
+    
+    const response = await client.request(REGISTER_WEBHOOK_QUERY, {
+      input: {
+        carrierId,
+        trackingNumber,
+        callbackUrl: webhookUrl,
+        expirationTime
+      }
+    });
+    
+    console.log('[웹훅 등록] 응답:', JSON.stringify(response, null, 2));
+    return true;
+  } catch (error) {
+    console.error('[웹훅 등록] 오류:', error);
+    return false;
   }
 };
 
@@ -307,6 +363,10 @@ export async function POST(
     } catch (updateError) {
       console.error('[주문 상태 업데이트] 예외 발생:', updateError);
     }
+    
+    // Delivery Tracker Webhook 등록
+    const webhookRegistered = await registerWebhook(carrier, tracking_number);
+    console.log(`[웹훅 등록] 결과: ${webhookRegistered ? '성공' : '실패'}`);
 
     return NextResponse.json({
       success: true,
@@ -315,7 +375,8 @@ export async function POST(
       delivery_status: {
         code: statusCode,
         order_status: orderStatus
-      }
+      },
+      webhook_registered: webhookRegistered
     });
     
   } catch (error) {
