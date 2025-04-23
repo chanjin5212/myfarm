@@ -40,7 +40,7 @@ async function verifyAdminToken(request: NextRequest) {
 // 문의 상세 정보 조회 API
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 관리자 인증
@@ -52,7 +52,7 @@ export async function GET(
       );
     }
 
-    const inquiryId = params.id;
+    const { id: inquiryId } = await params;
     
     // 문의 상세 정보 조회
     const { data: inquiry, error: inquiryError } = await supabase
@@ -125,7 +125,7 @@ export async function GET(
 // 문의 답변 등록 API
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 관리자 인증
@@ -137,7 +137,7 @@ export async function POST(
       );
     }
 
-    const inquiryId = params.id;
+    const { id: inquiryId } = await params;
     const userId = authResult.userId;
     
     // 요청 본문 가져오기
@@ -193,4 +193,11 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  // Implementation of DELETE method
 } 

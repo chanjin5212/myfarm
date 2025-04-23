@@ -40,7 +40,7 @@ async function verifyAdminToken(request: NextRequest) {
 // 문의 답변 등록 API
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // 관리자 인증
@@ -52,7 +52,7 @@ export async function POST(
       );
     }
 
-    const inquiryId = params.id;
+    const { id: inquiryId } = await params;
     const userId = authResult.userId;
     
     // 요청 본문 가져오기
