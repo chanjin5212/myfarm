@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { checkToken, getAuthHeader, logout, triggerLoginEvent } from '@/utils/auth';
 import toast, { Toaster } from 'react-hot-toast';
+import DeactivateModal from '@/components/modals/DeactivateModal';
 
 // URL 파라미터 처리 컴포넌트
 function TabParamsHandler({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
@@ -119,6 +120,7 @@ function MobileMyPageContent() {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('profile');
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
 
   // 로그인 확인 및 데이터 로드
   useEffect(() => {
@@ -247,6 +249,14 @@ function MobileMyPageContent() {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <Toaster position="top-center" />
+      
+      {/* 회원탈퇴 모달 */}
+      <DeactivateModal
+        isOpen={showDeactivateModal}
+        onClose={() => setShowDeactivateModal(false)}
+        hasPassword={!!user.login_id}
+        onComplete={() => router.push('/')}
+      />
       
       {/* 헤더 */}
       <div className="bg-white px-4 py-4 shadow-sm fixed top-0 left-0 right-0 z-30">
@@ -414,6 +424,19 @@ function MobileMyPageContent() {
                 <span>로그아웃</span>
               </div>
             </button>
+            
+            {/* 회원탈퇴 버튼 추가 */}
+            <button 
+              onClick={() => setShowDeactivateModal(true)}
+              className="flex items-center justify-between p-4 rounded-lg bg-white shadow-sm w-full text-left mt-6"
+            >
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-500 mr-3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                </svg>
+                <span className="text-red-500">회원탈퇴</span>
+              </div>
+            </button>
           </div>
         </div>
       )}
@@ -510,7 +533,12 @@ function MobileMyPageContent() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start">
-                                <p className="font-medium text-base truncate">{product.product_name}</p>
+                                <Link 
+                                  href={`/m/products/${productId}`}
+                                  className="font-medium text-base truncate hover:text-green-600"
+                                >
+                                  {product.product_name}
+                                </Link>
                                 <p className="text-gray-600 text-sm whitespace-nowrap ml-2">
                                   총 {product.total_quantity}개
                                 </p>

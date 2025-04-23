@@ -46,6 +46,41 @@ export function checkToken(): { user: User | null, isLoggedIn: boolean } {
   return { user: null, isLoggedIn: false };
 }
 
+// 현재 로그인한 사용자 ID 가져오기
+export function getUserId(): string | null {
+  try {
+    // 먼저 토큰 정보에서 사용자 ID 가져오기 시도
+    const { user } = checkToken();
+    if (user && user.id) {
+      return user.id;
+    }
+    
+    // 토큰 정보에서 사용자 ID를 가져올 수 없다면 로컬 스토리지에서 직접 가져오기
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      return userId;
+    }
+    
+    // 토큰 데이터 자체가 사용자 ID인 경우
+    const tokenData = localStorage.getItem('token');
+    if (tokenData) {
+      try {
+        const parsedToken = JSON.parse(tokenData);
+        if (parsedToken.user && parsedToken.user.id) {
+          return parsedToken.user.id;
+        }
+      } catch (e) {
+        // JSON 파싱 실패 시 토큰 자체가 ID일 수 있음
+        return tokenData;
+      }
+    }
+  } catch (error) {
+    console.error('사용자 ID 가져오기 오류:', error);
+  }
+  
+  return null;
+}
+
 // API 호출을 위한 인증 헤더 생성
 export function getAuthHeader(): { Authorization?: string } {
   try {

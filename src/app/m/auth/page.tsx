@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { triggerLoginEvent } from '@/utils/auth';
 import { Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 
 // URL 파라미터에서 성공 메시지를 가져오는 컴포넌트
 function SuccessMessageHandler({ setSuccessMessage }: { setSuccessMessage: (message: string | null) => void }) {
@@ -26,6 +27,7 @@ export default function MobileAuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isNaverLoginProcessing, setIsNaverLoginProcessing] = useState(false);
   const router = useRouter();
 
   const handleGoBack = () => {
@@ -78,23 +80,35 @@ export default function MobileAuthPage() {
   };
 
   const handleNaverLogin = () => {
-    // 랜덤 상태 문자열 생성
-    const state = Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('oauth_state', state);
+    // 이미 처리 중이면 중복 실행 방지
+    if (isNaverLoginProcessing) {
+      toast.error('이미 로그인 처리 중입니다. 잠시만 기다려주세요.');
+      return;
+    }
+
+    setIsNaverLoginProcessing(true);
     
-    // 네이버 OAuth 인증 URL 생성
-    const authUrl = new URL('https://nid.naver.com/oauth2.0/authorize');
-    authUrl.searchParams.append('client_id', process.env.NEXT_PUBLIC_NAVER_CLIENT_ID || '');
-    authUrl.searchParams.append('redirect_uri', `${window.location.origin}/m/auth/naver/callback`);
-    authUrl.searchParams.append('response_type', 'code');
-    authUrl.searchParams.append('state', state);
-    // 전화번호 정보 요청 추가
-    authUrl.searchParams.append('auth_type', 'reprompt');
-    // 전화번호 정보에 대한 동의 요청 추가
-    authUrl.searchParams.append('scope', 'name email phone');
-    
-    // 네이버 로그인 페이지로 리디렉션
-    window.location.href = authUrl.toString();
+    try {
+      // 랜덤 상태 문자열 생성
+      const state = Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('oauth_state', state);
+      
+      // 네이버 OAuth 인증 URL 생성
+      const authUrl = new URL('https://nid.naver.com/oauth2.0/authorize');
+      authUrl.searchParams.append('client_id', process.env.NEXT_PUBLIC_NAVER_CLIENT_ID || '');
+      authUrl.searchParams.append('redirect_uri', `${window.location.origin}/m/auth/naver/callback`);
+      authUrl.searchParams.append('response_type', 'code');
+      authUrl.searchParams.append('state', state);
+      authUrl.searchParams.append('auth_type', 'reprompt');
+      authUrl.searchParams.append('scope', 'name email phone');
+      
+      // 네이버 로그인 페이지로 리디렉션
+      window.location.href = authUrl.toString();
+    } catch (error) {
+      console.error('네이버 로그인 초기화 오류:', error);
+      toast.error('네이버 로그인 처리 중 오류가 발생했습니다.');
+      setIsNaverLoginProcessing(false);
+    }
   };
 
   const handleKakaoLogin = () => {

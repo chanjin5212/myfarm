@@ -84,6 +84,63 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    name: '문의관리',
+    href: '/admin/inquiries',
+    icon: (
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+        />
+      </svg>
+    ),
+  },
+  {
+    name: '리뷰관리',
+    href: '/admin/reviews',
+    icon: (
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+        />
+      </svg>
+    ),
+  },
+  {
+    name: '통계',
+    href: '/admin/statistics',
+    icon: (
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+        />
+      </svg>
+    ),
+  },
 ];
 
 export default function AdminLayout({
@@ -95,6 +152,7 @@ export default function AdminLayout({
   const pathname = usePathname() || '';
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     // 토큰 확인 및 인증 상태 체크
@@ -148,6 +206,19 @@ export default function AdminLayout({
     checkAuth();
   }, [pathname, router]);
 
+  // 메뉴가 열렸을 때 스크롤 방지
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [menuOpen]);
+
   // 로딩 상태 표시
   if (isLoading) {
     return (
@@ -170,7 +241,10 @@ export default function AdminLayout({
   const pageTitle = pathname.includes('/dashboard') ? '대시보드' :
                     pathname.includes('/products') ? '상품 관리' :
                     pathname.includes('/orders') ? '주문 관리' :
-                    pathname.includes('/users') ? '회원 관리' : '관리자';
+                    pathname.includes('/users') ? '회원 관리' :
+                    pathname.includes('/inquiries') ? '문의관리' :
+                    pathname.includes('/reviews') ? '리뷰관리' :
+                    pathname.includes('/statistics') ? '통계' : '관리자';
 
   return (
     <>
@@ -182,7 +256,28 @@ export default function AdminLayout({
           {/* 관리자 헤더 */}
           <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-10">
             <div className="px-4 py-3 flex items-center justify-between">
-              <h1 className="text-lg font-bold">숙경팜 관리자</h1>
+              <div className="flex items-center">
+                <button 
+                  onClick={() => setMenuOpen(true)}
+                  className="mr-3 text-gray-600"
+                  aria-label="메뉴 열기"
+                >
+                  <svg 
+                    className="w-6 h-6" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
+                  </svg>
+                </button>
+                <h1 className="text-lg font-bold">숙경팜 관리자</h1>
+              </div>
               <div className="flex items-center">
                 <span className="text-gray-500 mr-2">{pageTitle}</span>
                 <Button
@@ -199,6 +294,57 @@ export default function AdminLayout({
             </div>
           </header>
 
+          {/* 슬라이드 메뉴 */}
+          <div className={`fixed inset-0 bg-black bg-opacity-50 z-20 transition-opacity duration-300 ${menuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div 
+              className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            >
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-lg font-bold">메뉴</h2>
+                <button 
+                  onClick={() => setMenuOpen(false)}
+                  className="text-gray-500"
+                  aria-label="메뉴 닫기"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <div className="overflow-y-auto h-full pb-20">
+                <div className="p-4">
+                  <nav className="space-y-1">
+                    {navItems.map((item) => (
+                      <button
+                        key={item.href}
+                        onClick={() => {
+                          router.push(item.href);
+                          setMenuOpen(false);
+                        }}
+                        className={`flex items-center p-2 w-full rounded-md ${
+                          pathname.startsWith(item.href) ? 'bg-green-50 text-green-600' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className="mr-3">{item.icon}</span>
+                        <span>{item.name}</span>
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* 메인 콘텐츠 */}
           <main className="pt-14 pb-16">
             {children}
@@ -207,7 +353,7 @@ export default function AdminLayout({
           {/* 모바일용 하단 네비게이션 바 */}
           <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
             <div className="grid grid-cols-4 h-16">
-              {navItems.map((item) => (
+              {navItems.slice(0, 4).map((item) => (
                 <button 
                   key={item.href}
                   onClick={() => router.push(item.href)}

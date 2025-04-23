@@ -34,6 +34,7 @@ export default function PaymentModal({
   const [widgets, setWidgets] = useState<any>(null);
   const paymentMethodRef = useRef<HTMLDivElement>(null);
   const agreementRef = useRef<HTMLDivElement>(null);
+  const [isPaymentCompleted, setIsPaymentCompleted] = useState(false);
   
   // 토스 페이먼츠 위젯 초기화
   useEffect(() => {
@@ -108,28 +109,6 @@ export default function PaymentModal({
     renderPaymentWidgets();
   }, [widgets, amount]);
   
-  // 주문 취소
-  const cancelOrder = async () => {
-    try {
-      console.log("주문 삭제 시도:", orderId);
-      const response = await fetch(`/api/orders/${orderId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader()
-        }
-      });
-      
-      if (!response.ok) {
-        console.error('주문 삭제 API 오류:', await response.text());
-      } else {
-        console.log('주문이 삭제되었습니다.');
-      }
-    } catch (error) {
-      console.error('주문 삭제 중 오류 발생:', error);
-    }
-  };
-  
   // 결제 요청
   const processPayment = async () => {
     if (!widgets) {
@@ -157,34 +136,13 @@ export default function PaymentModal({
       });
       
       console.log("결제 요청 성공");
+      setIsPaymentCompleted(true);
       onPaymentSuccess();
     } catch (error: any) {
       console.error('결제 요청 오류:', error);
-      
-      if (error.message === '취소되었습니다.' || 
-          error.message.includes('cancel') || 
-          error.message.includes('취소')) {
-        // 결제 취소된 경우
-        console.log("결제 취소됨");
-        // 주문 취소 API 호출
-        await cancelOrder();
-        onClose();
-      } else {
-        setError('결제 처리 중 오류가 발생했습니다: ' + error.message);
-        // 주문 취소 API 호출
-        await cancelOrder();
-        onPaymentFail(error);
-      }
+      setError('결제 처리 중 오류가 발생했습니다: ' + error.message);
+      onPaymentFail(error);
     }
-  };
-  
-  // 모달이 닫힐 때 처리
-  const handleClose = async () => {
-    // 모달을 닫을 때 주문 취소
-    if (orderId) {
-      await cancelOrder();
-    }
-    onClose();
   };
   
   if (!isOpen) return null;
@@ -195,7 +153,7 @@ export default function PaymentModal({
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">결제 진행</h2>
           <button 
-            onClick={handleClose}
+            onClick={onClose}
             className="text-gray-500 hover:text-gray-700"
           >
             ✕
@@ -243,7 +201,7 @@ export default function PaymentModal({
             </button>
             
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="w-full py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
             >
               취소

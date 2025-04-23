@@ -11,6 +11,30 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 });
 
+type Product = {
+  id: string;
+  stock: number;
+};
+
+type ProductOption = {
+  id: string;
+  stock: number;
+};
+
+type OrderItem = {
+  id: string;
+  quantity: number;
+  product: Product | null;
+  product_option: ProductOption | null;
+};
+
+type Order = {
+  id: string;
+  order_number: string;
+  status: string;
+  items: OrderItem[];
+};
+
 export async function POST(req: NextRequest) {
   try {
     console.log('API 요청 시작 - orders');
@@ -63,9 +87,9 @@ export async function POST(req: NextRequest) {
         .insert({
           id: orderId,
           user_id: userId,
-          status: 'pending',  // 초기 상태는 pending
-          payment_method: orderData.payment.method,
-          total_amount: orderData.payment.totalAmount,
+          status: 'paid',
+          payment_method: 'toss',
+          total_amount: orderData.payment.total_amount,
           shipping_name: orderData.shipping.name,
           shipping_phone: orderData.shipping.phone,
           shipping_address: orderData.shipping.address,
@@ -97,65 +121,107 @@ export async function POST(req: NextRequest) {
       const orderItems = orderData.items.map((item: any) => ({
         order_id: order.id,
         product_id: item.productId,
-        product_option_id: item.productOptionId || null,
+        product_option_id: item.productOptionId,
         quantity: item.quantity,
-        price: item.price,
-        // options 필드를 JSON 형식으로 저장
+        price: item.price + (item.selectedOptions?.additional_price || 0),
         options: {
           name: item.name,
           image: item.image,
-          option_name: item.selectedOptions ? item.selectedOptions.name : null,
-          option_value: item.selectedOptions ? item.selectedOptions.value : null
+          option_name: item.selectedOptions?.name || null,
+          option_value: item.selectedOptions?.value || null,
+          additional_price: item.selectedOptions?.additional_price || 0
         }
       }));
-      
-      console.log('모든 주문 상품 삽입 시도, 개수:', orderItems.length);
-      
+
+      console.log('주문 상품 데이터:', orderItems);
+
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(orderItems);
-      
+
       if (itemsError) {
-        console.error('주문 상품 일괄 삽입 오류:', itemsError);
+        console.error('주문 상품 생성 오류:', itemsError);
         throw new Error('주문 상품 생성 오류: ' + itemsError.message);
       }
+
+      console.log('주문 상품 생성 완료');
       
-      console.log('모든 주문 상품 생성 완료');
-      
-      // 성공 응답
-      return NextResponse.json({
-        success: true,
-        id: order.id,
-        message: '주문이 성공적으로 생성되었습니다.'
-      });
-      
-    } catch (error) {
-      // 오류 발생 시 이미 생성된 주문 취소 시도
-      if (order && order.id) {
-        console.error('오류 발생으로 주문 취소 시도:', order.id);
-        try {
-          await supabase
-            .from('orders')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('id', order.id);
-            
-          console.log('주문 취소 완료:', order.id);
-        } catch (cancelError) {
-          console.error('주문 취소 실패:', cancelError);
+      // 3. 재고 감소 처리
+      for (const item of orderData.items) {
+        if (!item.productOptionId) {
+          throw new Error('상품 옵션이 지정되지 않았습니다.');
+        }
+
+        // 상품 옵션의 재고 감소
+        const { data: productOption, error: productOptionError } = await supabase
+          .from('product_options')
+          .select('stock')
+          .eq('id', item.productOptionId)
+          .single();
+
+        if (productOptionError || !productOption) {
+          throw new Error('상품 옵션 정보를 찾을 수 없습니다.');
+        }
+
+        const { error: stockError } = await supabase
+          .from('product_options')
+          .update({ stock: productOption.stock - item.quantity })
+          .eq('id', item.productOptionId);
+
+        if (stockError) {
+          throw new Error('재고 업데이트에 실패했습니다.');
         }
       }
       
+      // 성공 응답
+      return NextResponse.json({
+        status: 'success',
+        orderId: order.id,
+        message: '주문이 성공적으로 처리되었습니다.',
+      });
+      
+    } catch (error: any) {
+      // 오류 발생 시 롤백 (주문 취소)
       console.error('주문 처리 중 오류 발생:', error);
+
+      try {
+        // 주문이 생성되었다면 해당 주문 ID 사용, 그렇지 않으면 전달된 ID 사용
+        const deleteOrderId = order?.id || orderId;
+
+        console.log('롤백 - 주문 삭제 시도:', deleteOrderId);
+
+        // 생성된 주문 항목 삭제 시도
+        const { error: deleteItemsError } = await supabase
+          .from('order_items')
+          .delete()
+          .eq('order_id', deleteOrderId);
+
+        if (deleteItemsError) {
+          console.error('주문 항목 삭제 중 오류:', deleteItemsError);
+        }
+
+        // 생성된 주문 삭제 시도
+        const { error: deleteOrderError } = await supabase
+          .from('orders')
+          .delete()
+          .eq('id', deleteOrderId);
+
+        if (deleteOrderError) {
+          console.error('주문 삭제 중 오류:', deleteOrderError);
+        }
+      } catch (rollbackError) {
+        console.error('롤백 중 오류:', rollbackError);
+      }
       
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : '주문 생성 중 오류가 발생했습니다.' },
+        { error: '주문 처리 중 오류가 발생했습니다: ' + error.message },
         { status: 500 }
       );
     }
-  } catch (error) {
-    console.error('API 요청 처리 중 예외 발생:', error);
+  } catch (error: any) {
+    console.error('주문 처리 중 오류:', error);
     return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
+      { error: '주문 처리 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류') },
       { status: 500 }
     );
   }

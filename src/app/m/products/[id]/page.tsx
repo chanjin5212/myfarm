@@ -80,7 +80,7 @@ export default function MobileProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isAddingToCart, setIsAddingToCart] = useState<boolean>(false);
   const [cartSuccessPopup, setCartSuccessPopup] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'review' | 'inquiry'>('info');
   const [currentImage, setCurrentImage] = useState<number>(0);
 
   // 상품 정보 가져오기
@@ -558,7 +558,7 @@ export default function MobileProductDetailPage() {
               className="flex-1 border-2 border-green-600 bg-white text-green-600 py-2.5 rounded-md font-medium flex items-center justify-center"
             >
               {isAddingToCart ? (
-                <span className="inline-block w-5 h-5 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2" />
+                <Spinner size="sm" className="mr-2 border-t-green-600 border-b-green-600" />
               ) : null}
               장바구니
             </button>

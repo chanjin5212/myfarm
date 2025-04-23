@@ -395,7 +395,7 @@ export default function MobileOrderDetailPage() {
           
           {groupedOrderItems.map((group, groupIndex) => (
             <div key={`group-${groupIndex}`} className="border-b border-gray-100 py-3 last:border-b-0">
-              <div className="flex items-start gap-3">
+              <Link href={`/m/products/${group.product_id}`} className="flex items-start gap-3">
                 <div className="relative w-16 h-16 flex-shrink-0">
                   <Image
                     src={group.image}
@@ -407,7 +407,7 @@ export default function MobileOrderDetailPage() {
                 </div>
                 
                 <div className="flex-grow">
-                  <h3 className="font-medium text-sm">{group.name}</h3>
+                  <h3 className="font-medium text-sm hover:text-green-600">{group.name}</h3>
                   <p className="text-xs text-gray-600">
                     {group.totalQuantity}개 / {formatPrice(group.totalPrice)}
                   </p>
@@ -460,7 +460,7 @@ export default function MobileOrderDetailPage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </Link>
             </div>
           ))}
           

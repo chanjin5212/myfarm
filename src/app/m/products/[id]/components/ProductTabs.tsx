@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline';
+import ProductInquiry from './ProductInquiry';
+import { Spinner } from '@/components/ui/CommonStyles';
 
 interface ProductTabsProps {
   product: {
@@ -13,8 +15,8 @@ interface ProductTabsProps {
     storage_method?: string;
     is_organic?: boolean;
   };
-  activeTab: 'info' | 'review';
-  setActiveTab: (tab: 'info' | 'review') => void;
+  activeTab: 'info' | 'review' | 'inquiry';
+  setActiveTab: (tab: 'info' | 'review' | 'inquiry') => void;
 }
 
 interface Review {
@@ -116,6 +118,16 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
         >
           리뷰 {reviewsCount > 0 && `(${reviewsCount})`}
         </button>
+        <button
+          className={`flex-1 py-3 text-center font-medium ${
+            activeTab === 'inquiry'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-500'
+          }`}
+          onClick={() => setActiveTab('inquiry')}
+        >
+          문의
+        </button>
       </div>
       
       {/* 탭 콘텐츠 */}
@@ -209,7 +221,7 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
             {/* 리뷰 목록 */}
             {reviewsLoading && page === 1 ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500 mx-auto"></div>
+                <Spinner size="md" className="mx-auto mb-2" />
                 <p className="mt-2 text-gray-500">리뷰를 불러오는 중입니다...</p>
               </div>
             ) : reviews.length === 0 ? (
@@ -265,13 +277,22 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
                       className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50"
                       disabled={reviewsLoading}
                     >
-                      {reviewsLoading ? '불러오는 중...' : '더보기'}
+                      {reviewsLoading ? (
+                        <Spinner size="sm" className="mx-auto" />
+                      ) : (
+                        '더보기'
+                      )}
                     </button>
                   </div>
                 )}
               </div>
             )}
           </div>
+        )}
+        
+        {/* 문의 탭 */}
+        {activeTab === 'inquiry' && (
+          <ProductInquiry productId={product.id} />
         )}
       </div>
     </div>

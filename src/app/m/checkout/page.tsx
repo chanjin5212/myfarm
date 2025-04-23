@@ -418,27 +418,30 @@ export default function MobileCheckoutPage() {
       // 배송 정보를 localStorage에 저장
       localStorage.setItem('checkoutShippingInfo', JSON.stringify(shippingInfo));
       
-      // 주문 상품 정보를 localStorage에 저장 (아직 저장되지 않은 경우)
-      if (!localStorage.getItem('checkoutItems')) {
-        const checkoutItems = cartItems.map(item => {
-          const itemPrice = parseInt(item.product.price) || 0;
-          return {
-            productId: item.product_id,
-            productOptionId: item.product_option_id || null,
-            name: item.product.name,
-            price: itemPrice,
-            quantity: item.quantity,
-            image: item.product.thumbnail_url || '/images/default-product.png',
-            option: item.product_option ? {
-              name: item.product_option.option_name,
-              value: item.product_option.option_value,
-              additionalPrice: item.product_option.additional_price || 0
-            } : null
-          };
-        });
+      // 주문 상품 정보를 localStorage에 저장
+      const checkoutItems = cartItems.map(item => {
+        const itemPrice = parseInt(item.product.price) || 0;
+        const additionalPrice = item.product_option ? parseInt(item.product_option.additional_price) || 0 : 0;
         
-        localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
-      }
+        return {
+          productId: item.product_id,
+          productOptionId: item.product_option_id,
+          name: item.product.name,
+          price: itemPrice,
+          originalPrice: itemPrice,
+          quantity: item.quantity,
+          image: item.product.thumbnail_url || '/images/default-product.png',
+          option: item.product_option ? {
+            id: item.product_option.id,
+            name: item.product_option.option_name,
+            value: item.product_option.option_value,
+            additionalPrice: additionalPrice,
+            quantity: item.quantity
+          } : null
+        };
+      });
+      
+      localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
       
       // 주문명 생성
       const orderName = cartItems.length > 1 
@@ -448,72 +451,8 @@ export default function MobileCheckoutPage() {
       // UUID 형식의 주문 ID 생성
       const tempOrderId = uuidv4();
       
-      // API를 호출하여 주문 생성 (DB에 저장)
-      const checkoutItems = JSON.parse(localStorage.getItem('checkoutItems') || '[]');
-      
-      // 안전한 문자열 처리 함수
-      const safeString = (str: string) => {
-        if (!str) return '';
-        return str.normalize('NFC');
-      };
-      
-      // 주문 데이터 생성
-      const orderData = {
-        userId: user?.id,
-        items: checkoutItems.map((item: any) => ({
-          productId: item.productId,
-          productOptionId: item.productOptionId || null,
-          name: safeString(item.name),
-          price: item.price,
-          originalPrice: item.price,
-          additionalPrice: item.option?.additionalPrice || 0,
-          totalPrice: item.price * item.quantity,
-          quantity: item.quantity,
-          image: item.image || '/images/default-product.png',
-          selectedOptions: item.option ? {
-            name: safeString(item.option.name),
-            value: safeString(item.option.value),
-            additional_price: item.option.additionalPrice || 0
-          } : null
-        })),
-        shipping: {
-          name: safeString(shippingInfo.name),
-          phone: shippingInfo.phone,
-          address: safeString(shippingInfo.address),
-          detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
-          memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
-        },
-        payment: {
-          method: 'toss',
-          totalAmount: finalPrice
-        }
-      };
-      
-      // 주문 생성 API 호출
-      const createOrderResponse = await fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeader()
-        },
-        body: JSON.stringify({
-          orderId: tempOrderId,
-          orderData
-        })
-      });
-      
-      if (!createOrderResponse.ok) {
-        const errorData = await createOrderResponse.json();
-        throw new Error(errorData.error || errorData.message || '주문 생성에 실패했습니다.');
-      }
-      
-      const createOrderResult = await createOrderResponse.json();
-      console.log('주문 생성 성공:', createOrderResult);
-      
-      // 생성된 주문 ID 사용
-      const finalOrderId = createOrderResult.id || tempOrderId;
-      
-      setOrderIdForPayment(finalOrderId);
+      // 임시 주문 ID와 주문명 저장
+      setOrderIdForPayment(tempOrderId);
       setOrderNameForPayment(orderName);
       setShowPaymentModal(true);
       setOrderProcessing(false);

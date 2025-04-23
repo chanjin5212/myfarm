@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { triggerLoginEvent } from '@/utils/auth';
 import { Spinner } from '@/components/ui/CommonStyles';
@@ -9,35 +9,43 @@ import toast from 'react-hot-toast';
 export default function MobileNaverCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isProcessing = useRef(false);
 
   useEffect(() => {
     const handleCallback = async () => {
-      // 기존 로컬 스토리지 데이터 정리
-      localStorage.removeItem('google_user_info');
-      localStorage.removeItem('google_access_token');
-      localStorage.removeItem('kakao_user_info');
-      localStorage.removeItem('kakao_access_token');
-      localStorage.removeItem('token');
-      
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const state = urlParams.get('state');
-      const savedState = localStorage.getItem('oauth_state');
-
-      // state 검증
-      if (!state || state !== savedState) {
-        toast.error('잘못된 요청입니다.');
-        router.push('/m/auth');
+      // 이미 처리 중이면 중복 실행 방지
+      if (isProcessing.current) {
+        console.log('이미 처리 중인 요청입니다.');
         return;
       }
-
-      if (!code) {
-        toast.error('인증 코드가 없습니다.');
-        router.push('/m/auth');
-        return;
-      }
+      isProcessing.current = true;
 
       try {
+        // 기존 로컬 스토리지 데이터 정리
+        localStorage.removeItem('google_user_info');
+        localStorage.removeItem('google_access_token');
+        localStorage.removeItem('kakao_user_info');
+        localStorage.removeItem('kakao_access_token');
+        localStorage.removeItem('token');
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const savedState = localStorage.getItem('oauth_state');
+
+        // state 검증
+        if (!state || state !== savedState) {
+          toast.error('잘못된 요청입니다.');
+          router.push('/m/auth');
+          return;
+        }
+
+        if (!code) {
+          toast.error('인증 코드가 없습니다.');
+          router.push('/m/auth');
+          return;
+        }
+
         // 서버 API를 통해 토큰 교환
         const response = await fetch('/api/auth/naver', {
           method: 'POST',
@@ -122,6 +130,8 @@ export default function MobileNaverCallbackPage() {
         console.error('로그인 과정 오류:', error);
         toast.error('네이버 로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
         router.push('/m/auth');
+      } finally {
+        isProcessing.current = false;
       }
     };
 

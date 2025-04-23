@@ -44,6 +44,8 @@ CREATE TABLE users (
 	address text NULL,
 	detail_address text NULL,
 	is_admin bool DEFAULT false NULL,
+	is_deleted BOOLEAN DEFAULT FALSE,
+	deleted_at TIMESTAMPTZ NULL,
 	CONSTRAINT users_email_unique UNIQUE (email),
 	CONSTRAINT users_login_id_key UNIQUE (login_id),
 	CONSTRAINT users_pkey PRIMARY KEY (id)
@@ -51,6 +53,19 @@ CREATE TABLE users (
 CREATE INDEX idx_users_google_id ON public.users USING btree (google_id);
 CREATE INDEX idx_users_kakao_id ON public.users USING btree (kakao_id);
 CREATE INDEX idx_users_naver_id ON public.users USING btree (naver_id);
+CREATE INDEX IF NOT EXISTS idx_users_is_deleted ON users(is_deleted);
+
+-- 회원 탈퇴 사유 저장 테이블 생성
+CREATE TABLE IF NOT EXISTS user_deactivation_reasons (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT user_deactivation_reasons_user_id_key UNIQUE (user_id)
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_user_deactivation_reasons_user_id ON user_deactivation_reasons(user_id);
 
 
 -- public.carts definition
@@ -493,3 +508,59 @@ CREATE POLICY shipments_update_policy ON shipments
 
 CREATE POLICY shipments_delete_policy ON shipments
   FOR DELETE USING (true); 
+
+-- 상품 문의 테이블 생성
+CREATE TABLE IF NOT EXISTS product_inquiries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    is_private BOOLEAN DEFAULT FALSE,
+    status VARCHAR(20) DEFAULT 'pending', -- pending, answered, closed
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 문의 답변 테이블 생성
+CREATE TABLE IF NOT EXISTS inquiry_replies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    inquiry_id UUID NOT NULL REFERENCES product_inquiries(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 인덱스 생성
+CREATE INDEX idx_product_inquiries_product_id ON product_inquiries(product_id);
+CREATE INDEX idx_product_inquiries_user_id ON product_inquiries(user_id);
+CREATE INDEX idx_inquiry_replies_inquiry_id ON inquiry_replies(inquiry_id);
+
+-- RLS 정책 설정
+ALTER TABLE product_inquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inquiry_replies ENABLE ROW LEVEL SECURITY;
+
+-- 문의 조회 정책
+CREATE POLICY product_inquiries_select_policy ON product_inquiries
+  FOR SELECT USING (true);
+
+-- 문의 등록 정책
+CREATE POLICY product_inquiries_insert_policy ON product_inquiries
+  FOR INSERT WITH CHECK (true);
+
+-- 문의 수정 정책
+CREATE POLICY product_inquiries_update_policy ON product_inquiries
+  FOR UPDATE USING (true);
+
+-- 문의 답변 조회 정책
+CREATE POLICY inquiry_replies_select_policy ON inquiry_replies
+  FOR SELECT USING (true);
+
+-- 문의 답변 등록 정책
+CREATE POLICY inquiry_replies_insert_policy ON inquiry_replies
+  FOR INSERT WITH CHECK (true);
+
+-- 문의 답변 수정 정책
+CREATE POLICY inquiry_replies_update_policy ON inquiry_replies
+  FOR UPDATE USING (true); 

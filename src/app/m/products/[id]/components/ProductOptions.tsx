@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import { Spinner } from '@/components/ui/CommonStyles';
 
 interface ProductOption {
   id: string;
@@ -44,6 +45,9 @@ export default function MobileProductOptions({
 }: ProductOptionsProps) {
   // 실제 판매 가격
   const actualPrice = product.price;
+  // 로딩 상태 관리
+  const [changingOptionId, setChangingOptionId] = useState<string | null>(null);
+  const [changingBaseQuantity, setChangingBaseQuantity] = useState<boolean>(false);
   
   // 총 금액 계산
   const calculateTotalPrice = () => {
@@ -105,6 +109,9 @@ export default function MobileProductOptions({
   
   // 옵션 수량 변경 핸들러
   const handleOptionQuantityChange = (optionId: string, newQuantity: number) => {
+    // 이미 변경 중인 경우 중복 요청 방지
+    if (changingOptionId) return;
+    
     // 수량은 최소 1 이상이어야 함
     if (newQuantity < 1) {
       toast.error('최소 수량은 1개입니다.');
@@ -121,16 +128,25 @@ export default function MobileProductOptions({
       return;
     }
     
-    // 수량 업데이트
-    setSelectedOptions(
-      selectedOptions.map(opt => 
-        opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
-      )
-    );
+    // 로딩 상태 설정
+    setChangingOptionId(optionId);
+    
+    // 수량 업데이트 (약간의 지연 효과 추가)
+    setTimeout(() => {
+      setSelectedOptions(
+        selectedOptions.map(opt => 
+          opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
+        )
+      );
+      setChangingOptionId(null);
+    }, 300);
   };
   
   // 기본 수량 변경 핸들러 (옵션이 없는 상품용)
   const handleBaseQuantityChange = (newQuantity: number) => {
+    // 이미 변경 중인 경우 중복 요청 방지
+    if (changingBaseQuantity) return;
+    
     if (newQuantity < 1) {
       toast.error('최소 수량은 1개입니다.');
       return;
@@ -141,7 +157,14 @@ export default function MobileProductOptions({
       return;
     }
     
-    setQuantity(newQuantity);
+    // 로딩 상태 설정
+    setChangingBaseQuantity(true);
+    
+    // 수량 업데이트 (약간의 지연 효과 추가)
+    setTimeout(() => {
+      setQuantity(newQuantity);
+      setChangingBaseQuantity(false);
+    }, 300);
   };
   
   // 옵션 삭제 핸들러
@@ -216,8 +239,13 @@ export default function MobileProductOptions({
                   <button
                     className="px-3 py-1 text-gray-500"
                     onClick={() => handleOptionQuantityChange(option.optionId, option.quantity - 1)}
+                    disabled={changingOptionId === option.optionId}
                   >
-                    -
+                    {changingOptionId === option.optionId ? (
+                      <Spinner size="sm" className="w-3 h-3" />
+                    ) : (
+                      '-'
+                    )}
                   </button>
                   <input
                     type="number"
@@ -226,12 +254,18 @@ export default function MobileProductOptions({
                     value={option.quantity}
                     onChange={(e) => handleOptionQuantityChange(option.optionId, parseInt(e.target.value) || 1)}
                     className="w-12 text-center border-x border-gray-300"
+                    disabled={changingOptionId === option.optionId}
                   />
                   <button
                     className="px-3 py-1 text-gray-500"
                     onClick={() => handleOptionQuantityChange(option.optionId, option.quantity + 1)}
+                    disabled={changingOptionId === option.optionId}
                   >
-                    +
+                    {changingOptionId === option.optionId ? (
+                      <Spinner size="sm" className="w-3 h-3" />
+                    ) : (
+                      '+'
+                    )}
                   </button>
                 </div>
                 <span className="font-semibold">
@@ -254,8 +288,13 @@ export default function MobileProductOptions({
               <button
                 className="px-3 py-1 text-gray-500"
                 onClick={() => handleBaseQuantityChange(quantity - 1)}
+                disabled={changingBaseQuantity}
               >
-                -
+                {changingBaseQuantity ? (
+                  <Spinner size="sm" className="w-3 h-3" />
+                ) : (
+                  '-'
+                )}
               </button>
               <input
                 id="quantity"
@@ -265,12 +304,18 @@ export default function MobileProductOptions({
                 value={quantity}
                 onChange={(e) => handleBaseQuantityChange(parseInt(e.target.value) || 1)}
                 className="w-12 text-center border-x border-gray-300"
+                disabled={changingBaseQuantity}
               />
               <button
                 className="px-3 py-1 text-gray-500"
                 onClick={() => handleBaseQuantityChange(quantity + 1)}
+                disabled={changingBaseQuantity}
               >
-                +
+                {changingBaseQuantity ? (
+                  <Spinner size="sm" className="w-3 h-3" />
+                ) : (
+                  '+'
+                )}
               </button>
             </div>
             <span className="ml-auto font-semibold">

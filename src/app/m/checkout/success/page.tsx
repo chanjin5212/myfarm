@@ -10,6 +10,7 @@ export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [orderId, setOrderId] = useState('');
+  const [orderNumber, setOrderNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [orderCompleted, setOrderCompleted] = useState(false);
   const isProcessing = useRef(false);
@@ -56,9 +57,73 @@ export default function CheckoutSuccessPage() {
         const userId = user.id;
         const authHeader = getAuthHeader();
 
+        // 로컬 스토리지에서 주문 정보 가져오기
+        const checkoutItems = JSON.parse(localStorage.getItem('checkoutItems') || '[]');
+        const shippingInfo = JSON.parse(localStorage.getItem('checkoutShippingInfo') || '{}');
+
+        // 안전한 문자열 처리 함수
+        const safeString = (str: string) => {
+          if (!str) return '';
+          return str.normalize('NFC');
+        };
+
+        // 주문 데이터 생성
+        const orderData = {
+          userId: user.id,
+          items: checkoutItems.map((item: any) => ({
+            productId: item.productId,
+            productOptionId: item.productOptionId,
+            name: safeString(item.name),
+            price: item.price,
+            additionalPrice: item.option ? item.option.additionalPrice : 0,
+            quantity: item.quantity,
+            image: item.image,
+            selectedOptions: item.option ? {
+              name: safeString(item.option.name),
+              value: safeString(item.option.value),
+              additional_price: item.option.additionalPrice
+            } : null
+          })),
+          shipping: {
+            name: safeString(shippingInfo.name),
+            phone: shippingInfo.phone,
+            address: safeString(shippingInfo.address),
+            detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
+            memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
+          },
+          payment: {
+            method: 'toss',
+            total_amount: parseInt(amount)
+          }
+        };
+
+        // 주문 생성 API 호출
+        const createOrderResponse = await fetch('/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader
+          },
+          body: JSON.stringify({
+            orderId,
+            orderData
+          })
+        });
+
+        if (!createOrderResponse.ok) {
+          const errorData = await createOrderResponse.json();
+          throw new Error(errorData.error || errorData.message || '주문 생성에 실패했습니다.');
+        }
+
+        const createOrderResult = await createOrderResponse.json();
+        console.log('주문 생성 성공:', createOrderResult);
+
+        // 주문 번호 저장
+        setOrderNumber(createOrderResult.order_number || orderId);
+
         // 토스페이먼츠 결제 승인 API 호출
         console.log('토스페이먼츠 결제 승인 요청:', { paymentKey, orderId, amount });
-        
+
         const paymentResponse = await fetch('/api/payments/toss', {
           method: 'POST',
           headers: {
@@ -154,7 +219,7 @@ export default function CheckoutSuccessPage() {
             결제가 완료되었습니다!
           </h2>
           <p className="text-green-700 mb-1">
-            주문번호: <span className="font-medium">{orderId}</span>
+            주문번호: <span className="font-medium">{orderNumber}</span>
           </p>
           <p className="text-green-700">
             주문 상세 페이지로 이동합니다...
