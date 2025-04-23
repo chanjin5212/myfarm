@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import { toast } from 'react-hot-toast';
+import Link from 'next/link';
 
 interface Inquiry {
   id: string;

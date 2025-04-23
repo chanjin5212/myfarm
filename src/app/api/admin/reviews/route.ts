@@ -47,94 +47,104 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+    
+    console.log('[API 호출] 인증 성공, 사용자 ID:', authResult.userId);
 
     // 쿼리 파라미터 추출
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
-    const status = searchParams.get('status') || '';
     const search = searchParams.get('search') || '';
-    const startDate = searchParams.get('startDate') || '';
-    const endDate = searchParams.get('endDate') || '';
     const sort = searchParams.get('sort') || 'created_at';
     const order = searchParams.get('order') || 'desc';
     
     // 페이지네이션 계산
     const offset = (page - 1) * limit;
     
-    // 기본 쿼리 작성
+    // 기본 쿼리 작성 - 상품 목록 조회
     let query = supabase
-      .from('orders')
+      .from('products')
       .select(`
-        *,
-        items:order_items(
-          *,
-          product:products(id, name)
-        ),
-        shipments(*)
-      `, { count: 'exact' })
-      .order(sort, { ascending: order === 'asc' })
-      .range(offset, offset + limit - 1);
-    
-    // 상태 필터 적용
-    if (status && status !== 'all') {
-      // 취소 상태는 'canceled'와 'cancelled' 모두 포함
-      if (status === 'canceled') {
-        query = query.or('status.eq.canceled,status.eq.cancelled');
-      } else {
-        query = query.eq('status', status);
-      }
-    }
+        id,
+        name,
+        price,
+        thumbnail_url
+      `, { count: 'exact' });
     
     // 검색어 적용
     if (search) {
-      query = query.or(`order_number.ilike.%${search}%,shipping_name.ilike.%${search}%,shipping_phone.ilike.%${search}%`);
+      query = query.ilike('name', `%${search}%`);
     }
     
-    // 날짜 범위 필터 적용
-    if (startDate) {
-      query = query.gte('created_at', `${startDate}T00:00:00`);
-    }
-    if (endDate) {
-      query = query.lte('created_at', `${endDate}T23:59:59`);
-    }
+    // 기본 정렬은 생성일
+    query = query.order(sort === 'rating' || sort === 'review_count' ? 'created_at' : sort, { 
+      ascending: order === 'asc' 
+    });
+    
+    // 페이지네이션 적용
+    query = query.range(offset, offset + limit - 1);
     
     // 쿼리 실행
-    const { data: orders, count, error } = await query;
+    const { data: products, count, error } = await query;
     
     if (error) {
-      console.error('주문 목록 조회 오류:', error);
+      console.error('상품 목록 조회 오류:', error);
       return NextResponse.json(
-        { error: '주문 목록을 가져오는데 실패했습니다' },
+        { error: '상품 목록을 가져오는데 실패했습니다' },
         { status: 500 }
       );
     }
     
-    // 상품 정보 가공
-    const processedOrders = orders?.map(order => {
-      if (order.items && order.items.length > 0) {
-        order.items = order.items.map((item: any) => {
-          // 상품 정보에서 product_name 추출
-          let product_name = '상품명 없음';
-          
-          if (item.product) {
-            product_name = item.product.name || '상품명 없음';
-          }
-          
-          return {
-            ...item,
-            product_name
-          };
-        });
+    // 데이터 가공 - 각 상품에 대한 평균 평점과 리뷰 수 계산
+    const productsWithReviewStats = await Promise.all(products?.map(async (product) => {
+      // 리뷰 통계 계산
+      const { data: reviewStats, error: statsError } = await supabase
+        .from('product_reviews')
+        .select('rating')
+        .eq('product_id', product.id);
+      
+      if (statsError) {
+        console.error(`상품 ${product.id}의 리뷰 통계 조회 오류:`, statsError);
+        return {
+          ...product,
+          average_rating: 0,
+          review_count: 0
+        };
       }
-      return order;
-    });
+      
+      const reviewCount = reviewStats?.length || 0;
+      const totalRating = reviewStats?.reduce((sum, review) => sum + review.rating, 0) || 0;
+      const averageRating = reviewCount > 0 ? totalRating / reviewCount : 0;
+      
+      return {
+        ...product,
+        average_rating: parseFloat(averageRating.toFixed(1)),
+        review_count: reviewCount
+      };
+    }) || []);
+    
+    // 평점 또는 리뷰 수로 정렬이 필요한 경우 JavaScript에서 정렬
+    const sortedProducts = [...productsWithReviewStats];
+    
+    if (sort === 'rating') {
+      sortedProducts.sort((a, b) => {
+        return order === 'asc' 
+          ? a.average_rating - b.average_rating
+          : b.average_rating - a.average_rating;
+      });
+    } else if (sort === 'review_count') {
+      sortedProducts.sort((a, b) => {
+        return order === 'asc'
+          ? a.review_count - b.review_count
+          : b.review_count - a.review_count;
+      });
+    }
     
     // 총 페이지 수 계산
     const totalPages = Math.ceil((count || 0) / limit);
     
     return NextResponse.json({
-      orders: processedOrders,
+      products: sortedProducts,
       total: count,
       page,
       limit,
@@ -142,9 +152,9 @@ export async function GET(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('관리자 주문 목록 조회 에러:', error);
+    console.error('[API 오류] 관리자 리뷰 통계 조회 에러:', error);
     return NextResponse.json(
-      { error: '주문 목록을 가져오는데 실패했습니다' },
+      { error: '리뷰 통계를 가져오는데 실패했습니다' },
       { status: 500 }
     );
   }

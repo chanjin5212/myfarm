@@ -29,6 +29,8 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [currentStatus, setCurrentStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -64,6 +66,14 @@ export default function AdminOrdersPage() {
       
       if (searchTerm) {
         queryParams.append('search', searchTerm);
+      }
+
+      if (startDate) {
+        queryParams.append('startDate', startDate);
+      }
+      
+      if (endDate) {
+        queryParams.append('endDate', endDate);
       }
 
       const response = await fetch(`/api/admin/orders?${queryParams.toString()}`, {
@@ -107,6 +117,27 @@ export default function AdminOrdersPage() {
     } else {
       setSortBy(field);
       setSortOrder('desc');
+    }
+  };
+
+  // 날짜 변경 핸들러
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newStartDate = e.target.value;
+    setStartDate(newStartDate);
+    
+    // 종료일이 시작일보다 이른 경우 종료일을 시작일로 변경
+    if (endDate && newStartDate > endDate) {
+      setEndDate(newStartDate);
+    }
+  };
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEndDate = e.target.value;
+    setEndDate(newEndDate);
+    
+    // 시작일이 종료일보다 늦은 경우 시작일을 종료일로 변경
+    if (startDate && newEndDate < startDate) {
+      setStartDate(newEndDate);
     }
   };
 
@@ -256,15 +287,33 @@ export default function AdminOrdersPage() {
             </Button>
           </div>
           
-          <form onSubmit={handleSearch} className="flex gap-2 w-full">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="주문번호, 고객명, 연락처 검색"
-              className="border border-gray-300 rounded px-3 py-2 flex-grow"
-            />
-            <Button type="submit">검색</Button>
+          <form onSubmit={handleSearch} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="주문번호, 고객명, 연락처 검색"
+                className="border border-gray-300 rounded px-3 py-2 flex-grow"
+              />
+              <Button type="submit">검색</Button>
+            </div>
+            
+            <div className="flex gap-2 items-center">
+              <input
+                type="date"
+                value={startDate}
+                onChange={handleStartDateChange}
+                className="border border-gray-300 rounded px-3 py-2"
+              />
+              <span>~</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={handleEndDateChange}
+                className="border border-gray-300 rounded px-3 py-2"
+              />
+            </div>
           </form>
         </div>
       </div>

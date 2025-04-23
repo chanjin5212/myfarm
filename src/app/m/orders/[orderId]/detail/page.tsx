@@ -395,72 +395,74 @@ export default function MobileOrderDetailPage() {
           
           {groupedOrderItems.map((group, groupIndex) => (
             <div key={`group-${groupIndex}`} className="border-b border-gray-100 py-3 last:border-b-0">
-              <Link href={`/m/products/${group.product_id}`} className="flex items-start gap-3">
-                <div className="relative w-16 h-16 flex-shrink-0">
-                  <Image
-                    src={group.image}
-                    alt={group.name}
-                    fill
-                    sizes="64px"
-                    className="object-cover rounded"
-                  />
-                </div>
-                
-                <div className="flex-grow">
-                  <h3 className="font-medium text-sm hover:text-green-600">{group.name}</h3>
-                  <p className="text-xs text-gray-600">
-                    {group.totalQuantity}개 / {formatPrice(group.totalPrice)}
-                  </p>
+              <div className="flex items-start gap-3">
+                <Link href={`/m/products/${group.product_id}`} className="flex items-start gap-3 flex-grow">
+                  <div className="relative w-16 h-16 flex-shrink-0">
+                    <Image
+                      src={group.image}
+                      alt={group.name}
+                      fill
+                      sizes="64px"
+                      className="object-cover rounded"
+                    />
+                  </div>
                   
-                  {group.items.length > 0 && (
-                    <div className="mt-1 text-xs text-gray-500">
-                      {group.items.map((item, itemIndex) => (
-                        <div key={`item-${itemIndex}`} className="mb-1">
-                          <div className="text-gray-600">
-                            {item.options && typeof item.options === 'object' ? (
-                              <span>
-                                {item.options.option_name && item.options.option_value ? 
-                                  `${item.options.option_name}: ${item.options.option_value}` : 
-                                  (item.options.name ? item.options.name : '기본 상품')}
+                  <div className="flex-grow">
+                    <h3 className="font-medium text-sm hover:text-green-600">{group.name}</h3>
+                    <p className="text-xs text-gray-600">
+                      {group.totalQuantity}개 / {formatPrice(group.totalPrice)}
+                    </p>
+                    
+                    {group.items.length > 0 && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        {group.items.map((item, itemIndex) => (
+                          <div key={`item-${itemIndex}`} className="mb-1">
+                            <div className="text-gray-600">
+                              {item.options && typeof item.options === 'object' ? (
+                                <span>
+                                  {item.options.option_name && item.options.option_value ? 
+                                    `${item.options.option_name}: ${item.options.option_value}` : 
+                                    (item.options.name ? item.options.name : '기본 상품')}
+                                </span>
+                              ) : (
+                                <span>기본 상품</span>
+                              )}
+                              <span className="ml-2">
+                                {item.quantity}개 × {formatPrice(item.price)} = {formatPrice(item.price * item.quantity)}
                               </span>
-                            ) : (
-                              <span>기본 상품</span>
-                            )}
-                            <span className="ml-2">
-                              {item.quantity}개 × {formatPrice(item.price)} = {formatPrice(item.price * item.quantity)}
-                            </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* 리뷰 작성 버튼 */}
-                  {paymentInfo.status === 'delivered' && (
-                    <div className="mt-2">
-                      {loadingReviewStatus ? (
-                        <div className="text-xs text-gray-500">
-                          <Spinner size="sm" className="mr-1" />
-                          리뷰 상태 확인 중...
-                        </div>
-                      ) : reviewedProducts[group.product_id] ? (
-                        <span className="text-xs text-green-600 font-medium">
-                          리뷰 작성 완료
-                        </span>
-                      ) : (
-                        <Button 
-                          size="sm"
-                          variant="outline"
-                          className="text-xs"
-                          onClick={() => handleOpenReviewModal(group.product_id, group.name)}
-                        >
-                          리뷰 작성
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Link>
+                
+                {/* 리뷰 작성 버튼 */}
+                {paymentInfo.status === 'delivered' && (
+                  <div className="mt-2">
+                    {loadingReviewStatus ? (
+                      <div className="text-xs text-gray-500">
+                        <Spinner size="sm" className="mr-1" />
+                        리뷰 상태 확인 중...
+                      </div>
+                    ) : reviewedProducts[group.product_id] ? (
+                      <span className="text-xs text-green-600 font-medium">
+                        리뷰 작성 완료
+                      </span>
+                    ) : (
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="text-xs"
+                        onClick={() => handleOpenReviewModal(group.product_id, group.name)}
+                      >
+                        리뷰 작성
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           
@@ -499,7 +501,7 @@ export default function MobileOrderDetailPage() {
       </div>
       
       {/* 리뷰 모달 */}
-      {selectedProduct && (
+      {selectedProduct && reviewModalOpen && (
         <ReviewModal
           isOpen={reviewModalOpen}
           onClose={handleCloseReviewModal}
