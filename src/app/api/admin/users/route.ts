@@ -56,11 +56,22 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const sort = searchParams.get('sort') || 'created_at';
     const order = searchParams.get('order') || 'desc';
+    const status = searchParams.get('status') || 'active';
     
     // 사용자 쿼리
     let query = supabase
       .from('users')
       .select('*');
+    
+    // 상태 필터 적용
+    if (status === 'active') {
+      query = query.is('deleted_at', null);
+    } else if (status === 'deleted') {
+      query = query.not('deleted_at', 'is', null);
+    } else if (status === 'all') {
+      // 'all'일 때는 필터링 없이 모든 사용자 표시
+      query = query;
+    }
     
     // 검색어가 있는 경우 필터링
     if (search) {

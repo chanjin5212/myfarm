@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Input, Spinner, Select } from '@/components/ui/CommonStyles';
+import { Button, Spinner } from '@/components/ui/CommonStyles';
 import { toast } from 'react-hot-toast';
 
 interface Inquiry {
