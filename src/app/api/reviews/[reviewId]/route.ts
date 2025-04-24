@@ -78,10 +78,10 @@ export async function GET(
 // 리뷰 삭제
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { reviewId: string } }
+  { params }: { params: Promise<{ reviewId: string }> }
 ) {
   try {
-    const reviewId = params.reviewId;
+    const { reviewId } = await params;
     
     // 토큰 확인
     const token = request.headers.get('authorization')?.split(' ')[1];
