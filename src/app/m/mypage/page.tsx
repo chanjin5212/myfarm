@@ -18,6 +18,8 @@ function TabParamsHandler({ setActiveTab }: { setActiveTab: (tab: string) => voi
     const tabParam = searchParams.get('tab');
     if (tabParam === 'orders') {
       setActiveTab('orders');
+    } else if (tabParam === 'reviews') {
+      setActiveTab('reviews');
     }
   }, [searchParams, setActiveTab]);
 
@@ -55,6 +57,22 @@ interface OrderHistory {
     product_image?: string;
     thumbnail_url?: string; // 상품 이미지 URL 추가
   }>;
+}
+
+// 리뷰 인터페이스 추가
+interface Review {
+  id: string;
+  product_id: string;
+  product?: {
+    name: string;
+    thumbnail_url?: string;
+  };
+  order_id?: string;
+  rating: number;
+  content: string;
+  image_url?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 // 주문 상태 표시 컴포넌트
@@ -114,13 +132,69 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
   );
 };
 
+// 이미지 모달 컴포넌트 추가
+const ImageModal = ({ 
+  imageUrl, 
+  isOpen, 
+  onClose 
+}: { 
+  imageUrl: string; 
+  isOpen: boolean; 
+  onClose: () => void;
+}) => {
+  if (!isOpen) return null;
+  
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75"
+      onClick={onClose}
+    >
+      <div className="relative max-w-full max-h-full p-2">
+        <button 
+          className="absolute top-4 right-4 bg-black bg-opacity-50 rounded-full p-2 text-white"
+          onClick={onClose}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <Image 
+          src={imageUrl} 
+          alt="리뷰 이미지" 
+          width={800} 
+          height={800}
+          className="max-w-full max-h-[80vh] object-contain"
+        />
+      </div>
+    </div>
+  );
+};
+
 function MobileMyPageContent() {
   const router = useRouter();
   
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('profile');
   const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
+  const [reviewHistory, setReviewHistory] = useState<Review[]>([]);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+
+  // URL 파라미터 처리
+  useEffect(() => {
+    const handleTabParam = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab === 'orders') {
+        setActiveTab('orders');
+      } else if (tab === 'reviews') {
+        setActiveTab('reviews');
+      }
+    };
+
+    handleTabParam();
+  }, []);
 
   // 로그인 확인 및 데이터 로드
   useEffect(() => {
@@ -202,6 +276,23 @@ function MobileMyPageContent() {
           console.error('주문 정보 로딩 중 오류:', error);
           setOrderHistory([]);
         }
+
+        // 리뷰 정보 요청
+        try {
+          const reviewsResponse = await fetch('/api/reviews/my', {
+            headers: authHeader
+          });
+
+          if (reviewsResponse.ok) {
+            const reviewsData = await reviewsResponse.json();
+            setReviewHistory(reviewsData);
+          } else {
+            setReviewHistory([]);
+          }
+        } catch (error) {
+          console.error('리뷰 정보 로딩 중 오류:', error);
+          setReviewHistory([]);
+        }
       } catch (error) {
         console.error('데이터 로딩 오류:', error);
         toast.error('데이터를 불러오는데 문제가 발생했습니다.');
@@ -243,12 +334,57 @@ function MobileMyPageContent() {
     router.push('/m/auth');
   };
 
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      if (!window.confirm('정말로 이 리뷰를 삭제하시겠습니까?')) {
+        return;
+      }
+
+      const authHeader = getAuthHeader();
+      const response = await fetch(`/api/reviews/${reviewId}`, {
+        method: 'DELETE',
+        headers: authHeader
+      });
+
+      if (response.ok) {
+        toast.success('리뷰가 삭제되었습니다.');
+        // 리뷰 목록에서 삭제된 리뷰 제거
+        setReviewHistory(prev => prev.filter(review => review.id !== reviewId));
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || '리뷰 삭제에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('리뷰 삭제 오류:', error);
+      toast.error('리뷰를 삭제하는데 문제가 발생했습니다.');
+    }
+  };
+
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setIsImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setIsImageModalOpen(false);
+    setSelectedImage(null);
+  };
+
   // 로그인되지 않은 상태면 이 컴포넌트는 렌더링되지 않음 (위에서 리다이렉트)
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <Toaster position="top-center" />
+      
+      {/* 이미지 모달 */}
+      {selectedImage && (
+        <ImageModal 
+          imageUrl={selectedImage}
+          isOpen={isImageModalOpen}
+          onClose={closeImageModal}
+        />
+      )}
       
       {/* 회원탈퇴 모달 */}
       <DeactivateModal
@@ -321,6 +457,12 @@ function MobileMyPageContent() {
             onClick={() => setActiveTab('orders')}
           >
             주문내역
+          </button>
+          <button
+            className={`flex-1 py-3 text-center font-medium ${activeTab === 'reviews' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-600'}`}
+            onClick={() => setActiveTab('reviews')}
+          >
+            리뷰관리
           </button>
         </div>
       </div>
@@ -604,6 +746,87 @@ function MobileMyPageContent() {
               </svg>
               <p className="text-gray-500 text-lg">주문 내역이 없습니다</p>
               <p className="text-gray-400 text-sm mt-2">새로운 상품을 구매해보세요</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 리뷰관리 탭 컨텐츠 */}
+      {activeTab === 'reviews' && (
+        <div className="p-4">
+          {reviewHistory.length > 0 ? (
+            <div className="space-y-4">
+              {reviewHistory.map((review) => (
+                <div key={review.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
+                  <div className="p-4 border-b">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <Link 
+                          href={`/m/products/${review.product_id}`}
+                          className="font-medium hover:text-green-600"
+                        >
+                          {review.product?.name || '상품명 없음'}
+                        </Link>
+                        <div className="flex items-center mt-1">
+                          <div className="flex">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <svg 
+                                key={star} 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                viewBox="0 0 24 24" 
+                                fill={star <= review.rating ? "currentColor" : "none"}
+                                stroke={star <= review.rating ? "none" : "currentColor"}
+                                className="w-4 h-4 text-yellow-400"
+                              >
+                                <path 
+                                  fillRule="evenodd" 
+                                  d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            ))}
+                          </div>
+                          <span className="ml-2 text-gray-500 text-sm">
+                            {new Date(review.created_at).toLocaleDateString('ko-KR')}
+                          </span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteReview(review.id)}
+                        className="text-red-500 text-sm hover:text-red-700"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    
+                    <p className="text-gray-700 whitespace-pre-line mt-2">{review.content}</p>
+                    
+                    {review.image_url && (
+                      <div 
+                        className="mt-3 cursor-pointer"
+                        onClick={() => openImageModal(review.image_url!)}
+                      >
+                        <div className="relative w-20 h-20 bg-gray-100 rounded-md overflow-hidden">
+                          <Image
+                            src={review.image_url}
+                            alt="리뷰 이미지"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 mx-auto text-gray-300 mb-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+              </svg>
+              <p className="text-gray-500 text-lg">작성한 리뷰가 없습니다</p>
+              <p className="text-gray-400 text-sm mt-2">상품을 구매하고 리뷰를 작성해보세요</p>
             </div>
           )}
         </div>

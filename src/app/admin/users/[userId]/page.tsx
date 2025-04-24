@@ -221,26 +221,9 @@ export default function UserDetailPage({ params }: UserDetailPageProps) {
 
       {/* 회원 기본 정보 카드 */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center mb-4">
-          <div className="flex-shrink-0 mb-4 md:mb-0 md:mr-6">
-            {user.avatar_url ? (
-              <Image
-                src={user.avatar_url}
-                alt="프로필 이미지"
-                width={80}
-                height={80}
-                className="rounded-full"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-2xl font-bold">
-                {user.nickname?.charAt(0) || user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">{user.nickname || user.name || '이름 없음'}</h2>
-            <p className="text-gray-600">{user.email}</p>
-          </div>
+        <div className="mb-4">
+          <h2 className="text-xl font-bold">{user.nickname || user.name || '이름 없음'}</h2>
+          <p className="text-gray-600">{user.email}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

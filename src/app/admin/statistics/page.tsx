@@ -87,66 +87,94 @@ export default function AdminStatisticsPage() {
   const [loading, setLoading] = useState(true);
   const [salesData, setSalesData] = useState<SalesData | null>(null);
   const [adminToken, setAdminToken] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState(formatDate(new Date(new Date().setDate(new Date().getDate() - 30))));
-  const [endDate, setEndDate] = useState(formatDate(new Date()));
+  const [period, setPeriod] = useState('월');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const { year, month } = getCurrentDateInfo();
   
-  // 선택된 기간에 따른 데이터 가져오기
-  const currentRangeData = salesData?.daily || [];
-
-  // 페이지 로드 시 관리자 토큰 확인
+  // 기간 선택에 따라 날짜 범위 설정
   useEffect(() => {
-    const token = localStorage.getItem('adminToken');
-    setAdminToken(token);
-    
-    if (!token) {
-      toast.error('로그인이 필요합니다');
-      router.push('/admin/login');
-    } else {
-      fetchSalesStatistics();
-    }
-  }, [router]);
+    const today = new Date();
+    const end = formatDate(today);
+    let start = '';
 
-  // 판매 통계 데이터 가져오기
-  const fetchSalesStatistics = async () => {
+    switch (period) {
+      case '일':
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        start = formatDate(yesterday);
+        break;
+      case '주':
+        const lastWeek = new Date(today);
+        lastWeek.setDate(today.getDate() - 7);
+        start = formatDate(lastWeek);
+        break;
+      case '월':
+        const lastMonth = new Date(today);
+        lastMonth.setMonth(today.getMonth() - 1);
+        start = formatDate(lastMonth);
+        break;
+      case '연':
+        const lastYear = new Date(today);
+        lastYear.setFullYear(today.getFullYear() - 1);
+        start = formatDate(lastYear);
+        break;
+    }
+
+    setStartDate(start);
+    setEndDate(end);
+  }, [period]);
+
+  // 날짜 범위에 따른 적절한 데이터 단위 결정
+  const getAppropriateData = () => {
+    if (!salesData) return { data: [], label: '일' };
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 31) { // 1개월 이내
+      return { data: salesData.daily, label: '일' };
+    } else if (diffDays <= 365) { // 1년 이내
+      return { data: salesData.monthly, label: '월' };
+    } else { // 1년 이상
+      return { data: salesData.yearly, label: '연' };
+    }
+  };
+
+  const fetchSalesData = async () => {
     try {
       setLoading(true);
-      const adminToken = localStorage.getItem('adminToken');
-      
-      if (!adminToken) {
-        toast.error('관리자 권한이 없습니다');
-        router.push('/admin/login');
-        return;
-      }
-      
-      const queryParams = new URLSearchParams();
-      queryParams.append('startDate', startDate);
-      queryParams.append('endDate', endDate);
-      
-      const response = await fetch(`/api/admin/statistics/sales?${queryParams.toString()}`, {
+      const response = await fetch(`/api/admin/statistics/sales?startDate=${startDate}&endDate=${endDate}`, {
         headers: {
-          'Authorization': `Bearer ${adminToken}`
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
         }
       });
       
       if (!response.ok) {
-        throw new Error('판매 통계 데이터를 가져오는데 실패했습니다');
+        throw new Error('데이터를 불러오는데 실패했습니다');
       }
       
       const data = await response.json();
       setSalesData(data);
     } catch (error) {
-      console.error('판매 통계 로딩 오류:', error);
-      toast.error('판매 통계를 불러오는데 실패했습니다');
+      console.error('매출 데이터 조회 오류:', error);
+      toast.error('매출 데이터를 불러오는데 실패했습니다');
     } finally {
       setLoading(false);
     }
   };
 
-  // 날짜 범위 변경 핸들러
-  const handleDateRangeChange = () => {
-    fetchSalesStatistics();
-  };
+  // 날짜 범위가 변경될 때마다 데이터 조회
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchSalesData();
+    }
+  }, [startDate, endDate]);
+
+  // 현재 선택된 기간에 따른 데이터 가져오기
+  const { data: currentRangeData, label: dataLabel } = getAppropriateData();
 
   // 매출 추이 차트 데이터
   const salesTrendChartData = {
@@ -187,6 +215,19 @@ export default function AdminStatisticsPage() {
     ],
   };
 
+  // 페이지 로드 시 관리자 토큰 확인
+  useEffect(() => {
+    const token = localStorage.getItem('adminToken');
+    setAdminToken(token);
+    
+    if (!token) {
+      toast.error('로그인이 필요합니다');
+      router.push('/admin/login');
+    } else {
+      fetchSalesData();
+    }
+  }, [router]);
+
   if (loading) {
     return (
       <div className="container mx-auto py-6 px-2 sm:px-4 pt-20">
@@ -200,7 +241,7 @@ export default function AdminStatisticsPage() {
   return (
     <div className="container mx-auto py-6 px-2 sm:px-4 pt-20">
       <h1 className="text-2xl font-bold mb-6">판매 통계</h1>
-      <div className="mb-6 flex items-center justify-end">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex space-x-2">
           <div className="flex flex-col">
             <label htmlFor="startDate" className="text-sm font-medium text-gray-700 mb-1">시작일</label>
@@ -210,6 +251,7 @@ export default function AdminStatisticsPage() {
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="border border-gray-300 rounded px-2 py-1 text-sm w-32"
+              max={endDate}
             />
           </div>
           <div className="flex flex-col">
@@ -220,25 +262,29 @@ export default function AdminStatisticsPage() {
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               className="border border-gray-300 rounded px-2 py-1 text-sm w-32"
+              min={startDate}
+              max={formatDate(new Date())}
             />
           </div>
-          <div className="flex flex-col justify-end">
-            <Button 
-              onClick={handleDateRangeChange}
-              className="h-[34px] px-4 text-sm"
+          <div className="flex flex-col">
+            <label htmlFor="period" className="text-sm font-medium text-gray-700 mb-1">기간</label>
+            <select
+              id="period"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1 text-sm w-24"
             >
-              조회
-            </Button>
+              <option value="일">일</option>
+              <option value="주">주</option>
+              <option value="월">월</option>
+              <option value="연">연</option>
+            </select>
           </div>
         </div>
       </div>
 
       {/* 주요 지표 요약 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-sm font-medium text-gray-500">평균 주문 금액</h3>
-          <p className="text-2xl font-bold text-gray-800">{formatPrice(salesData?.averageOrderAmount || 0)}</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow p-4">
           <h3 className="text-sm font-medium text-gray-500">
             {startDate} ~ {endDate} 기간 총 주문 금액
@@ -251,7 +297,7 @@ export default function AdminStatisticsPage() {
 
       {/* 매출 추이 차트 */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <h2 className="text-lg font-semibold mb-4">매출 추이</h2>
+        <h2 className="text-lg font-semibold mb-4">매출 추이 ({dataLabel}별)</h2>
         <div className="h-80">
           <Line 
             data={salesTrendChartData} 
@@ -286,7 +332,7 @@ export default function AdminStatisticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         {/* 시간대별 판매 현황 */}
         <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-lg font-semibold mb-4">시간대별 판매 현황</h2>
+          <h2 className="text-lg font-semibold mb-4">시간대별 판매 현황 ({startDate} ~ {endDate})</h2>
           <div className="h-80">
             <Bar 
               data={timeOfDayChartData} 
@@ -319,7 +365,7 @@ export default function AdminStatisticsPage() {
 
         {/* 상품별 판매 순위 */}
         <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-lg font-semibold mb-4">상위 5개 상품 판매량</h2>
+          <h2 className="text-lg font-semibold mb-4">상위 5개 상품 판매량 ({startDate} ~ {endDate})</h2>
           <div className="h-80">
             <Pie 
               data={topProductsChartData} 
@@ -342,7 +388,7 @@ export default function AdminStatisticsPage() {
 
         {/* 상품 판매 순위 테이블 */}
         <div className="bg-white rounded-lg shadow p-4 md:col-span-2">
-          <h2 className="text-lg font-semibold mb-4">상품별 판매 순위</h2>
+          <h2 className="text-lg font-semibold mb-4">상품별 판매 순위 ({startDate} ~ {endDate})</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">

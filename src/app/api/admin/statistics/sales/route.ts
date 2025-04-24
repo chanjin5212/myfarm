@@ -39,16 +39,12 @@ function formatDate(date: Date): string {
 }
 
 // 일별 매출 데이터 조회
-async function fetchDailySales() {
-  const today = new Date();
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(today.getDate() - 30);
-  
+async function fetchDailySales(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('orders')
     .select('created_at, total_amount')
-    .gte('created_at', formatDate(thirtyDaysAgo))
-    .lte('created_at', formatDate(today))
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -59,10 +55,15 @@ async function fetchDailySales() {
   // 일별 매출 집계
   const salesByDay = new Map<string, number>();
   
-  // 30일 기간의 모든 날짜에 대해 초기값 설정
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(thirtyDaysAgo);
-    date.setDate(thirtyDaysAgo.getDate() + i);
+  // 날짜 범위의 모든 날짜에 대해 초기값 설정
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  for (let i = 0; i <= diffDays; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
     const dateKey = `${date.getMonth() + 1}/${date.getDate()}`;
     salesByDay.set(dateKey, 0);
   }
@@ -88,16 +89,12 @@ async function fetchDailySales() {
 }
 
 // 주별 매출 데이터 조회
-async function fetchWeeklySales() {
-  const today = new Date();
-  const twelveWeeksAgo = new Date();
-  twelveWeeksAgo.setDate(today.getDate() - 84); // 12주 * 7일
-  
+async function fetchWeeklySales(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('orders')
     .select('created_at, total_amount')
-    .gte('created_at', formatDate(twelveWeeksAgo))
-    .lte('created_at', formatDate(today))
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -117,10 +114,15 @@ async function fetchWeeklySales() {
     return weekNo;
   };
   
-  // 12주 기간의 모든 주차에 대해 초기값 설정
-  for (let i = 0; i < 12; i++) {
-    const date = new Date(twelveWeeksAgo);
-    date.setDate(twelveWeeksAgo.getDate() + (i * 7));
+  // 날짜 범위의 모든 주차에 대해 초기값 설정
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffWeeks = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7));
+  
+  for (let i = 0; i <= diffWeeks; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + (i * 7));
     const weekNo = getWeekNumber(date);
     salesByWeek.set(`${weekNo}주차`, 0);
   }
@@ -148,17 +150,12 @@ async function fetchWeeklySales() {
 }
 
 // 월별 매출 데이터 조회
-async function fetchMonthlySales() {
-  const today = new Date();
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(today.getMonth() - 11);
-  twelveMonthsAgo.setDate(1); // 월의 첫날로 설정
-  
+async function fetchMonthlySales(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('orders')
     .select('created_at, total_amount')
-    .gte('created_at', formatDate(twelveMonthsAgo))
-    .lte('created_at', formatDate(today))
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -169,10 +166,14 @@ async function fetchMonthlySales() {
   // 월별 매출 집계
   const salesByMonth = new Map<string, number>();
   
-  // 12개월 기간의 모든 월에 대해 초기값 설정
-  for (let i = 0; i < 12; i++) {
-    const date = new Date(twelveMonthsAgo);
-    date.setMonth(twelveMonthsAgo.getMonth() + i);
+  // 날짜 범위의 모든 월에 대해 초기값 설정
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  
+  for (let i = 0; i <= diffMonths; i++) {
+    const date = new Date(start);
+    date.setMonth(start.getMonth() + i);
     const monthKey = `${date.getMonth() + 1}월`;
     salesByMonth.set(monthKey, 0);
   }
@@ -197,15 +198,12 @@ async function fetchMonthlySales() {
 }
 
 // 연도별 매출 데이터 조회
-async function fetchYearlySales() {
-  const currentYear = new Date().getFullYear();
-  const fiveYearsAgo = currentYear - 4;
-  
+async function fetchYearlySales(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('orders')
     .select('created_at, total_amount')
-    .gte('created_at', `${fiveYearsAgo}-01-01`)
-    .lte('created_at', `${currentYear}-12-31`)
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -216,8 +214,11 @@ async function fetchYearlySales() {
   // 연도별 매출 집계
   const salesByYear = new Map<string, number>();
   
-  // 5년 기간의 모든 연도에 대해 초기값 설정
-  for (let year = fiveYearsAgo; year <= currentYear; year++) {
+  // 날짜 범위의 모든 연도에 대해 초기값 설정
+  const startYear = new Date(startDate).getFullYear();
+  const endYear = new Date(endDate).getFullYear();
+  
+  for (let year = startYear; year <= endYear; year++) {
     salesByYear.set(year.toString(), 0);
   }
   
@@ -236,10 +237,12 @@ async function fetchYearlySales() {
 }
 
 // 시간대별 매출 데이터 조회
-async function fetchTimeOfDaySales() {
+async function fetchTimeOfDaySales(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('orders')
     .select('created_at, total_amount')
+    .gte('created_at', startDate)
+    .lte('created_at', endDate)
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -284,7 +287,7 @@ async function fetchTimeOfDaySales() {
 }
 
 // 상품별 매출 데이터 조회
-async function fetchTopProducts() {
+async function fetchTopProducts(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('order_items')
     .select(`
@@ -292,11 +295,14 @@ async function fetchTopProducts() {
       product_id,
       quantity,
       price,
+      orders!inner(created_at),
       products:product_id (
         id,
         name
       )
-    `);
+    `)
+    .gte('orders.created_at', startDate)
+    .lte('orders.created_at', endDate);
     
   if (error) {
     console.error('상품별 매출 조회 오류:', error);
@@ -310,7 +316,6 @@ async function fetchTopProducts() {
     if (!item.product_id || !item.products) return;
     
     const productId = item.product_id;
-    // products는 객체이므로 타입을 명확하게 지정
     const productName = (item.products as any).name || '알 수 없는 상품';
     const quantity = item.quantity || 0;
     const amount = item.price * quantity;
@@ -339,10 +344,12 @@ async function fetchTopProducts() {
 }
 
 // 평균 주문 금액 계산
-async function calculateAverageOrderAmount() {
+async function calculateAverageOrderAmount(startDate: string, endDate: string) {
   const { data, error } = await supabase
     .from('orders')
-    .select('total_amount');
+    .select('total_amount')
+    .gte('created_at', startDate)
+    .lte('created_at', endDate);
     
   if (error || !data || data.length === 0) {
     console.error('평균 주문 금액 계산 오류:', error);
@@ -401,13 +408,13 @@ export async function GET(request: NextRequest) {
       averageOrderAmount,
       totalAmountInRange
     ] = await Promise.all([
-      fetchDailySales(),
-      fetchWeeklySales(),
-      fetchMonthlySales(),
-      fetchYearlySales(),
-      fetchTimeOfDaySales(),
-      fetchTopProducts(),
-      calculateAverageOrderAmount(),
+      fetchDailySales(startDate, endDate),
+      fetchWeeklySales(startDate, endDate),
+      fetchMonthlySales(startDate, endDate),
+      fetchYearlySales(startDate, endDate),
+      fetchTimeOfDaySales(startDate, endDate),
+      fetchTopProducts(startDate, endDate),
+      calculateAverageOrderAmount(startDate, endDate),
       calculateTotalAmountByDateRange(startDate, endDate)
     ]);
     
