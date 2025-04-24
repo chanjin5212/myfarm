@@ -68,7 +68,8 @@ export async function GET(request: NextRequest) {
         id,
         name,
         price,
-        thumbnail_url
+        thumbnail_url,
+        created_at
       `, { count: 'exact' });
     
     // 검색어 적용
@@ -77,9 +78,11 @@ export async function GET(request: NextRequest) {
     }
     
     // 기본 정렬은 생성일
-    query = query.order(sort === 'rating' || sort === 'review_count' ? 'created_at' : sort, { 
-      ascending: order === 'asc' 
-    });
+    if (sort === 'rating' || sort === 'review_count') {
+      query = query.order('created_at', { ascending: order === 'asc' });
+    } else {
+      query = query.order(sort, { ascending: order === 'asc' });
+    }
     
     // 페이지네이션 적용
     query = query.range(offset, offset + limit - 1);

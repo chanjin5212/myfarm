@@ -154,7 +154,7 @@ export default function AdminProductReviewsPage({
   // 정렬 변경 핸들러
   const handleSortChange = (value: string) => {
     // value 형식: 'field_order' (예: 'rating_asc')
-    const [field, order] = value.split('_');
+    const [field, order] = value.split('-');
     setSortBy(field);
     setSortOrder(order);
     setCurrentPage(1);
@@ -357,14 +357,14 @@ export default function AdminProductReviewsPage({
           <label htmlFor="sortReviews" className="mr-2 text-sm font-medium text-gray-700">정렬:</label>
           <select
             id="sortReviews"
-            value={`${sortBy}_${sortOrder}`}
+            value={`${sortBy}-${sortOrder}`}
             onChange={(e) => handleSortChange(e.target.value)}
             className="border border-gray-300 rounded px-3 py-2 flex-grow"
           >
-            <option value="created_at_desc">최신순</option>
-            <option value="created_at_asc">오래된순</option>
-            <option value="rating_desc">평점 높은순</option>
-            <option value="rating_asc">평점 낮은순</option>
+            <option value="created_at-desc">최신순</option>
+            <option value="created_at-asc">오래된순</option>
+            <option value="rating-desc">평점 높은순</option>
+            <option value="rating-asc">평점 낮은순</option>
           </select>
         </div>
       </div>
