@@ -16,8 +16,8 @@ export function middleware(request: NextRequest) {
   const userAgent = request.headers.get('user-agent') || '';
   const isMobile = isMobileDevice(userAgent);
   
-  // 모바일 기기이고 /m으로 시작하지 않는 경로인 경우
-  if (isMobile && !pathname.startsWith('/m') && !pathname.startsWith('/admin')) {
+  // /m으로 시작하지 않고, /admin으로 시작하지 않는 모든 경로를 /m으로 리다이렉트
+  if (!pathname.startsWith('/m') && !pathname.startsWith('/admin')) {
     const url = request.nextUrl.clone();
     url.pathname = `/m${pathname}`;
     return NextResponse.redirect(url);
