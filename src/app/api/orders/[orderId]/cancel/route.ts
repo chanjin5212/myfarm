@@ -2,107 +2,184 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase 클라이언트 초기화
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Toss Payments 시크릿 키
+const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY!;
+
+// 현재 로그인한 사용자 ID 가져오기
+async function getUserId(request: NextRequest) {
+  // Authorization 헤더에서 토큰 가져오기
+  const authHeader = request.headers.get('Authorization');
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('[주문 취소 API] 인증 헤더가 없거나 잘못된 형식입니다:', authHeader);
+    return null;
+  }
+  
+  try {
+    // Bearer 접두사 제거
+    const token = authHeader.split(' ')[1].trim();
+    
+    // 1. UUID 형식의 사용자 ID인지 확인
+    if (isValidUUID(token)) {
+      // 사용자 ID가 users 테이블에 존재하는지 확인
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', token)
+        .maybeSingle();
+        
+      if (userError) {
+        console.error('[주문 취소 API] 사용자 확인 오류:', userError.message);
+        return null;
+      }
+      
+      if (!userData) {
+        console.log('[주문 취소 API] 해당 ID의 사용자를 찾을 수 없습니다.');
+        return null;
+      }
+      
+      return token; // 사용자 ID 반환
+    }
+    
+    // 2. JSON 형식의 토큰인지 확인 (로컬스토리지에 직접 저장된 형식)
+    try {
+      const parsedToken = JSON.parse(token);
+      
+      if (parsedToken.user && parsedToken.user.id && isValidUUID(parsedToken.user.id)) {
+        // 사용자 ID가 유효한지 확인
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', parsedToken.user.id)
+          .maybeSingle();
+        
+        if (userError || !userData) {
+          console.error('[주문 취소 API] JSON 토큰의 사용자 ID 확인 실패');
+          return null;
+        }
+        
+        return parsedToken.user.id;
+      }
+    } catch (parseError) {
+      // JSON 파싱 실패 - 다음 단계로 진행
+    }
+    
+    console.error('[주문 취소 API] 유효하지 않은 토큰 형식');
+    return null;
+  } catch (error) {
+    console.error('[주문 취소 API] 토큰 처리 중 오류 발생:', error);
+    return null;
+  }
+}
+
+// UUID 형식인지 확인하는 함수
+function isValidUUID(id: string | null | undefined): boolean {
+  if (id === null || id === undefined) return false;
+  const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return pattern.test(id);
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const orderId = (await params).orderId;
+    const { orderId } = await params;
     
-    if (!orderId) {
-      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
-    }
-    
-    console.log('주문 취소 요청:', orderId);
-    
-    // 인증 확인
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: '인증 정보가 필요합니다.' }, { status: 401 });
-    }
-    
-    // 토큰에서 사용자 ID 추출
-    const userId = authHeader.split(' ')[1].trim();
+    // 사용자 ID 가져오기
+    const userId = await getUserId(request);
     
     if (!userId) {
-      return NextResponse.json({ error: '유효하지 않은 인증 정보입니다.' }, { status: 401 });
+      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 });
+    }
+    
+    // 요청 본문에서 취소 사유 가져오기
+    const { cancelReason } = await request.json();
+    
+    if (!cancelReason) {
+      return NextResponse.json({ error: '취소 사유를 입력해주세요' }, { status: 400 });
     }
     
     // 주문 정보 조회
-    const { data: orderData, error: orderError } = await supabase
+    const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('*')
+      .select('id, user_id, tid, status, total_amount')
       .eq('id', orderId)
       .single();
     
     if (orderError) {
-      console.error('주문 정보 조회 실패:', orderError);
-      return NextResponse.json({ error: '주문 정보를 찾을 수 없습니다.' }, { status: 404 });
+      console.error('주문 조회 오류:', orderError);
+      return NextResponse.json({ error: '주문을 찾을 수 없습니다' }, { status: 404 });
     }
     
-    // 주문 소유자 확인
-    if (orderData.user_id !== userId) {
-      console.log('주문 소유자 불일치:', { orderId, requestUserId: userId, orderUserId: orderData.user_id });
-      return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
+    // 유저의 주문인지 확인
+    if (order.user_id !== userId) {
+      return NextResponse.json({ error: '해당 주문에 대한 권한이 없습니다' }, { status: 403 });
     }
     
-    // 주문이 이미 완료된 경우 취소 불가
-    if (orderData.status === 'paid' || orderData.status === 'completed' || 
-        orderData.status === 'shipping' || orderData.status === 'delivered') {
-      console.log('이미 처리된 주문은 취소할 수 없음:', orderId, orderData.status);
-      return NextResponse.json({
-        error: `이미 처리된 주문(${orderData.status})은 취소할 수 없습니다.`
+    // 주문이 결제완료 상태인지 확인
+    if (order.status !== 'paid' && order.status !== 'payment_confirmed') {
+      return NextResponse.json({ 
+        error: '취소 가능한 주문 상태가 아닙니다. 결제 완료 상태인 주문만 취소할 수 있습니다.' 
       }, { status: 400 });
     }
     
-    // 주문 항목 삭제
-    try {
-      const { error: itemsDeleteError } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('order_id', orderId);
-      
-      if (itemsDeleteError) {
-        console.error('주문 항목 삭제 오류:', itemsDeleteError);
-        // 계속 진행
-      } else {
-        console.log('주문 항목 삭제 완료:', orderId);
-      }
-    } catch (itemsError) {
-      console.error('주문 항목 삭제 중 예외 발생:', itemsError);
-      // 계속 진행
+    // tid가 없는 경우
+    if (!order.tid) {
+      return NextResponse.json({ error: '결제 정보가 올바르지 않습니다' }, { status: 400 });
     }
     
-    // 주문 완전 삭제
-    const { data: deleteData, error: deleteError } = await supabase
-      .from('orders')
-      .delete()
-      .eq('id', orderId)
-      .select()
-      .single();
-    
-    if (deleteError) {
-      console.error('주문 삭제 오류:', deleteError);
-      return NextResponse.json({ error: '주문 삭제에 실패했습니다.' }, { status: 500 });
-    }
-    
-    console.log('주문 삭제 완료:', orderId);
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: '주문이 성공적으로 삭제되었습니다.',
-      order: deleteData
+    // Toss Payments API로 결제 취소 요청
+    const tossResponse = await fetch(`https://api.tosspayments.com/v1/payments/${order.tid}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(TOSS_SECRET_KEY + ':').toString('base64')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ cancelReason })
     });
     
+    // Toss API 응답 확인
+    if (!tossResponse.ok) {
+      const tossError = await tossResponse.json();
+      console.error('토스 결제 취소 오류:', tossError);
+      return NextResponse.json({ 
+        error: '결제 취소에 실패했습니다',
+        tossError
+      }, { status: tossResponse.status });
+    }
+    
+    const tossResult = await tossResponse.json();
+    
+    // 주문 상태 업데이트
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ 
+        status: 'canceled',
+        updated_at: new Date().toISOString(),
+        cancel_reason: cancelReason,
+        cancel_date: new Date().toISOString()
+      })
+      .eq('id', orderId);
+    
+    if (updateError) {
+      console.error('주문 상태 업데이트 오류:', updateError);
+      return NextResponse.json({ 
+        error: '주문 취소는 되었으나 상태 업데이트에 실패했습니다. 관리자에게 문의하세요.',
+        tossResult
+      }, { status: 500 });
+    }
+    
+    return NextResponse.json({
+      message: '주문이 성공적으로 취소되었습니다',
+      tossResult
+    });
   } catch (error) {
     console.error('주문 취소 중 오류 발생:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : '주문 취소 중 오류가 발생했습니다.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '주문 취소 중 오류가 발생했습니다' }, { status: 500 });
   }
 } 

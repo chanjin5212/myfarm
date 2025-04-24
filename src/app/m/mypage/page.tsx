@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { checkToken, getAuthHeader, logout, triggerLoginEvent } from '@/utils/auth';
 import toast, { Toaster } from 'react-hot-toast';
 import DeactivateModal from '@/components/modals/DeactivateModal';
+import CancelOrderModal from '@/components/modals/CancelOrderModal';
 
 // URL 파라미터 처리 컴포넌트
 function TabParamsHandler({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
@@ -180,6 +181,8 @@ function MobileMyPageContent() {
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [showCancelOrderModal, setShowCancelOrderModal] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   // URL 파라미터 처리
   useEffect(() => {
@@ -334,29 +337,116 @@ function MobileMyPageContent() {
     router.push('/m/auth');
   };
 
+  // 주문 취소 기능 추가
+  const handleCancelOrder = async (orderId: string) => {
+    // 주문 ID 저장 및 모달 열기
+    setSelectedOrderId(orderId);
+    setShowCancelOrderModal(true);
+  };
+
+  // 선택한 취소 사유로 실제 취소 처리
+  const processCancelOrder = async (cancelReason: string) => {
+    try {
+      if (!selectedOrderId) return;
+      
+      // 모달 닫기
+      setShowCancelOrderModal(false);
+      
+      // 정말 취소할 것인지 재확인
+      if (!window.confirm('정말로 이 주문을 취소하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+        return;
+      }
+      
+      // 인증 헤더 가져오기
+      const authHeader = getAuthHeader();
+      
+      // 인증 정보가 없을 경우 예외 처리
+      if (!authHeader.Authorization) {
+        toast.error('인증 정보가 없습니다. 다시 로그인해주세요.');
+        handleLogout(); // 로그아웃 처리하고 로그인 페이지로 이동
+        return;
+      }
+      
+      // 로딩 토스트 표시
+      const loadingToast = toast.loading('주문 취소 중입니다...');
+      
+      // API 호출
+      const response = await fetch(`/api/orders/${selectedOrderId}/cancel`, {
+        method: 'POST',
+        headers: {
+          ...authHeader,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ cancelReason })
+      });
+      
+      // 로딩 토스트 닫기
+      toast.dismiss(loadingToast);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '주문 취소에 실패했습니다.');
+      }
+      
+      toast.success('주문이 성공적으로 취소되었습니다.');
+      
+      // 주문 목록 업데이트
+      setOrderHistory(prev => prev.map(order => 
+        order.id === selectedOrderId 
+          ? { ...order, status: 'canceled' } 
+          : order
+      ));
+      
+      // 선택된 주문 ID 초기화
+      setSelectedOrderId(null);
+    } catch (error) {
+      console.error('주문 취소 오류:', error);
+      toast.error(error instanceof Error ? error.message : '주문 취소 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleDeleteReview = async (reviewId: string) => {
     try {
       if (!window.confirm('정말로 이 리뷰를 삭제하시겠습니까?')) {
         return;
       }
 
+      // 인증 헤더 가져오기
       const authHeader = getAuthHeader();
+      
+      // 인증 정보가 없을 경우 예외 처리
+      if (!authHeader.Authorization) {
+        toast.error('인증 정보가 없습니다. 다시 로그인해주세요.');
+        handleLogout(); // 로그아웃 처리하고 로그인 페이지로 이동
+        return;
+      }
+
+      // 디버깅용 콘솔 출력
+      console.log('리뷰 삭제 요청 :', reviewId);
+
       const response = await fetch(`/api/reviews/${reviewId}`, {
         method: 'DELETE',
-        headers: authHeader
+        headers: {
+          ...authHeader,
+          'Content-Type': 'application/json'
+        }
       });
 
-      if (response.ok) {
-        toast.success('리뷰가 삭제되었습니다.');
-        // 리뷰 목록에서 삭제된 리뷰 제거
-        setReviewHistory(prev => prev.filter(review => review.id !== reviewId));
-      } else {
-        const error = await response.json();
-        throw new Error(error.message || '리뷰 삭제에 실패했습니다.');
+      // 응답 상태 디버깅
+      console.log('리뷰 삭제 응답 상태:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('리뷰 삭제 오류 응답:', errorData);
+        throw new Error(errorData.error || '리뷰 삭제에 실패했습니다.');
       }
+
+      toast.success('리뷰가 삭제되었습니다.');
+      // 리뷰 목록에서 삭제된 리뷰 제거
+      setReviewHistory(prev => prev.filter(review => review.id !== reviewId));
     } catch (error) {
       console.error('리뷰 삭제 오류:', error);
-      toast.error('리뷰를 삭제하는데 문제가 발생했습니다.');
+      toast.error(error instanceof Error ? error.message : '리뷰를 삭제하는데 문제가 발생했습니다.');
     }
   };
 
@@ -392,6 +482,13 @@ function MobileMyPageContent() {
         onClose={() => setShowDeactivateModal(false)}
         hasPassword={!!user.login_id}
         onComplete={() => router.push('/')}
+      />
+      
+      {/* 주문 취소 모달 */}
+      <CancelOrderModal
+        isOpen={showCancelOrderModal}
+        onClose={() => setShowCancelOrderModal(false)}
+        onConfirm={processCancelOrder}
       />
       
       {/* 헤더 */}
@@ -734,6 +831,16 @@ function MobileMyPageContent() {
                       >
                         주문 상세
                       </Link>
+                      
+                      {/* 결제 완료 상태일 때만 취소 버튼 표시 */}
+                      {(order.status === 'paid' || order.status === 'payment_confirmed') && (
+                        <button
+                          onClick={() => handleCancelOrder(order.id)}
+                          className="px-4 py-2 text-sm border border-red-300 rounded-md text-red-700 hover:bg-red-50 transition-colors"
+                        >
+                          주문 취소
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

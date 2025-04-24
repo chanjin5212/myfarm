@@ -56,17 +56,6 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
-    
-    // 주문이 이미 결제되었는지 확인
-    if (orderData.status === 'paid') {
-      console.log('이미 결제된 주문입니다:', orderData);
-      return NextResponse.json({
-        success: true,
-        message: '이미 결제가 완료된 주문입니다.',
-        orderId: orderId,
-        paymentKey: orderData.payment_key,
-      });
-    }
 
     // 주문 금액 검증
     if (orderData.total_amount !== amount) {

@@ -109,9 +109,6 @@ export default function MobileProductOptions({
   
   // 옵션 수량 변경 핸들러
   const handleOptionQuantityChange = (optionId: string, newQuantity: number) => {
-    // 이미 변경 중인 경우 중복 요청 방지
-    if (changingOptionId) return;
-    
     // 수량은 최소 1 이상이어야 함
     if (newQuantity < 1) {
       toast.error('최소 수량은 1개입니다.');
@@ -128,25 +125,16 @@ export default function MobileProductOptions({
       return;
     }
     
-    // 로딩 상태 설정
-    setChangingOptionId(optionId);
-    
-    // 수량 업데이트 (약간의 지연 효과 추가)
-    setTimeout(() => {
-      setSelectedOptions(
-        selectedOptions.map(opt => 
-          opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
-        )
-      );
-      setChangingOptionId(null);
-    }, 300);
+    // 수량 업데이트
+    setSelectedOptions(
+      selectedOptions.map(opt => 
+        opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
+      )
+    );
   };
   
   // 기본 수량 변경 핸들러 (옵션이 없는 상품용)
   const handleBaseQuantityChange = (newQuantity: number) => {
-    // 이미 변경 중인 경우 중복 요청 방지
-    if (changingBaseQuantity) return;
-    
     if (newQuantity < 1) {
       toast.error('최소 수량은 1개입니다.');
       return;
@@ -157,14 +145,8 @@ export default function MobileProductOptions({
       return;
     }
     
-    // 로딩 상태 설정
-    setChangingBaseQuantity(true);
-    
-    // 수량 업데이트 (약간의 지연 효과 추가)
-    setTimeout(() => {
-      setQuantity(newQuantity);
-      setChangingBaseQuantity(false);
-    }, 300);
+    // 수량 업데이트
+    setQuantity(newQuantity);
   };
   
   // 옵션 삭제 핸들러

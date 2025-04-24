@@ -37,13 +37,6 @@ export default function CheckoutSuccessPage() {
         // 처리 중 플래그 설정
         isProcessing.current = true;
         
-        // UUID 유효성 검사
-        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId)) {
-          setError('주문 번호가 유효하지 않습니다.');
-          setLoading(false);
-          return;
-        }
-        
         setOrderId(orderId);
         
         // 로그인 체크

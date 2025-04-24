@@ -44,7 +44,7 @@ async function fetchDailySales(startDate: string, endDate: string) {
     .from('orders')
     .select('created_at, total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate)
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0])
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -94,7 +94,7 @@ async function fetchWeeklySales(startDate: string, endDate: string) {
     .from('orders')
     .select('created_at, total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate)
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0])
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -155,7 +155,7 @@ async function fetchMonthlySales(startDate: string, endDate: string) {
     .from('orders')
     .select('created_at, total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate)
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0])
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -203,7 +203,7 @@ async function fetchYearlySales(startDate: string, endDate: string) {
     .from('orders')
     .select('created_at, total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate)
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0])
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -242,7 +242,7 @@ async function fetchTimeOfDaySales(startDate: string, endDate: string) {
     .from('orders')
     .select('created_at, total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate)
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0])
     .order('created_at', { ascending: true });
     
   if (error) {
@@ -302,7 +302,7 @@ async function fetchTopProducts(startDate: string, endDate: string) {
       )
     `)
     .gte('orders.created_at', startDate)
-    .lte('orders.created_at', endDate);
+    .lt('orders.created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0]);
     
   if (error) {
     console.error('상품별 매출 조회 오류:', error);
@@ -349,7 +349,7 @@ async function calculateAverageOrderAmount(startDate: string, endDate: string) {
     .from('orders')
     .select('total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate);
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0]);
     
   if (error || !data || data.length === 0) {
     console.error('평균 주문 금액 계산 오류:', error);
@@ -366,7 +366,7 @@ async function calculateTotalAmountByDateRange(startDate: string, endDate: strin
     .from('orders')
     .select('total_amount')
     .gte('created_at', startDate)
-    .lte('created_at', endDate);
+    .lt('created_at', new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1)).toISOString().split('T')[0]);
     
   if (error) {
     console.error('날짜별 총 주문 금액 조회 오류:', error);

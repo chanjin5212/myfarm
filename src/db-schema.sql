@@ -338,12 +338,16 @@ CREATE TABLE orders (
   shipping_address TEXT NOT NULL,
   shipping_detail_address TEXT,
   shipping_memo TEXT,
+  cancel_reason TEXT,
+  cancel_date TIMESTAMP WITH TIME ZONE,
   payment_method VARCHAR(20) NOT NULL,
   total_amount INTEGER NOT NULL,
   tid VARCHAR(100),  -- 카카오페이 tid 저장을 위한 컬럼 추가
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_orders_cancel_date ON orders(cancel_date);
 
 -- order_items 테이블 생성
 CREATE TABLE order_items (
@@ -564,3 +568,22 @@ CREATE POLICY inquiry_replies_insert_policy ON inquiry_replies
 -- 문의 답변 수정 정책
 CREATE POLICY inquiry_replies_update_policy ON inquiry_replies
   FOR UPDATE USING (true); 
+
+-- RLS 정책 설정
+ALTER TABLE product_reviews ENABLE ROW LEVEL SECURITY;
+
+-- 사용자는 자신의 리뷰만 조회 가능
+CREATE POLICY product_reviews_select_policy ON product_reviews
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- 사용자는 자신의 리뷰만 추가 가능
+CREATE POLICY product_reviews_insert_policy ON product_reviews
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 사용자는 자신의 리뷰만 수정 가능
+CREATE POLICY product_reviews_update_policy ON product_reviews
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- 사용자는 자신의 리뷰만 삭제 가능
+CREATE POLICY product_reviews_delete_policy ON product_reviews
+  FOR DELETE USING (auth.uid() = user_id); 
