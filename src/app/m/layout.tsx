@@ -20,6 +20,12 @@ const HIDE_HEADER_PATHS = [
   '/m/mypage/address-book',  
 ];
 
+// 푸터를 표시할 경로 목록
+const SHOW_FOOTER_PATHS = [
+  '/m',
+  '/m/products',
+];
+
 export default function MobileLayout({
   children,
 }: {
@@ -34,6 +40,12 @@ export default function MobileLayout({
     pathname?.startsWith('/m/products/') ||  // 상품 상세 페이지
     pathname?.startsWith('/m/mypage/address-book/')  // 배송지 관리 관련 모든 페이지
   );
+  
+  // 푸터 표시 여부 확인
+  const shouldShowFooter = 
+    pathname === '/m' || 
+    pathname === '/m/products' || 
+    pathname?.startsWith('/m/products/');  // 상품 상세 페이지
   
   // 모바일 레이아웃 설정
   useEffect(() => {
@@ -106,7 +118,7 @@ export default function MobileLayout({
       )}
       
       {/* 메인 콘텐츠 */}
-      <div className={`bg-white min-h-screen ${shouldHideHeader ? '' : 'pt-14'}`} style={{ color: '#171717' }}>
+      <div className={`bg-white min-h-screen ${shouldHideHeader ? '' : 'pt-14'} ${shouldShowFooter ? 'pb-10' : 'pb-20'}`} style={{ color: '#171717' }}>
         <Suspense fallback={
           <div className="flex justify-center items-center min-h-[60vh] bg-white">
             <Spinner size="lg" />
@@ -115,6 +127,37 @@ export default function MobileLayout({
           {children}
         </Suspense>
       </div>
+      
+      {/* 모바일 푸터 */}
+      {shouldShowFooter && (
+        <footer className="bg-[#f9f9f9] border-t border-gray-200 pt-4 pb-24 px-4 mt-4">
+          <div className="container mx-auto">
+            <div className="flex flex-col space-y-4">
+              <div className="flex flex-col">
+                <h3 className="font-bold text-lg text-[#e3c478] mb-2">숙경팜</h3>
+                <p className="text-sm text-gray-600">최고 품질의 농산물을 직배송합니다.</p>
+              </div>
+              
+              <div className="flex space-x-4 text-sm text-gray-600">
+                <Link href="/m/company" className="hover:underline">회사소개</Link>
+                <Link href="/m/terms" className="hover:underline">이용약관</Link>
+                <Link href="/m/privacy" className="hover:underline">개인정보처리방침</Link>
+              </div>
+              
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>상호명: (주)숙경팜 | 대표: 홍길동</p>
+                <p>사업자등록번호: 123-45-67890</p>
+                <p>주소: 서울시 강남구 테헤란로 123</p>
+                <p>전화: 1588-1234 | 이메일: info@sukkyungfarm.com</p>
+              </div>
+              
+              <div className="pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-400">© 2024 숙경팜 All rights reserved.</p>
+              </div>
+            </div>
+          </div>
+        </footer>
+      )}
       
       {/* 모바일 하단 내비게이션 */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] border-t border-gray-200 z-20" suppressHydrationWarning={true}>

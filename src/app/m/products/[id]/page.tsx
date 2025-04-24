@@ -478,7 +478,7 @@ export default function MobileProductDetailPage() {
       </header>
 
       {/* 컨텐츠 영역 - 헤더 높이만큼 상단 여백 추가 */}
-      <div className="pt-14 pb-24">
+      <div className="pt-1 pb-1">
         {/* 메인 이미지 */}
         <div className="relative w-full aspect-square bg-gray-100">
           {images.length > 0 ? (
