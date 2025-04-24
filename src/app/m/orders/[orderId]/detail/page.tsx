@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getAuthHeader } from '@/utils/auth';
 import Image from 'next/image';
 import Link from 'next/link';
-import ReviewModal from '@/app/mypage/ReviewModal';
+import ReviewModal from '@/components/modals/ReviewModal';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import { formatPrice, formatDate } from '@/utils/format';
 import toast from 'react-hot-toast';
