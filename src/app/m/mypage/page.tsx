@@ -441,9 +441,9 @@ function MobileMyPageContent() {
         throw new Error(errorData.error || '리뷰 삭제에 실패했습니다.');
       }
 
-      toast.success('리뷰가 삭제되었습니다.');
-      // 리뷰 목록에서 삭제된 리뷰 제거
-      setReviewHistory(prev => prev.filter(review => review.id !== reviewId));
+        toast.success('리뷰가 삭제되었습니다.');
+        // 리뷰 목록에서 삭제된 리뷰 제거
+        setReviewHistory(prev => prev.filter(review => review.id !== reviewId));
     } catch (error) {
       console.error('리뷰 삭제 오류:', error);
       toast.error(error instanceof Error ? error.message : '리뷰를 삭제하는데 문제가 발생했습니다.');

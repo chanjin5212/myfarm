@@ -16,6 +16,11 @@ export function middleware(request: NextRequest) {
   const userAgent = request.headers.get('user-agent') || '';
   const isMobile = isMobileDevice(userAgent);
   
+  // 이미지나 정적 파일 경로는 제외
+  if (pathname.startsWith('/images/') || pathname.startsWith('/public/')) {
+    return NextResponse.next();
+  }
+  
   // /m으로 시작하지 않고, /admin으로 시작하지 않는 모든 경로를 /m으로 리다이렉트
   if (!pathname.startsWith('/m') && !pathname.startsWith('/admin')) {
     const url = request.nextUrl.clone();
@@ -39,5 +44,5 @@ export function middleware(request: NextRequest) {
  * API 경로와 정적 파일은 제외
  */
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|public).*)'],
 }; 
