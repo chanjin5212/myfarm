@@ -40,10 +40,10 @@ async function verifyAdminToken(request: NextRequest) {
 // 리뷰 삭제 API
 export async function DELETE(
   request: NextRequest,
-  context: { params: { reviewId: string } }
+  { params }: { params: Promise<{ reviewId: string }> }
 ) {
   try {
-    const { reviewId } = context.params;
+    const { reviewId } = await params;
     
     // 관리자 인증
     const authResult = await verifyAdminToken(request);
