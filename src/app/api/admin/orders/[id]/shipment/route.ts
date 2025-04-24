@@ -386,4 +386,82 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // 관리자 인증
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: 401 }
+      );
+    }
+
+    const { id: orderId } = await params;
+    
+    if (!orderId) {
+      return NextResponse.json(
+        { error: '주문 ID가 필요합니다' },
+        { status: 400 }
+      );
+    }
+
+    // URL에서 shipment_id 추출
+    const url = new URL(request.url);
+    const shipmentId = url.searchParams.get('shipment_id');
+
+    // shipment_id가 없는 경우 에러 반환
+    if (!shipmentId) {
+      return NextResponse.json(
+        { error: '송장 ID가 필요합니다' },
+        { status: 400 }
+      );
+    }
+
+    // 송장 정보 삭제
+    const { error: deleteError } = await supabase
+      .from('shipments')
+      .delete()
+      .eq('id', shipmentId)
+      .eq('order_id', orderId.toString());
+    
+    if (deleteError) {
+      console.error('송장 정보 삭제 오류:', deleteError);
+      return NextResponse.json(
+        { error: '송장 정보 삭제에 실패했습니다' },
+        { status: 500 }
+      );
+    }
+
+    // 주문 상태를 'paid'로 업데이트 (송장이 없으므로 배송 전 상태로 되돌림)
+    const { error: updateOrderError } = await supabase
+      .from('orders')
+      .update({
+        status: 'paid',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', orderId.toString());
+    
+    if (updateOrderError) {
+      console.error('주문 상태 업데이트 오류:', updateOrderError);
+      // 주문 상태 업데이트 실패해도 송장 정보는 삭제되었으므로 에러 반환하지 않음
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: '송장 정보가 삭제되었습니다'
+    });
+    
+  } catch (error) {
+    console.error('송장 정보 삭제 에러:', error);
+    return NextResponse.json(
+      { error: '송장 정보 삭제에 실패했습니다' },
+      { status: 500 }
+    );
+  }
 } 

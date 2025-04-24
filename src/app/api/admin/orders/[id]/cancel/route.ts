@@ -10,6 +10,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
+// Toss Payments 시크릿 키
+const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY!;
+
 // 관리자 토큰 검증 함수
 async function verifyAdminToken(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -93,13 +96,58 @@ export async function POST(
       );
     }
 
+    // 현재 날짜 생성
+    const cancelDate = new Date().toISOString();
+
+    // 토스 결제 취소 처리 (tid가 있는 경우)
+    let tossResult = null;
+    if (order.tid) {
+      try {
+        // Toss Payments API로 결제 취소 요청
+        const tossResponse = await fetch(`https://api.tosspayments.com/v1/payments/${order.tid}/cancel`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${Buffer.from(TOSS_SECRET_KEY + ':').toString('base64')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ cancelReason: reason })
+        });
+        
+        // Toss API 응답 확인
+        if (!tossResponse.ok) {
+          const tossError = await tossResponse.json();
+          console.error('토스 결제 취소 오류:', tossError);
+          
+          // 이미 취소된 결제인지 확인
+          if (tossError.code === 'ALREADY_CANCELED_PAYMENT') {
+            console.log('이미 취소된 결제입니다. 주문 상태만 변경합니다.');
+          } else {
+            return NextResponse.json({ 
+              error: '결제 취소에 실패했습니다',
+              tossError
+            }, { status: tossResponse.status });
+          }
+        } else {
+          tossResult = await tossResponse.json();
+          console.log('토스 결제 취소 성공:', tossResult);
+        }
+      } catch (tossError) {
+        console.error('토스 결제 취소 중 오류 발생:', tossError);
+        return NextResponse.json(
+          { error: '결제 취소 처리 중 오류가 발생했습니다' },
+          { status: 500 }
+        );
+      }
+    }
+
     // 주문 취소 - 상태 변경
     const { data: updatedOrder, error: updateError } = await supabase
       .from('orders')
       .update({ 
         status: 'canceled', 
         cancel_reason: reason,
-        updated_at: new Date().toISOString() 
+        cancel_date: cancelDate,
+        updated_at: cancelDate
       })
       .eq('id', orderId)
       .select()
@@ -153,14 +201,18 @@ export async function POST(
         order_id: orderId,
         user_id: authResult.userId,
         action: 'cancel',
-        details: { reason },
-        created_at: new Date().toISOString()
+        details: { 
+          reason,
+          toss_result: tossResult 
+        },
+        created_at: cancelDate
       });
 
     return NextResponse.json({
       success: true,
       message: '주문이 취소되었습니다',
-      order: updatedOrder
+      order: updatedOrder,
+      toss_result: tossResult
     });
     
   } catch (error) {

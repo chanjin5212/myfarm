@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast, Toaster } from 'react-hot-toast';
 import { Spinner } from '@/components/ui/CommonStyles';
 import Script from 'next/script';
+import { TermsModal } from '@/components/modals/TermsModal';
 
 interface RegisterFormData {
   login_id: string;
@@ -68,6 +69,7 @@ export default function MobileRegisterPage() {
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const [isCustomDomain, setIsCustomDomain] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
   // 비밀번호 유효성 검증 상태
   const [passwordValidation, setPasswordValidation] = useState({
@@ -920,7 +922,16 @@ export default function MobileRegisterPage() {
                     <label htmlFor="terms_agreed" className="font-medium text-gray-700">
                       서비스 이용약관 동의 (필수) *
                     </label>
-                    <p className="text-gray-500">회원가입을 위해 서비스 이용약관에 동의해야 합니다.</p>
+                    <p className="text-gray-500">
+                      회원가입을 위해 서비스 이용약관에 동의해야 합니다.
+                      <button
+                        type="button"
+                        onClick={() => setIsTermsModalOpen(true)}
+                        className="ml-1 text-green-600 hover:text-green-500 underline"
+                      >
+                        약관 보기
+                      </button>
+                    </p>
                   </div>
                 </div>
                 {formErrors.terms_agreed && (
@@ -970,6 +981,11 @@ export default function MobileRegisterPage() {
           </div>
         </div>
       </div>
+
+      <TermsModal 
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+      />
     </>
   );
 }

@@ -154,6 +154,10 @@ export default function AdminOrderDetailPage() {
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<any>(null);
 
+  // 송장 정보 삭제를 위한 상태
+  const [isDeleteShipment, setIsDeleteShipment] = useState(false);
+  const [deleteShipmentId, setDeleteShipmentId] = useState('');
+
   // 주문 정보 가져오기
   useEffect(() => {
     fetchOrderDetails();
@@ -426,6 +430,42 @@ export default function AdminOrderDetailPage() {
     return formatDistanceToNow(date, { addSuffix: true, locale: ko });
   };
 
+  // 송장 정보 삭제 함수
+  const deleteShipment = async (shipmentId: string) => {
+    try {
+      setIsDeleteShipment(true);
+      setDeleteShipmentId(shipmentId);
+      
+      const adminToken = localStorage.getItem('adminToken');
+      
+      if (!adminToken) {
+        toast.error('관리자 권한이 없습니다');
+        router.push('/admin/login');
+        return;
+      }
+
+      const response = await fetch(`/api/admin/orders/${orderId}/shipment?shipment_id=${shipmentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('송장 정보 삭제에 실패했습니다');
+      }
+
+      toast.success('송장 정보가 삭제되었습니다');
+      fetchOrderDetails();
+    } catch (error) {
+      console.error('송장 정보 삭제 오류:', error);
+      toast.error('송장 정보 삭제에 실패했습니다');
+    } finally {
+      setIsDeleteShipment(false);
+      setDeleteShipmentId('');
+    }
+  };
+
   // 페이지 내용 렌더링
   if (loading) {
     return (
@@ -459,36 +499,114 @@ export default function AdminOrderDetailPage() {
       {/* 관리자 작업 패널 */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">주문 관리</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* 주문 상태 관리 */}
-          <div className="border rounded-md p-4">
-            <h3 className="font-medium mb-2">주문 상태 변경</h3>
-            <div className="mb-4">
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="block w-full p-2 border border-gray-300 rounded-md mb-2"
-                disabled={isUpdating}
-              >
-                {Object.keys(ORDER_STATUS_MAP).map((status) => (
-                  <option key={status} value={status}>
-                    {ORDER_STATUS_MAP[status].text}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="primary"
-                onClick={updateOrderStatus}
-                disabled={isUpdating || selectedStatus === orderInfo.status}
-                className="w-full"
-              >
-                {isUpdating ? <Spinner size="sm" /> : '상태 변경'}
-              </Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            {/* 주문 상태 관리 */}
+            <div className="border rounded-md p-4 mb-6">
+              <h3 className="font-medium mb-2">주문 상태 변경</h3>
+              <div className="mb-4">
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="block w-full p-2 border border-gray-300 rounded-md mb-2"
+                  disabled={isUpdating}
+                >
+                  {Object.keys(ORDER_STATUS_MAP).map((status) => (
+                    <option key={status} value={status}>
+                      {ORDER_STATUS_MAP[status].text}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="primary"
+                  onClick={updateOrderStatus}
+                  disabled={isUpdating || selectedStatus === orderInfo.status}
+                  className="w-full"
+                >
+                  {isUpdating ? <Spinner size="sm" /> : '상태 변경'}
+                </Button>
+              </div>
+            </div>
+
+            {/* 결제 취소 */}
+            <div className="border rounded-md p-4">
+              <h3 className="font-medium mb-2">주문 취소</h3>
+              <div className="mb-2">
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="취소 사유 입력"
+                  className="block w-full p-2 border border-gray-300 rounded-md mb-2 h-20"
+                  disabled={isCancelling || !['pending', 'payment_pending', 'paid'].includes(orderInfo.status)}
+                />
+                <Button
+                  onClick={cancelPayment}
+                  disabled={
+                    isCancelling || 
+                    !cancelReason || 
+                    !['pending', 'payment_pending', 'paid'].includes(orderInfo.status)
+                  }
+                  className="w-full bg-red-500 text-white hover:bg-red-600 disabled:bg-red-300 disabled:text-gray-600 font-medium py-2"
+                >
+                  {isCancelling ? <Spinner size="sm" /> : '주문 취소'}
+                </Button>
+                {!['pending', 'payment_pending', 'paid'].includes(orderInfo.status) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    이미 처리중인 주문은 취소할 수 없습니다.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* 송장 입력 */}
+          {/* 배송 정보 및 송장 입력 */}
           <div className="border rounded-md p-4">
+            {shipments.length > 0 ? (
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-medium">배송 정보</h3>
+                  {isDeleteShipment ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if(window.confirm('송장 정보를 삭제하시겠습니까?')) {
+                          deleteShipment(shipments[0].id);
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-800 text-sm"
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
+                <div className="bg-gray-50 p-3 rounded border mb-4">
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <div className="text-xs text-gray-500">택배사</div>
+                      <div className="font-medium">{carrierOptions.find(option => option.value === shipments[0].carrier)?.label || shipments[0].carrier}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">송장번호</div>
+                      <div className="font-medium">{shipments[0].tracking_number}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs text-gray-500">상태</div>
+                      <div className="font-medium">
+                        {DELIVERY_STATUS_MAP[shipments[0].status] || shipments[0].status}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">등록일</div>
+                      <div className="font-medium">{formatDate(shipments[0].created_at)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <h3 className="font-medium mb-2">송장 정보 {shipments.length > 0 ? '수정' : '입력'}</h3>
             <div className="mb-2">
               <select
@@ -524,37 +642,6 @@ export default function AdminOrderDetailPage() {
               >
                 {isAddingShipment ? <Spinner size="sm" /> : shipments.length > 0 ? '송장 정보 수정' : '송장 정보 추가'}
               </Button>
-            </div>
-          </div>
-
-          {/* 결제 취소 */}
-          <div className="border rounded-md p-4">
-            <h3 className="font-medium mb-2">주문 취소</h3>
-            <div className="mb-2">
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="취소 사유 입력"
-                className="block w-full p-2 border border-gray-300 rounded-md mb-2 h-20"
-                disabled={isCancelling || !['pending', 'payment_pending', 'paid'].includes(orderInfo.status)}
-              />
-              <Button
-                variant="outline"
-                onClick={cancelPayment}
-                disabled={
-                  isCancelling || 
-                  !cancelReason || 
-                  !['pending', 'payment_pending', 'paid'].includes(orderInfo.status)
-                }
-                className="w-full bg-red-500 text-white hover:bg-red-600"
-              >
-                {isCancelling ? <Spinner size="sm" /> : '주문 취소'}
-              </Button>
-              {!['pending', 'payment_pending', 'paid'].includes(orderInfo.status) && (
-                <p className="text-xs text-gray-500 mt-1">
-                  이미 처리중인 주문은 취소할 수 없습니다.
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -650,9 +737,9 @@ export default function AdminOrderDetailPage() {
         </div>
       </div>
 
-      {/* 배송 정보 */}
+      {/* 배송 정보 (상세 조회) */}
       <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h2 className="text-lg font-semibold mb-4">배송 정보</h2>
+        <h2 className="text-lg font-semibold mb-4">배송 상세 정보</h2>
         {shipments.length > 0 ? (
           <div className="space-y-4">
             {shipments.map((shipment) => {
@@ -674,7 +761,7 @@ export default function AdminOrderDetailPage() {
               const carrierName = carrierOptions.find(option => option.value === shipment.carrier)?.label || shipment.carrier;
               
               return (
-                <div key={shipment.id} className="border rounded-lg p-4 bg-gray-50">
+                <div key={shipment.id} className="border rounded-lg p-4 bg-gray-50 relative">
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
                       <div className="text-xs text-gray-500">택배사</div>

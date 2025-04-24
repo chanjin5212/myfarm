@@ -24,6 +24,7 @@ const HIDE_HEADER_PATHS = [
 const SHOW_FOOTER_PATHS = [
   '/m',
   '/m/products',
+  '/m/company',  // 회사소개 페이지 추가
 ];
 
 export default function MobileLayout({
@@ -45,6 +46,7 @@ export default function MobileLayout({
   const shouldShowFooter = 
     pathname === '/m' || 
     pathname === '/m/products' || 
+    pathname === '/m/company' ||  // 회사소개 페이지 추가
     pathname?.startsWith('/m/products/');  // 상품 상세 페이지
   
   // 모바일 레이아웃 설정
