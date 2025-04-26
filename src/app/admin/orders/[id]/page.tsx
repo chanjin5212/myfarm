@@ -486,6 +486,39 @@ export default function AdminOrderDetailPage() {
     );
   }
 
+  // 주문 상품을 상품 ID 기준으로 그룹화
+  const groupedOrderItems = orderItems.reduce((groups: any, item: any) => {
+    const productId = item.product_id;
+    
+    if (!groups[productId]) {
+      groups[productId] = {
+        product_id: productId,
+        product_name: item.product_name,
+        product_image: item.product_image || null,
+        total_quantity: 0,
+        total_price: 0,
+        options: [],
+      };
+    }
+    
+    groups[productId].total_quantity += item.quantity;
+    groups[productId].total_price += (item.price * item.quantity);
+    
+    // 옵션 정보 추가
+    groups[productId].options.push({
+      id: item.id,
+      option: item.options,
+      quantity: item.quantity,
+      price: item.price,
+      total: item.price * item.quantity
+    });
+    
+    return groups;
+  }, {});
+
+  // 그룹화된 상품을 배열로 변환
+  const groupedProducts = Object.values(groupedOrderItems);
+
   return (
     <div className="container mx-auto py-6 px-4 pt-20">
       <div className="mb-6 flex items-center justify-between">
@@ -816,36 +849,47 @@ export default function AdminOrderDetailPage() {
         )}
       </div>
 
-      {/* 주문 상품 목록 */}
+      {/* 주문 상품 목록 - 그룹화된 버전 */}
       <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
         <h2 className="text-lg font-semibold mb-4">주문 상품</h2>
-        {orderItems.length > 0 ? (
+        {groupedProducts.length > 0 ? (
           <div className="space-y-4">
-            {orderItems.map((item) => (
-              <div key={item.id} className="border rounded-lg p-4 bg-gray-50">
+            {groupedProducts.map((product: any) => (
+              <div key={product.product_id} className="border rounded-lg p-4 bg-gray-50">
                 <div className="mb-3">
-                  <div className="font-medium text-gray-900 mb-1">{item.product_name}</div>
-                  {item.options && (
-                    <div className="text-sm text-gray-500 mb-2">
-                      {item.options.option_name || item.options.name ? (
-                        <span>
-                          {`${item.options.option_name || item.options.name}: ${item.options.option_value || item.options.value}`}
-                          {item.options.additional_price > 0 && (
-                            <span className="ml-1">(+{item.options.additional_price.toLocaleString()}원)</span>
-                          )}
-                        </span>
-                      ) : (
-                        <span>기본 상품</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="text-sm text-gray-500">
-                    {item.quantity}개 × {formatPrice(item.price)}
+                  <div className="font-medium text-gray-900 mb-2">{product.product_name}</div>
+                  <div className="text-sm text-gray-600 mb-2">총 {product.total_quantity}개</div>
+                  
+                  {/* 옵션 목록 */}
+                  <div className="pl-4 border-l-2 border-gray-200 space-y-2">
+                    {product.options.map((option: any, index: number) => (
+                      <div key={index} className="text-sm">
+                        <div className="flex justify-between items-center mb-1">
+                          <div>
+                            {option.option?.option_name || option.option?.name ? (
+                              <span className="text-gray-700">
+                                {`${option.option.option_name || option.option.name}: ${option.option.option_value || option.option.value}`}
+                                {option.option.additional_price > 0 && (
+                                  <span className="ml-1 text-gray-500">(+{option.option.additional_price.toLocaleString()}원)</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-gray-700">기본 상품</span>
+                            )}
+                          </div>
+                          <div className="text-gray-600">{option.quantity}개</div>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-gray-500">
+                          <span>단가: {formatPrice(option.price)}</span>
+                          <span>소계: {formatPrice(option.total)}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t">
-                  <span className="text-sm text-gray-500">총 금액</span>
-                  <span className="font-medium">{formatPrice(item.price * item.quantity)}</span>
+                  <span className="text-sm text-gray-500">상품 금액</span>
+                  <span className="font-medium">{formatPrice(product.total_price)}</span>
                 </div>
               </div>
             ))}
