@@ -636,6 +636,14 @@ export default function AdminOrderDetailPage() {
                       <div className="font-medium">{formatDate(shipments[0].created_at)}</div>
                     </div>
                   </div>
+                  <div className="mt-3 pt-2 border-t border-gray-200">
+                    <button
+                      onClick={() => openTrackingModal(shipments[0])}
+                      className="w-full text-center py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                    >
+                      상세정보
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -768,85 +776,6 @@ export default function AdminOrderDetailPage() {
             </table>
           </div>
         </div>
-      </div>
-
-      {/* 배송 정보 (상세 조회) */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h2 className="text-lg font-semibold mb-4">배송 상세 정보</h2>
-        {shipments.length > 0 ? (
-          <div className="space-y-4">
-            {shipments.map((shipment) => {
-              // 택배사별 배송 조회 URL
-              const trackingUrl = shipment.carrier === 'cj' 
-                ? `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${shipment.tracking_number}`
-                : shipment.carrier === 'lotte'
-                ? `https://www.lotteglogis.com/home/reservation/tracking/index?InvNo=${shipment.tracking_number}`
-                : shipment.carrier === 'hanjin'
-                ? `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText=${shipment.tracking_number}`
-                : shipment.carrier === 'post'
-                ? `https://service.epost.go.kr/trace.RetrieveRegiPrclDeliv.postal?sid1=${shipment.tracking_number}`
-                : shipment.carrier === 'logen'
-                ? `https://www.ilogen.com/web/personal/trace/${shipment.tracking_number}`
-                : shipment.carrier === 'epost'
-                ? `https://service.epost.go.kr/trace.RetrieveEmsTrace.postal?ems_gubun=E&POST_CODE=${shipment.tracking_number}`
-                : '';
-
-              const carrierName = carrierOptions.find(option => option.value === shipment.carrier)?.label || shipment.carrier;
-              
-              return (
-                <div key={shipment.id} className="border rounded-lg p-4 bg-gray-50 relative">
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div>
-                      <div className="text-xs text-gray-500">택배사</div>
-                      <div className="font-medium">{carrierName}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">송장번호</div>
-                      <div className="font-medium">{shipment.tracking_number}</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div>
-                      <div className="text-xs text-gray-500">상태</div>
-                      <div className="font-medium">
-                        {DELIVERY_STATUS_MAP[shipment.status] || shipment.status}
-                        {shipment.status_name && (
-                          <span className="ml-1 text-gray-500">({shipment.status_name})</span>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500">등록일</div>
-                      <div className="font-medium">{formatDate(shipment.created_at)}</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {trackingUrl && (
-                      <a
-                        href={trackingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                      >
-                        배송조회
-                      </a>
-                    )}
-                    <button
-                      onClick={() => openTrackingModal(shipment)}
-                      className="block text-center py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                    >
-                      상세정보
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            등록된 배송 정보가 없습니다
-          </div>
-        )}
       </div>
 
       {/* 주문 상품 목록 - 그룹화된 버전 */}

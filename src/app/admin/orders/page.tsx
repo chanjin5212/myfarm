@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import toast from 'react-hot-toast';
 import { ORDER_STATUS_MAP } from '@/constants/orderStatus';
+import BulkShipmentModal from '@/components/modals/BulkShipmentModal';
+import { gql } from "graphql-request";
+import { DeliveryTrackerGraphQLClient } from "@/lib/DeliveryTrackerGraphQLClient";
 
 // 날짜 포맷팅 함수
 const formatDate = (dateString: string) => {
@@ -37,10 +40,123 @@ export default function AdminOrdersPage() {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
 
+  // 송장 일괄 등록을 위한 상태
+  const [showBulkShipmentModal, setShowBulkShipmentModal] = useState(false);
+  const [carrierOptions, setCarrierOptions] = useState<any[]>([]);
+  const [isLoadingCarriers, setIsLoadingCarriers] = useState(false);
+
   // 주문 데이터 가져오기
   useEffect(() => {
     fetchOrders();
   }, [currentStatus, currentPage, sortBy, sortOrder]);
+
+  // 택배사 목록 가져오기
+  useEffect(() => {
+    fetchCarrierList();
+  }, []);
+
+  // 택배사 목록을 가져오는 함수
+  const fetchCarrierList = async () => {
+    // 기본 택배사 목록
+    const fallbackCarrierOptions = [
+      { value: 'cj', label: 'CJ대한통운' },
+      { value: 'lotte', label: '롯데택배' },
+      { value: 'hanjin', label: '한진택배' },
+      { value: 'post', label: '우체국택배' },
+      { value: 'logen', label: '로젠택배' },
+      { value: 'epost', label: '우체국 EMS' },
+    ];
+
+    try {
+      setIsLoadingCarriers(true);
+      
+      // GraphQL API를 통해 택배사 목록 조회
+      const CARRIER_LIST_QUERY = gql`
+        query CarrierList($after: String, $countryCode: String) {
+          carriers(first: 100, after: $after, countryCode: $countryCode) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            edges {
+              node {
+                id
+                name
+              }
+            }
+          }
+        }
+      `;
+      
+      const client = new DeliveryTrackerGraphQLClient(
+        process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID || "",
+        process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET || ""
+      );
+      
+      let allCarriers: any[] = [];
+      let hasNextPage = true;
+      let endCursor: string | null = null;
+
+      // 택배사 API 응답 타입 정의
+      interface CarrierResponse {
+        carriers: {
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string | null;
+          };
+          edges: Array<{
+            node: {
+              id: string;
+              name: string;
+            }
+          }>;
+        };
+      }
+
+      while (hasNextPage) {
+        const response: CarrierResponse = await client.request<CarrierResponse>(CARRIER_LIST_QUERY, { 
+          after: endCursor,
+          countryCode: 'KR'  // 한국 택배사만 조회
+        });
+        
+        if (response?.carriers?.edges?.length > 0) {
+          const carriers = response.carriers.edges.map((edge: { node: { id: string; name: string } }) => ({
+            value: edge.node.id,
+            label: edge.node.name
+          }));
+          
+          allCarriers = [...allCarriers, ...carriers];
+        }
+
+        hasNextPage = response.carriers.pageInfo.hasNextPage;
+        endCursor = response.carriers.pageInfo.endCursor;
+      }
+      
+      // 개발용 택배사 추가
+      allCarriers.push({
+        value: 'dev.track.dummy',
+        label: '개발용'
+      });
+      
+      if (allCarriers.length > 0) {
+        setCarrierOptions(allCarriers);
+      } else {
+        // 한국 택배사가 없으면 기본 목록 사용
+        setCarrierOptions(fallbackCarrierOptions);
+      }
+    } catch (error) {
+      console.error('택배사 목록 로딩 오류:', error);
+      
+      // 에러 발생 시에도 개발용 택배사는 추가
+      const fallbackWithDevCarrier = [
+        ...fallbackCarrierOptions,
+        { value: 'dev.track.dummy', label: '개발용' }
+      ];
+      setCarrierOptions(fallbackWithDevCarrier);
+    } finally {
+      setIsLoadingCarriers(false);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -299,20 +415,29 @@ export default function AdminOrdersPage() {
               <Button type="submit">검색</Button>
             </div>
             
-            <div className="flex gap-2 items-center">
-              <input
-                type="date"
-                value={startDate}
-                onChange={handleStartDateChange}
-                className="border border-gray-300 rounded px-3 py-2"
-              />
-              <span>~</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={handleEndDateChange}
-                className="border border-gray-300 rounded px-3 py-2"
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 flex-grow">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={handleStartDateChange}
+                  className="border border-gray-300 rounded px-3 py-2"
+                />
+                <span>~</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={handleEndDateChange}
+                  className="border border-gray-300 rounded px-3 py-2"
+                />
+              </div>
+              <Button 
+                type="button"
+                onClick={() => setShowBulkShipmentModal(true)}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                송장 일괄 입력
+              </Button>
             </div>
           </form>
         </div>
@@ -505,6 +630,15 @@ export default function AdminOrdersPage() {
       
       {/* 페이지네이션 */}
       {!loading && orders.length > 0 && renderPagination()}
+
+      {/* 송장 일괄 입력 모달 */}
+      <BulkShipmentModal
+        isOpen={showBulkShipmentModal}
+        onClose={() => setShowBulkShipmentModal(false)}
+        orders={orders}
+        carrierOptions={carrierOptions}
+        onRefresh={fetchOrders}
+      />
     </div>
   );
 } 
