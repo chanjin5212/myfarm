@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "쇼핑몰",
-  description: "쇼핑몰 웹사이트",
+  title: "강원찐농부",
+  description: "강원찐농부",
 };
 
 export default async function RootLayout({

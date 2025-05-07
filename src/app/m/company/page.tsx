@@ -29,41 +29,31 @@ export default function CompanyPage() {
           <div className="relative w-full h-40 rounded-lg overflow-hidden mb-4">
             <div className="absolute inset-0 bg-[#e3c478] opacity-20"></div>
             <div className="absolute inset-0 flex items-center justify-center">
-              <h2 className="text-2xl font-bold text-[#555]">숙경팜</h2>
+              <h2 className="text-2xl font-bold text-[#555]">강원찐농부</h2>
             </div>
           </div>
           <p className="text-sm text-gray-600 leading-relaxed">
-            숙경팜은 2020년 설립된 프리미엄 농산물 직거래 플랫폼으로, 신선하고 품질 좋은 농산물을 합리적인 가격에 소비자에게 직접 제공하는 것을 목표로 하고 있습니다.
+          강원찐농부는 2025년 설립된 농산물 직거래 플랫폼으로, 신선하고 품질 좋은 농산물을 합리적인 가격에 소비자에게 직접 제공하는 것을 목표로 하고 있습니다.
           </p>
         </div>
 
         <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-2 text-[#e3c478]">회사 미션</h3>
+          <h3 className="text-lg font-semibold mb-2 text-[#e3c478]">회사 슬로건</h3>
           <p className="text-sm text-gray-600 leading-relaxed">
-            &ldquo;농부의 정성을 식탁까지&rdquo; 라는 미션 아래, 생산자와 소비자를 직접 연결하여 중간 유통과정을 줄이고 더 신선한 농산물을 더 합리적인 가격에 제공합니다.
+            &ldquo;농부의 정성을 식탁까지&rdquo; 라는 슬로건 아래, 생산자와 소비자를 직접 연결하여 중간 유통과정을 줄이고 더 신선한 농산물을 더 합리적인 가격에 제공합니다.
           </p>
-        </div>
-
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-2 text-[#e3c478]">핵심 가치</h3>
-          <ul className="list-disc list-inside text-sm text-gray-600 space-y-2">
-            <li><span className="font-medium">신선함</span> - 당일 수확한 신선한 농산물 제공</li>
-            <li><span className="font-medium">투명성</span> - 생산 과정과 유통 과정의 투명한 공개</li>
-            <li><span className="font-medium">지속가능성</span> - 친환경 농법과 포장재 사용</li>
-            <li><span className="font-medium">상생</span> - 농부와 소비자 모두에게 이로운 플랫폼 추구</li>
-          </ul>
         </div>
 
         <div className="mb-8">
           <h3 className="text-lg font-semibold mb-2 text-[#e3c478]">회사 정보</h3>
           <div className="text-sm text-gray-600 space-y-1">
-            <p>상호명: (주)숙경팜</p>
-            <p>대표: 홍길동</p>
-            <p>설립일: 2020년 3월 15일</p>
-            <p>사업자등록번호: 123-45-67890</p>
-            <p>주소: 서울시 강남구 테헤란로 123</p>
-            <p>전화: 1588-1234</p>
-            <p>이메일: info@sukkyungfarm.com</p>
+            <p>상호명: 강원찐농부</p>
+            <p>대표: 이창덕</p>
+            <p>설립일: 2025년 5월 01일</p>
+            <p>사업자등록번호: 302-92-02762</p>
+            <p>주소: 강원특별자치도 고성군 간성읍 어천1길 11</p>
+            <p>전화: 010-5796-2201</p>
+            <p>이메일: oho1114@naver.com</p>
           </div>
         </div>
       </div>

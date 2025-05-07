@@ -455,7 +455,7 @@ export default function MobileProductDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
-            <Link href="/m" className="font-bold text-xl text-[#e3c478] ml-4">숙경팜</Link>
+            <Link href="/m" className="font-bold text-xl text-[#e3c478] ml-4">강원찐농부</Link>
             <div className="flex space-x-3 ml-auto">
               <Link href="/m/search" aria-label="검색" className="text-gray-700">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">

@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     
     // 이메일로 인증 코드 전송
     const mailOptions = {
-      from: process.env.EMAIL_FROM || '"숙경팜" <admin@sukkyungfarm.com>',
+      from: process.env.EMAIL_FROM || '"강원찐농부" <admin@sukkyungfarm.com>',
       to: email,
       subject: getVerificationEmailSubject('findId'),
       html: getVerificationEmailTemplate(name, verificationCode, 'findId')

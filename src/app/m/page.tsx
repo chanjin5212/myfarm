@@ -209,7 +209,7 @@ function HomePage() {
                 제철 농산물로<br />건강한 식탁을 차려보세요
               </h1>
               <p className="text-base text-gray-700 leading-relaxed">
-                직접 재배한 신선한 농산물을 집으로 배송해 드립니다. 숙경팜의 정성이 담긴 제철 식재료로 맛있는 식사를 준비하세요.
+                직접 재배한 신선한 농산물을 집으로 배송해 드립니다. 강원찐농부의 정성이 담긴 제철 식재료로 맛있는 식사를 준비하세요.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row mt-4">
                 <Button className="w-full sm:w-auto">
@@ -247,7 +247,7 @@ function HomePage() {
         <div className="px-5">
           <div className="flex flex-col items-center justify-center space-y-3 text-center mb-5">
             <div className="inline-block rounded-md bg-green-100 px-3 py-1 text-sm font-medium text-green-800 mb-1">
-              숙경팜의 약속
+            강원찐농부의 약속
             </div>
             <h2 className="text-xl font-bold text-gray-900">신선함을 전해드립니다</h2>
             <p className="text-base text-gray-700">

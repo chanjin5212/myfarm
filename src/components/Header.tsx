@@ -68,7 +68,7 @@ export default function Header() {
           <Link href="/" className="flex items-center">
             <Image
               src="/logo.png"
-              alt="숙경팜 로고"
+              alt="강원찐농부 로고"
               width={150}
               height={40}
               priority

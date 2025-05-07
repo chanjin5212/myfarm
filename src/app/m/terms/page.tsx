@@ -31,7 +31,7 @@ export default function TermsPage() {
             <section>
               <h3 className="font-bold mb-2 text-base">제1조 (목적)</h3>
               <p className="leading-relaxed">
-                이 약관은 (주)숙경팜 (이하 &ldquo;회사&rdquo;라 함)이 운영하는 인터넷 쇼핑몰(이하 &ldquo;몰&rdquo;이라 함)에서 제공하는 전자상거래 관련 서비스(이하 &ldquo;서비스&rdquo;라 함)를 이용함에 있어 회사와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
+                이 약관은 강원찐농부 (이하 &ldquo;회사&rdquo;라 함)이 운영하는 인터넷 쇼핑몰(이하 &ldquo;몰&rdquo;이라 함)에서 제공하는 전자상거래 관련 서비스(이하 &ldquo;서비스&rdquo;라 함)를 이용함에 있어 회사와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
               </p>
             </section>
 

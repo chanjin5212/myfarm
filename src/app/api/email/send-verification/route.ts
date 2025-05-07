@@ -104,11 +104,11 @@ export async function POST(request: Request) {
 
     // 이메일 발송
     const mailOptions = {
-      from: `"숙경팜" <${process.env.EMAIL_FROM}>`,
+      from: `"강원찐농부" <${process.env.EMAIL_FROM}>`,
       to: email,
       subject: getVerificationEmailSubject('register'),
       html: getVerificationEmailTemplate('고객', verificationCode, 'register'),
-      text: `숙경팜 회원가입 이메일 인증\n\n안녕하세요, 숙경팜을 이용해 주셔서 감사합니다.\n회원가입을 완료하기 위해 아래의 인증 코드를 입력해주세요.\n\n인증 코드: ${verificationCode}\n\n이 인증 코드는 10분 동안 유효합니다.\n본인이 요청하지 않은 경우 이 이메일을 무시하셔도 됩니다.`
+      text: `강원찐농부 회원가입 이메일 인증\n\n안녕하세요, 강원찐농부를 이용해 주셔서 감사합니다.\n회원가입을 완료하기 위해 아래의 인증 코드를 입력해주세요.\n\n인증 코드: ${verificationCode}\n\n이 인증 코드는 10분 동안 유효합니다.\n본인이 요청하지 않은 경우 이 이메일을 무시하셔도 됩니다.`
     };
 
     try {

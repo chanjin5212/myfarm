@@ -30,7 +30,7 @@ export default function PrivacyPage() {
           <div className="space-y-8 text-sm text-gray-700">
             <section>
               <p className="leading-relaxed mb-4">
-                (주)숙경팜(이하 &ldquo;회사&rdquo;라 함)은 개인정보보호법, 정보통신망 이용촉진 및 정보보호 등에 관한 법률 등 관련 법령을 준수하고 있습니다. 회사는 개인정보처리방침을 통하여 이용자가 제공하는 개인정보가 어떠한 용도와 방식으로 이용되고 있으며, 개인정보 보호를 위해 어떠한 조치가 취해지고 있는지 알려드립니다.
+                (주)강원찐농부(이하 &ldquo;회사&rdquo;라 함)은 개인정보보호법, 정보통신망 이용촉진 및 정보보호 등에 관한 법률 등 관련 법령을 준수하고 있습니다. 회사는 개인정보처리방침을 통하여 이용자가 제공하는 개인정보가 어떠한 용도와 방식으로 이용되고 있으며, 개인정보 보호를 위해 어떠한 조치가 취해지고 있는지 알려드립니다.
               </p>
             </section>
 
@@ -139,10 +139,9 @@ export default function PrivacyPage() {
               </p>
               <ul className="list-none pl-2 space-y-1">
                 <li>개인정보 관리책임자</li>
-                <li>- 이름: 홍길동</li>
-                <li>- 직위: 개인정보보호팀장</li>
-                <li>- 이메일: privacy@sukkyungfarm.com</li>
-                <li>- 전화번호: 1588-1234</li>
+                <li>- 이름: 이숙경</li>
+                <li>- 이메일: oho1114@naver.com</li>
+                <li>- 전화번호: 010-8775-5212</li>
               </ul>
             </section>
 
@@ -152,7 +151,7 @@ export default function PrivacyPage() {
                 현 개인정보처리방침 내용 추가, 삭제 및 수정이 있을 시에는 시행일자 최소 7일 전부터 홈페이지의 공지사항을 통하여 고지할 것입니다.
               </p>
               <p className="mt-4">
-                시행일: 2024년 1월 1일
+                시행일: 2025년 5월 1일
               </p>
             </section>
           </div>
