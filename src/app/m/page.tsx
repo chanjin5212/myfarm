@@ -129,6 +129,25 @@ const BannerSlider = memo(() => {
     { id: 2, src: '/images/banner2.png', alt: '강원찐농부 배너 2' }
   ];
   const [current, setCurrent] = useState(0);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [isTouching, setIsTouching] = useState(false);
+
+  // 배너 바깥 스크롤 방지
+  useEffect(() => {
+    if (!isTouching) return;
+    const preventScroll = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+    const node = sliderRef.current;
+    if (node) {
+      node.addEventListener('touchmove', preventScroll, { passive: false });
+    }
+    return () => {
+      if (node) {
+        node.removeEventListener('touchmove', preventScroll);
+      }
+    };
+  }, [isTouching]);
 
   const settings = {
     infinite: true,
@@ -154,7 +173,13 @@ const BannerSlider = memo(() => {
   };
 
   return (
-    <div className="relative w-full overflow-hidden">
+    <div
+      className="relative w-full overflow-hidden"
+      ref={sliderRef}
+      style={{ touchAction: 'pan-y' }}
+      onTouchStart={() => setIsTouching(true)}
+      onTouchEnd={() => setIsTouching(false)}
+    >
       <Slider {...settings}>
         {banners.map((banner, i) => (
           <div
