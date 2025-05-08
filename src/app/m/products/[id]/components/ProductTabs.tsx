@@ -4,6 +4,7 @@ import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline';
 import ProductInquiry from './ProductInquiry';
 import { Spinner } from '@/components/ui/CommonStyles';
+import { useProductContext } from './ProductContext';
 
 interface ProductTabsProps {
   product: {
@@ -36,6 +37,7 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsCount, setReviewsCount] = useState(0);
+  const { inquiriesCount, setInquiriesCount } = useProductContext();
   const [averageRating, setAverageRating] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -46,6 +48,32 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
       fetchReviews();
     }
   }, [activeTab, product.id, page]);
+  
+  // 초기 로딩시 리뷰와 문의 개수 가져오기
+  useEffect(() => {
+    if (product.id) {
+      // 리뷰 개수 가져오기
+      fetch(`/api/products/${product.id}/reviews?page=1&limit=1`)
+        .then(res => res.json())
+        .then(data => {
+          setReviewsCount(data.total || 0);
+          setAverageRating(data.averageRating || 0);
+        })
+        .catch(error => {
+          console.error('리뷰 개수 조회 오류:', error);
+        });
+      
+      // 문의 개수 가져오기
+      fetch(`/api/products/${product.id}/inquiries?page=1&limit=1`)
+        .then(res => res.json())
+        .then(data => {
+          setInquiriesCount(data.total || 0);
+        })
+        .catch(error => {
+          console.error('문의 개수 조회 오류:', error);
+        });
+    }
+  }, [product.id, setInquiriesCount]);
   
   const fetchReviews = async () => {
     if (!product.id) return;
@@ -116,7 +144,7 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
           }`}
           onClick={() => setActiveTab('review')}
         >
-          리뷰 {reviewsCount > 0 && `(${reviewsCount})`}
+          리뷰{`(${reviewsCount})`}
         </button>
         <button
           className={`flex-1 py-3 text-center font-medium ${
@@ -126,7 +154,7 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
           }`}
           onClick={() => setActiveTab('inquiry')}
         >
-          문의
+          문의{`(${inquiriesCount})`}
         </button>
       </div>
       
@@ -178,10 +206,6 @@ export default function MobileProductTabs({ product, activeTab, setActiveTab }: 
                       <td className="py-2">{product.storage_method}</td>
                     </tr>
                   )}
-                  <tr className="border-b border-gray-100">
-                    <th className="py-2 text-left text-gray-500 pr-4 align-top">유기농 여부</th>
-                    <td className="py-2">{product.is_organic ? '유기농' : '일반'}</td>
-                  </tr>
                 </tbody>
               </table>
             </div>

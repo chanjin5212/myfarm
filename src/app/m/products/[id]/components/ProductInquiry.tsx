@@ -4,6 +4,7 @@ import { checkToken, getAuthHeader, getUserId } from '@/utils/auth';
 import { formatDate } from '@/utils/format';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/CommonStyles';
+import { useProductContext } from './ProductContext';
 
 interface ProductInquiryProps {
   productId: string;
@@ -36,6 +37,7 @@ interface InquiryReply {
 
 export default function ProductInquiry({ productId }: ProductInquiryProps) {
   const router = useRouter();
+  const { updateInquiriesCount } = useProductContext();
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInquiryForm, setShowInquiryForm] = useState(false);
@@ -153,6 +155,9 @@ export default function ProductInquiry({ productId }: ProductInquiryProps) {
         setShowInquiryForm(false);
         setPage(1);
         fetchInquiries();
+        
+        // Context를 통해 문의 개수 업데이트
+        updateInquiriesCount();
       } else {
         const data = await response.json();
         toast.error(data.message || '문의 등록에 실패했습니다.');
