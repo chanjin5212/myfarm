@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect, memo, useMemo } from 'react';
+import { useState, useEffect, memo, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Spinner } from '@/components/ui/CommonStyles';
 import { ChevronRight } from "lucide-react";
 import React, { ReactNode } from 'react';
 
@@ -120,6 +119,100 @@ interface Category {
   image?: string;
 }
 
+// 배너 슬라이더 컴포넌트
+const BannerSlider = memo(() => {
+  const originalBanners = [
+    { id: 1, src: '/images/banner1.png', alt: '강원찐농부 배너 1' },
+    { id: 2, src: '/images/banner2.png', alt: '강원찐농부 배너 2' }
+  ];
+  
+  const [currentIndex, setCurrentIndex] = useState(1); // 1부터 시작 (실제 첫 번째 배너)
+  const [transition, setTransition] = useState(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 실제 렌더링할 배열 구성 (마지막 + 전체 + 첫번째)
+  const banners = [originalBanners[originalBanners.length - 1], ...originalBanners, originalBanners[0]];
+  
+  // 자동 슬라이드
+  useEffect(() => {
+    timeoutRef.current = setTimeout(() => {
+      setTransition(true);
+      setCurrentIndex(prevIndex => prevIndex + 1);
+    }, 5000);
+    
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [currentIndex]);
+  
+  // 트랜지션이 끝났을 때 처리
+  const handleTransitionEnd = () => {
+    // 마지막 슬라이드(복제된 첫번째)에 도달했을 때
+    if (currentIndex === banners.length - 1) {
+      setTransition(false); // 트랜지션 효과 끄기
+      setCurrentIndex(1); // 실제 첫번째 슬라이드로 즉시 이동
+    }
+  };
+  
+  // 인디케이터 클릭 시 해당 배너로 이동
+  const goToSlide = (index: number) => {
+    setCurrentIndex(index);
+    setTransition(true);
+  };
+  
+  return (
+    <div className="relative w-full overflow-hidden">
+      <div 
+        className="flex" 
+        style={{ 
+          transform: `translateX(-${currentIndex * 100 / banners.length}%)`,
+          transition: transition ? 'transform 0.5s ease-in-out' : 'none',
+          width: `${banners.length * 100}%`
+        }}
+        onTransitionEnd={handleTransitionEnd}
+      >
+        {banners.map((banner, i) => (
+          <div 
+            key={i} 
+            className="w-full flex-shrink-0" 
+            style={{ width: `${100 / banners.length}%` }}
+          >
+            <Image
+              src={typeof banner === 'object' ? banner.src : ''}
+              alt={typeof banner === 'object' ? banner.alt : '배너 이미지'}
+              width={1200}
+              height={400}
+              className="w-full h-auto"
+              priority={i === 1} // 첫 번째 실제 배너에 priority 적용
+              quality={80}
+            />
+          </div>
+        ))}
+      </div>
+      
+      {/* 인디케이터 */}
+      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
+        {originalBanners.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => goToSlide(index + 1)} // 실제 배너는 인덱스 1부터 시작
+            className={`w-2 h-2 rounded-full ${
+              index === (currentIndex - 1) % originalBanners.length 
+                ? 'bg-white' 
+                : 'bg-white/50'
+            }`}
+            aria-label={`배너 ${index + 1}로 이동`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+});
+
+BannerSlider.displayName = 'BannerSlider';
+
 // 상품 카드 컴포넌트 메모이제이션
 const ProductCard = memo(({ product }: { product: Product }) => {
   return (
@@ -188,29 +281,11 @@ function HomePage() {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh] bg-white">
-        <Spinner size="lg" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col pb-4">
-      {/* 배너 섹션 - 우선순위 높게 로드 */}
+      {/* 배너 슬라이더로 변경 */}
       <section className="w-full">
-        <div className="relative w-full">
-          <Image
-            src="/images/banner.png"
-            alt="메인 배너"
-            width={1200}
-            height={400}
-            className="w-full h-auto"
-            priority
-            quality={80}
-          />
-        </div>
+        <BannerSlider />
       </section>
 
       {/* 추천 상품 */}
