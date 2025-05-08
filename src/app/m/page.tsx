@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, memo, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, memo, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Spinner } from '@/components/ui/CommonStyles';
-import { ChevronRight, ShoppingBag } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import React, { ReactNode } from 'react';
 
 // Button 컴포넌트 메모이제이션
@@ -110,7 +110,6 @@ interface Product {
   id: string;
   name: string;
   price: number;
-  discount_price?: number;
   thumbnail_url?: string;
   is_organic?: boolean;
 }
@@ -123,12 +122,6 @@ interface Category {
 
 // 상품 카드 컴포넌트 메모이제이션
 const ProductCard = memo(({ product }: { product: Product }) => {
-  const discount = useMemo(() => 
-    product.discount_price 
-      ? Math.round(((product.price - product.discount_price) / product.price) * 100) 
-      : 0
-  , [product.price, product.discount_price]);
-  
   return (
     <Link href={`/m/products/${product.id}`} className="block">
       <div className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
@@ -152,15 +145,7 @@ const ProductCard = memo(({ product }: { product: Product }) => {
         <div className="p-3">
           <h3 className="font-medium text-sm truncate">{product.name}</h3>
           <div className="mt-1">
-            {product.discount_price ? (
-              <div className="flex items-baseline space-x-1">
-                <span className="line-through text-gray-400 text-xs">{product.price.toLocaleString()}원</span>
-                <span className="text-red-500 font-semibold">{discount}%</span>
-                <span className="font-bold">{product.discount_price.toLocaleString()}원</span>
-              </div>
-            ) : (
-              <span className="font-bold">{product.price.toLocaleString()}원</span>
-            )}
+            <span className="font-bold">{product.price.toLocaleString()}원</span>
           </div>
         </div>
       </div>

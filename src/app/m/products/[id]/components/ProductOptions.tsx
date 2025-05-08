@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/CommonStyles';
 
@@ -35,22 +35,155 @@ interface ProductOptionsProps {
   setQuantity: (quantity: number) => void;
 }
 
-export default function MobileProductOptions({
+// 옵션 아이템 컴포넌트 메모이제이션
+const OptionItem = memo(({ 
+  option, 
+  onRemove, 
+  onChangeQuantity, 
+  changingOptionId 
+}: { 
+  option: SelectedOption; 
+  onRemove: (id: string) => void; 
+  onChangeQuantity: (id: string, quantity: number) => void;
+  changingOptionId: string | null;
+}) => {
+  const formattedPrice = useMemo(() => 
+    (option.price + option.additionalPrice).toLocaleString(), 
+    [option.price, option.additionalPrice]
+  );
+  
+  const formattedAdditionalPrice = useMemo(() => 
+    option.additionalPrice > 0 ? ` (+${option.additionalPrice.toLocaleString()}원)` : '',
+    [option.additionalPrice]
+  );
+  
+  return (
+    <div className="bg-gray-50 rounded-md p-3">
+      <div className="flex justify-between mb-2">
+        <div>
+          <p className="font-medium text-sm">
+            {option.optionName}: {option.optionValue}
+          </p>
+          <p className="text-xs text-gray-500">
+            {formattedPrice}원
+            {formattedAdditionalPrice}
+          </p>
+        </div>
+        <button
+          onClick={() => onRemove(option.optionId)}
+          className="text-gray-400 hover:text-gray-600"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div className="flex justify-between items-center">
+        <div className="flex border border-gray-300 rounded-md">
+          <button
+            className="px-3 py-1 text-gray-500"
+            onClick={() => onChangeQuantity(option.optionId, option.quantity - 1)}
+            disabled={changingOptionId === option.optionId}
+          >
+            {changingOptionId === option.optionId ? (
+              <Spinner size="sm" className="w-3 h-3" />
+            ) : (
+              '-'
+            )}
+          </button>
+          <input
+            type="number"
+            min="1"
+            max={option.stock}
+            value={option.quantity}
+            onChange={(e) => onChangeQuantity(option.optionId, parseInt(e.target.value) || 1)}
+            className="w-12 text-center border-x border-gray-300"
+            disabled={changingOptionId === option.optionId}
+          />
+          <button
+            className="px-3 py-1 text-gray-500"
+            onClick={() => onChangeQuantity(option.optionId, option.quantity + 1)}
+            disabled={changingOptionId === option.optionId}
+          >
+            {changingOptionId === option.optionId ? (
+              <Spinner size="sm" className="w-3 h-3" />
+            ) : (
+              '+'
+            )}
+          </button>
+        </div>
+        <div className="text-sm font-semibold">
+          {((option.price + option.additionalPrice) * option.quantity).toLocaleString()}원
+        </div>
+      </div>
+    </div>
+  );
+});
+
+OptionItem.displayName = 'OptionItem';
+
+// 수량 컨트롤 컴포넌트 메모이제이션
+const QuantityControl = memo(({ 
+  quantity, 
+  onChangeQuantity, 
+  isChanging, 
+  maxStock 
+}: { 
+  quantity: number; 
+  onChangeQuantity: (quantity: number) => void;
+  isChanging: boolean;
+  maxStock?: number;
+}) => {
+  return (
+    <div className="flex space-x-3 items-center">
+      <div className="flex border border-gray-300 rounded-md">
+        <button
+          className="px-3 py-1 text-gray-500"
+          onClick={() => onChangeQuantity(quantity - 1)}
+          disabled={isChanging || quantity <= 1}
+        >
+          {isChanging ? <Spinner size="sm" className="w-3 h-3" /> : '-'}
+        </button>
+        <input
+          type="number"
+          min="1"
+          max={maxStock}
+          value={quantity}
+          onChange={(e) => onChangeQuantity(parseInt(e.target.value) || 1)}
+          className="w-12 text-center border-x border-gray-300"
+          disabled={isChanging}
+        />
+        <button
+          className="px-3 py-1 text-gray-500"
+          onClick={() => onChangeQuantity(quantity + 1)}
+          disabled={isChanging || (maxStock !== undefined && quantity >= maxStock)}
+        >
+          {isChanging ? <Spinner size="sm" className="w-3 h-3" /> : '+'}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+QuantityControl.displayName = 'QuantityControl';
+
+const ProductOptions = memo(({
   product,
   options,
   selectedOptions,
   setSelectedOptions,
   quantity,
   setQuantity
-}: ProductOptionsProps) {
+}: ProductOptionsProps) => {
   // 실제 판매 가격
   const actualPrice = product.price;
   // 로딩 상태 관리
   const [changingOptionId, setChangingOptionId] = useState<string | null>(null);
   const [changingBaseQuantity, setChangingBaseQuantity] = useState<boolean>(false);
   
-  // 총 금액 계산
-  const calculateTotalPrice = () => {
+  // 총 금액 계산 메모이제이션
+  const totalPrice = useMemo(() => {
     if (options.length > 0) {
       // 옵션이 있는 경우 선택된 옵션들의 가격 합계
       return selectedOptions.reduce((total, option) => {
@@ -60,10 +193,10 @@ export default function MobileProductOptions({
       // 옵션이 없는 경우 수량 * 기본 가격
       return actualPrice * quantity;
     }
-  };
+  }, [actualPrice, options.length, selectedOptions, quantity]);
   
   // 옵션 선택 핸들러
-  const handleOptionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleOptionChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const optionId = e.target.value;
     if (!optionId) return;
     
@@ -105,10 +238,10 @@ export default function MobileProductOptions({
     
     // 셀렉트 박스 초기화
     e.target.value = '';
-  };
+  }, [selectedOptions, options, actualPrice, setSelectedOptions]);
   
   // 옵션 수량 변경 핸들러
-  const handleOptionQuantityChange = (optionId: string, newQuantity: number) => {
+  const handleOptionQuantityChange = useCallback((optionId: string, newQuantity: number) => {
     // 수량은 최소 1 이상이어야 함
     if (newQuantity < 1) {
       toast.error('최소 수량은 1개입니다.');
@@ -125,16 +258,20 @@ export default function MobileProductOptions({
       return;
     }
     
+    setChangingOptionId(optionId);
+    
     // 수량 업데이트
     setSelectedOptions(
       selectedOptions.map(opt => 
         opt.optionId === optionId ? { ...opt, quantity: newQuantity } : opt
       )
     );
-  };
+    
+    setChangingOptionId(null);
+  }, [selectedOptions, setSelectedOptions]);
   
   // 기본 수량 변경 핸들러 (옵션이 없는 상품용)
-  const handleBaseQuantityChange = (newQuantity: number) => {
+  const handleBaseQuantityChange = useCallback((newQuantity: number) => {
     if (newQuantity < 1) {
       toast.error('최소 수량은 1개입니다.');
       return;
@@ -145,14 +282,31 @@ export default function MobileProductOptions({
       return;
     }
     
+    setChangingBaseQuantity(true);
+    
     // 수량 업데이트
     setQuantity(newQuantity);
-  };
+    
+    setChangingBaseQuantity(false);
+  }, [product.stock, setQuantity]);
   
   // 옵션 삭제 핸들러
-  const handleRemoveOption = (optionId: string) => {
+  const handleRemoveOption = useCallback((optionId: string) => {
     setSelectedOptions(selectedOptions.filter(option => option.optionId !== optionId));
-  };
+  }, [selectedOptions, setSelectedOptions]);
+  
+  // 옵션 렌더링 최적화
+  const optionItems = useMemo(() => {
+    return selectedOptions.map(option => (
+      <OptionItem
+        key={option.optionId}
+        option={option}
+        onRemove={handleRemoveOption}
+        onChangeQuantity={handleOptionQuantityChange}
+        changingOptionId={changingOptionId}
+      />
+    ));
+  }, [selectedOptions, handleRemoveOption, handleOptionQuantityChange, changingOptionId]);
   
   return (
     <div className="px-4 py-4 border-b">
@@ -194,128 +348,32 @@ export default function MobileProductOptions({
       {/* 선택된 옵션 목록 */}
       {selectedOptions.length > 0 && (
         <div className="mb-4 space-y-3">
-          {selectedOptions.map((option) => (
-            <div key={option.optionId} className="bg-gray-50 rounded-md p-3">
-              <div className="flex justify-between mb-2">
-                <div>
-                  <p className="font-medium text-sm">
-                    {option.optionName}: {option.optionValue}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {(option.price + option.additionalPrice).toLocaleString()}원
-                    {option.additionalPrice > 0 && ` (+${option.additionalPrice.toLocaleString()}원)`}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleRemoveOption(option.optionId)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <div className="flex border border-gray-300 rounded-md">
-                  <button
-                    className="px-3 py-1 text-gray-500"
-                    onClick={() => handleOptionQuantityChange(option.optionId, option.quantity - 1)}
-                    disabled={changingOptionId === option.optionId}
-                  >
-                    {changingOptionId === option.optionId ? (
-                      <Spinner size="sm" className="w-3 h-3" />
-                    ) : (
-                      '-'
-                    )}
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    max={option.stock}
-                    value={option.quantity}
-                    onChange={(e) => handleOptionQuantityChange(option.optionId, parseInt(e.target.value) || 1)}
-                    className="w-12 text-center border-x border-gray-300"
-                    disabled={changingOptionId === option.optionId}
-                  />
-                  <button
-                    className="px-3 py-1 text-gray-500"
-                    onClick={() => handleOptionQuantityChange(option.optionId, option.quantity + 1)}
-                    disabled={changingOptionId === option.optionId}
-                  >
-                    {changingOptionId === option.optionId ? (
-                      <Spinner size="sm" className="w-3 h-3" />
-                    ) : (
-                      '+'
-                    )}
-                  </button>
-                </div>
-                <span className="font-semibold">
-                  {((option.price + option.additionalPrice) * option.quantity).toLocaleString()}원
-                </span>
-              </div>
-            </div>
-          ))}
+          {optionItems}
         </div>
       )}
       
-      {/* 수량 선택 (옵션이 없을 때만 표시) */}
+      {/* 옵션이 없는 상품의 수량 선택 */}
       {options.length === 0 && (
-        <div className="mb-4">
-          <label htmlFor="quantity" className="block text-sm font-medium mb-1.5 text-gray-700">
-            수량
-          </label>
-          <div className="flex items-center">
-            <div className="flex border border-gray-300 rounded-md">
-              <button
-                className="px-3 py-1 text-gray-500"
-                onClick={() => handleBaseQuantityChange(quantity - 1)}
-                disabled={changingBaseQuantity}
-              >
-                {changingBaseQuantity ? (
-                  <Spinner size="sm" className="w-3 h-3" />
-                ) : (
-                  '-'
-                )}
-              </button>
-              <input
-                id="quantity"
-                type="number"
-                min="1"
-                max={product.stock}
-                value={quantity}
-                onChange={(e) => handleBaseQuantityChange(parseInt(e.target.value) || 1)}
-                className="w-12 text-center border-x border-gray-300"
-                disabled={changingBaseQuantity}
-              />
-              <button
-                className="px-3 py-1 text-gray-500"
-                onClick={() => handleBaseQuantityChange(quantity + 1)}
-                disabled={changingBaseQuantity}
-              >
-                {changingBaseQuantity ? (
-                  <Spinner size="sm" className="w-3 h-3" />
-                ) : (
-                  '+'
-                )}
-              </button>
-            </div>
-            <span className="ml-auto font-semibold">
-              {(actualPrice * quantity).toLocaleString()}원
-            </span>
-          </div>
+        <div className="flex justify-between items-center mb-4">
+          <span className="text-sm font-medium text-gray-700">수량</span>
+          <QuantityControl 
+            quantity={quantity} 
+            onChangeQuantity={handleBaseQuantityChange}
+            isChanging={changingBaseQuantity}
+            maxStock={product.stock}
+          />
         </div>
       )}
       
-      {/* 총 상품 금액 */}
-      <div className="pt-3 border-t border-gray-200">
-        <div className="flex justify-between items-center">
-          <span className="font-medium">총 상품 금액</span>
-          <span className="text-xl font-bold text-green-600">
-            {calculateTotalPrice().toLocaleString()}원
-          </span>
-        </div>
+      {/* 총 금액 표시 */}
+      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+        <span className="text-sm font-medium text-gray-700">총 상품 금액</span>
+        <span className="text-lg font-bold text-gray-900">{totalPrice.toLocaleString()}원</span>
       </div>
     </div>
   );
-}
+});
+
+ProductOptions.displayName = 'ProductOptions';
+
+export default ProductOptions;

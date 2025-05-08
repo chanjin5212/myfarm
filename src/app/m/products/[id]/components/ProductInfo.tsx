@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 
 interface ProductInfoProps {
   product: {
@@ -12,7 +12,16 @@ interface ProductInfoProps {
   };
 }
 
-const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
+const ProductInfo: React.FC<ProductInfoProps> = memo(({ product }) => {
+  // 가격 포맷팅 메모이제이션
+  const formattedPrice = useMemo(() => product.price.toLocaleString(), [product.price]);
+  
+  // 수확일 포맷팅 메모이제이션
+  const formattedHarvestDate = useMemo(() => {
+    if (!product.harvest_date) return null;
+    return new Date(product.harvest_date).toLocaleDateString('ko-KR');
+  }, [product.harvest_date]);
+
   return (
     <div className="px-4 py-4 bg-white">
       {/* 상품명 */}
@@ -21,7 +30,7 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
       {/* 가격 정보 */}
       <div className="mb-4">
         <p className="text-2xl font-bold text-gray-900">
-          {product.price.toLocaleString()}원
+          {formattedPrice}원
         </p>
       </div>
       
@@ -45,7 +54,7 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
           <div className="flex items-center">
             <span className="text-gray-500">수확일</span>
             <span className="ml-2 text-gray-900">
-              {new Date(product.harvest_date).toLocaleDateString('ko-KR')}
+              {formattedHarvestDate}
             </span>
           </div>
         )}
@@ -59,6 +68,8 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
       </div>
     </div>
   );
-};
+});
+
+ProductInfo.displayName = 'ProductInfo';
 
 export default ProductInfo; 
