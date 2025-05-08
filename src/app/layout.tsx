@@ -16,11 +16,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: '강원찐농부 - 강원도 농부가 직접 재배하고 판매하는 감자, 옥수수, 절임배추 쇼핑몰',
+  title: '강원찐농부',
   description: '강원도 농부가 직접 재배한 신선한 감자, 옥수수, 절임배추를 산지직송으로 판매하는 강원찐농부 공식 쇼핑몰입니다.',
   openGraph: {
     type: 'website',
-    title: '강원찐농부 - 강원도 농부가 직접 재배하고 판매하는 감자, 옥수수, 절임배추 쇼핑몰',
+    title: '강원찐농부',
     description: '강원도 농부가 직접 재배한 신선한 감자, 옥수수, 절임배추를 산지직송으로 판매하는 강원찐농부 공식 쇼핑몰입니다.',
     url: 'https://gangwonnongbu.co.kr', // 실제 도메인으로 교체
     images: [
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary',
-    title: '강원찐농부 - 강원도 농부가 직접 재배하고 판매하는 감자, 옥수수, 절임배추 쇼핑몰',
+    title: '강원찐농부',
     description: '강원도 농부가 직접 재배한 신선한 감자, 옥수수, 절임배추를 산지직송으로 판매하는 강원찐농부 공식 쇼핑몰입니다.',
     images: ['https://gangwonnongbu.co.kr/images/logo.png'], // 대표 이미지 경로로 교체
   },
