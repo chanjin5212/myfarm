@@ -179,7 +179,7 @@ function MobileProductsPage() {
       <ProductParamsHandler setInitialFilters={setInitialFilters} />
       
       {/* 헤더 */}
-      <div className="sticky top-12 z-10 bg-white shadow-sm">
+      <div className="sticky top-16 z-10 bg-white shadow-sm">
         <div className="flex items-center p-2 border-b">
           {/* 정렬 드롭다운 */}
           <select 

@@ -197,32 +197,17 @@ function HomePage() {
 
   return (
     <div className="flex flex-col pb-4">
-      {/* 히어로 섹션 */}
-      <section className="w-full py-8 bg-green-50">
-        <div className="px-5">
-          <div className="flex flex-col gap-5">
-            <div className="space-y-3">
-              <div className="inline-block rounded-md bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
-                신선 농산물
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                제철 농산물로<br />건강한 식탁을 차려보세요
-              </h1>
-              <p className="text-base text-gray-700 leading-relaxed">
-                직접 재배한 신선한 농산물을 집으로 배송해 드립니다. 강원찐농부의 정성이 담긴 제철 식재료로 맛있는 식사를 준비하세요.
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row mt-4">
-                <Button className="w-full sm:w-auto">
-                  <ShoppingBag className="mr-1.5 h-4 w-4" />
-                  지금 쇼핑하기
-                </Button>
-                <Button variant="outline" className="w-full sm:w-auto">
-                  제철 상품 보기
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+      {/* 배너 섹션 */}
+      <section className="w-full">
+        <div className="relative w-full">
+          <Image
+            src="/images/banner.png"
+            alt="메인 배너"
+            width={1920}
+            height={600}
+            className="w-full h-auto"
+            priority
+          />
         </div>
       </section>
 
@@ -239,50 +224,6 @@ function HomePage() {
           {featuredProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
-        </div>
-      </section>
-
-      {/* 특징 섹션 */}
-      <section className="w-full py-8 mt-6">
-        <div className="px-5">
-          <div className="flex flex-col items-center justify-center space-y-3 text-center mb-5">
-            <div className="inline-block rounded-md bg-green-100 px-3 py-1 text-sm font-medium text-green-800 mb-1">
-            강원찐농부의 약속
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">신선함을 전해드립니다</h2>
-            <p className="text-base text-gray-700">
-              농장에서 식탁까지, 최고의 품질과 신선함을 약속합니다
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 py-2">
-            <div className="flex items-center space-x-4 rounded-xl border p-4 shadow-sm bg-white">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-3">
-                <Leaf className="h-7 w-7 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900">유기농 재배</h3>
-                <p className="text-sm text-gray-700">친환경 농법으로 재배된 안전한 농산물만을 엄선합니다</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4 rounded-xl border p-4 shadow-sm bg-white">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-3">
-                <CalendarDays className="h-7 w-7 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900">제철 상품</h3>
-                <p className="text-sm text-gray-700">계절마다 가장 맛있는 제철 농산물을 제공합니다</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4 rounded-xl border p-4 shadow-sm bg-white">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-3">
-                <Truck className="h-7 w-7 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900">당일 배송</h3>
-                <p className="text-sm text-gray-700">오전 주문 시 당일 배송으로 가장 신선한 상태로 받아보세요</p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     </div>
