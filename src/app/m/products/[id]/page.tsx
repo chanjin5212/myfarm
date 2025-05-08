@@ -659,13 +659,13 @@ export default function MobileProductDetailPage() {
             <>
               <button
                 onClick={handleAddToCart}
-                disabled={isAddingToCart}
-                className="flex-1 border-2 border-green-600 bg-white text-green-600 py-2.5 rounded-md font-medium flex items-center justify-center"
+                disabled={isAddingToCart || !checkToken().isLoggedIn}
+                className={`flex-1 border-2 border-green-600 bg-white py-2.5 rounded-md font-medium flex items-center justify-center ${!checkToken().isLoggedIn ? 'text-gray-400 border-gray-300 bg-gray-100 cursor-not-allowed' : 'text-green-600'}`}
               >
                 {isAddingToCart ? (
                   <Spinner size="sm" className="mr-2 border-t-green-600 border-b-green-600" />
                 ) : null}
-                장바구니
+                {checkToken().isLoggedIn ? '장바구니' : '장바구니(로그인 필요)'}
               </button>
               <button
                 onClick={handleBuyNow}
