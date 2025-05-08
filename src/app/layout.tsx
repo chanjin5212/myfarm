@@ -31,6 +31,9 @@ export default async function RootLayout({
 
   return (
     <html lang="ko" className="light">
+      <head>
+        <meta name="naver-site-verification" content="58806f892aab82c55d33e632800042ef33f68eca" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         {!isAdminPath && <Header />}
         <Toaster position="top-center" />
