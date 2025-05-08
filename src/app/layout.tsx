@@ -57,6 +57,7 @@ export default async function RootLayout({
     <html lang="ko" className="light">
       <head>
         <meta name="naver-site-verification" content="58806f892aab82c55d33e632800042ef33f68eca" />
+        <meta name="google-site-verification" content="GKQLgj2mHox9uRKsrCwv0gUCXGHlNC98gk1FpxkgJGs" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         {!isAdminPath && <Header />}
