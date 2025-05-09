@@ -22,6 +22,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/public/') ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
+    pathname === '/rss' ||
     pathname === '/favicon.ico'
   ) {
     return NextResponse.next();
