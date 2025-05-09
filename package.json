@@ -27,6 +27,7 @@
     "chart.js": "^4.4.9",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
+    "feed": "^5.0.0",
     "framer-motion": "^12.7.4",
     "graphql": "^16.10.0",
     "graphql-request": "^7.1.2",
