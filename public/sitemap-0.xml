@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:mobile="http://www.google.com/schemas/sitemap-mobile/1.0" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+<url><loc>https://gangwonnongbu.co.kr/admin</loc><lastmod>2025-05-09T02:36:40.123Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/dashboard</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/products</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/products/add</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/orders</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/reviews</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/statistics</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/users</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/inquiries</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/login</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/m</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/m/products</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/m/mypage</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/m/mypage/change-password</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/m/mypage/edit-profile</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/admin/products/1</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+<url><loc>https://gangwonnongbu.co.kr/m/products/1</loc><lastmod>2025-05-09T02:36:40.124Z</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>
+</urlset>
