@@ -1,2 +1,9 @@
+# *
 User-agent: *
-Allow: / 
+Allow: /
+
+# Host
+Host: https://gangwonnongbu.co.kr
+
+# Sitemaps
+Sitemap: https://gangwonnongbu.co.kr/sitemap.xml
