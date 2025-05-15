@@ -10,8 +10,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// Toss Payments 시크릿 키
-const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY!;
+// 네이버페이 관련 환경변수
+const NAVER_PAY_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_ID!;
+const NAVER_PAY_CLIENT_SECRET = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_SECRET!;
+const NAVER_PAY_CHAIN_ID = process.env.NEXT_PUBLIC_NAVER_PAY_CHAIN_ID!;
 
 // 관리자 토큰 검증 함수
 async function verifyAdminToken(request: NextRequest) {
@@ -99,45 +101,65 @@ export async function POST(
     // 현재 날짜 생성
     const cancelDate = new Date().toISOString();
 
-    // 토스 결제 취소 처리 (tid가 있는 경우)
-    let tossResult = null;
-    if (order.tid) {
-      try {
-        // Toss Payments API로 결제 취소 요청
-        const tossResponse = await fetch(`https://api.tosspayments.com/v1/payments/${order.tid}/cancel`, {
+    // 결제 취소 처리
+    let paymentCancelResult = null;
+
+    // 네이버페이 결제 취소 확인
+    if (order.payment_method !== 'naverpay' || !order.tid) {
+      return NextResponse.json(
+        { error: '네이버페이 결제만 취소할 수 있습니다' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const idempotencyKey = crypto.randomUUID();
+      const cancelAmount = order.total_amount;
+      const taxScopeAmount = order.total_amount;
+      const taxExScopeAmount = 0;
+
+      const body = new URLSearchParams({
+        paymentId: order.tid,
+        cancelAmount: String(cancelAmount),
+        cancelReason: reason,
+        cancelRequester: '2',
+        taxScopeAmount: String(taxScopeAmount),
+        taxExScopeAmount: String(taxExScopeAmount),
+      });
+
+      const naverRes = await fetch(
+        'https://dev-pub.apis.naver.com/naverpay-partner/naverpay/payments/v1/cancel',
+        {
           method: 'POST',
           headers: {
-            'Authorization': `Basic ${Buffer.from(TOSS_SECRET_KEY + ':').toString('base64')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Naver-Client-Id': NAVER_PAY_CLIENT_ID,
+            'X-Naver-Client-Secret': NAVER_PAY_CLIENT_SECRET,
+            'X-NaverPay-Chain-Id': NAVER_PAY_CHAIN_ID,
+            'X-NaverPay-Idempotency-Key': idempotencyKey,
           },
-          body: JSON.stringify({ cancelReason: reason })
-        });
-        
-        // Toss API 응답 확인
-        if (!tossResponse.ok) {
-          const tossError = await tossResponse.json();
-          console.error('토스 결제 취소 오류:', tossError);
-          
-          // 이미 취소된 결제인지 확인
-          if (tossError.code === 'ALREADY_CANCELED_PAYMENT') {
-            console.log('이미 취소된 결제입니다. 주문 상태만 변경합니다.');
-          } else {
-            return NextResponse.json({ 
-              error: '결제 취소에 실패했습니다',
-              tossError
-            }, { status: tossResponse.status });
-          }
-        } else {
-          tossResult = await tossResponse.json();
-          console.log('토스 결제 취소 성공:', tossResult);
+          body,
         }
-      } catch (tossError) {
-        console.error('토스 결제 취소 중 오류 발생:', tossError);
+      );
+
+      const naverData = await naverRes.json();
+
+      if (!naverRes.ok) {
+        console.error('네이버페이 결제 취소 오류:', naverData);
         return NextResponse.json(
-          { error: '결제 취소 처리 중 오류가 발생했습니다' },
-          { status: 500 }
+          { error: '네이버페이 결제 취소에 실패했습니다', naverData },
+          { status: naverRes.status }
         );
       }
+
+      paymentCancelResult = naverData;
+      console.log('네이버페이 결제 취소 성공:', paymentCancelResult);
+    } catch (naverError) {
+      console.error('네이버페이 결제 취소 중 오류 발생:', naverError);
+      return NextResponse.json(
+        { error: '네이버페이 결제 취소 처리 중 오류가 발생했습니다' },
+        { status: 500 }
+      );
     }
 
     // 주문 취소 - 상태 변경
@@ -203,7 +225,7 @@ export async function POST(
         action: 'cancel',
         details: { 
           reason,
-          toss_result: tossResult 
+          payment_result: paymentCancelResult 
         },
         created_at: cancelDate
       });
@@ -212,7 +234,7 @@ export async function POST(
       success: true,
       message: '주문이 취소되었습니다',
       order: updatedOrder,
-      toss_result: tossResult
+      payment_result: paymentCancelResult
     });
     
   } catch (error) {
