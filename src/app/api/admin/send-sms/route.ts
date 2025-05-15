@@ -33,6 +33,12 @@ function getAuthHeaderForCoolSMS(apiKey: string, apiSecret: string) {
   return { Authorization: authorization, date };
 }
 
+// 광고 문자 형식으로 메시지 포맷팅
+function formatAdMessage(message: string): string {
+  
+  return `[광고]강원찐농부\n${message}\nhttps://gangwonnongbu.co.kr\n무료수신거부 080-500-4233`;
+}
+
 // 관리자 토큰 검증 함수
 async function verifyAdminToken(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -72,11 +78,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 요청 본문 파싱
-    const { message } = await request.json();
+    const { message, isAd = true, companyName, companyPhone } = await request.json();
     
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: '메시지 내용이 필요합니다' }, { status: 400 });
     }
+
+    // 광고 메시지인 경우 검증 로직 제거
+    // companyName과 companyPhone은 선택적으로 제공 가능
 
     // 3. 마케팅 수신 동의한 사용자 목록 조회
     const { data: users, error: usersError } = await supabase
@@ -100,6 +109,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '발송 가능한 전화번호가 없습니다' }, { status: 400 });
     }
 
+    // 메시지 포맷팅 (광고 문자인 경우)
+    const finalMessage = isAd ? formatAdMessage(message, companyName, companyPhone) : message;
+
     try {
       // 4. CoolSMS API 직접 사용하기
       const apiKey = process.env.COOLSMS_API_KEY || '';
@@ -120,7 +132,7 @@ export async function POST(request: NextRequest) {
           messages: validPhoneNumbers.map(phoneNumber => ({
             to: phoneNumber,
             from: senderNumber,
-            text: message,
+            text: finalMessage,
             type: "SMS",
             country: "82"
           })),
@@ -170,7 +182,7 @@ export async function POST(request: NextRequest) {
             messages: batch.map(phoneNumber => ({
               to: phoneNumber,
               from: senderNumber,
-              text: message,
+              text: finalMessage,
               type: "SMS",
               country: "82"
             })),

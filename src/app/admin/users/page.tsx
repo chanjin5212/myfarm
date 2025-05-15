@@ -27,6 +27,21 @@ const formatPrice = (price: number) => {
   return price ? price.toLocaleString('ko-KR') + '원' : '0원';
 };
 
+// 바이트 크기 계산 함수
+const calculateByteSize = (str: string): number => {
+  let byteSize = 0;
+  for (let i = 0; i < str.length; i++) {
+    const charCode = str.charCodeAt(i);
+    // 한글 및 특수문자는 2바이트, 영문 및 숫자는 1바이트
+    if (charCode > 127) {
+      byteSize += 2;
+    } else {
+      byteSize += 1;
+    }
+  }
+  return byteSize;
+};
+
 export default function AdminUsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
@@ -39,8 +54,14 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState('active'); // 기본값을 'active'로 변경
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [smsMessage, setSmsMessage] = useState('');
+  const [smsMessageBytes, setSmsMessageBytes] = useState(0);
   const [isSending, setIsSending] = useState(false);
   const [smsSendResult, setSmsSendResult] = useState<{success: boolean, message: string} | null>(null);
+
+  // smsMessage가 변경될 때마다 바이트 수 계산
+  useEffect(() => {
+    setSmsMessageBytes(calculateByteSize(smsMessage));
+  }, [smsMessage]);
 
   useEffect(() => {
     fetchUsers();
@@ -107,55 +128,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  // 페이지네이션 렌더링
-  const renderPagination = () => {
-    const pages = [];
-    const maxDisplayPages = 5;
-    
-    let startPage = Math.max(1, currentPage - Math.floor(maxDisplayPages / 2));
-    const endPage = Math.min(totalPages, startPage + maxDisplayPages - 1);
-    
-    if (endPage - startPage + 1 < maxDisplayPages) {
-      startPage = Math.max(1, endPage - maxDisplayPages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(
-        <button
-          key={i}
-          onClick={() => setCurrentPage(i)}
-          className={`px-3 py-1 mx-1 rounded ${
-            currentPage === i
-              ? 'bg-green-600 text-white'
-              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-          }`}
-        >
-          {i}
-        </button>
-      );
-    }
-
-    return (
-      <div className="flex justify-center mt-6 flex-wrap">
-        <button
-          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-          className="px-3 py-1 border border-gray-300 rounded-l bg-white text-gray-700 disabled:opacity-50"
-        >
-          이전
-        </button>
-        {pages}
-        <button
-          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage === totalPages}
-          className="px-3 py-1 border border-gray-300 rounded-r bg-white text-gray-700 disabled:opacity-50"
-        >
-          다음
-        </button>
-      </div>
-    );
-  };
-
   // SMS 발송 함수
   const handleSendSMS = async () => {
     if (!smsMessage.trim()) {
@@ -215,6 +187,84 @@ export default function AdminUsersPage() {
     } finally {
       setIsSending(false);
     }
+  };
+
+  // SMS 메시지 입력 핸들러
+  const handleSmsMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const inputText = e.target.value;
+    const byteSize = calculateByteSize(inputText);
+    
+    // 19바이트 제한
+    if (byteSize <= 19) {
+      setSmsMessage(inputText);
+    } else {
+      // 19바이트를 초과하는 경우, 19바이트 이내로 텍스트 자르기
+      let cutText = '';
+      let currentByte = 0;
+      
+      for (let i = 0; i < inputText.length; i++) {
+        const char = inputText.charAt(i);
+        const charByte = calculateByteSize(char);
+        
+        if (currentByte + charByte <= 19) {
+          cutText += char;
+          currentByte += charByte;
+        } else {
+          break;
+        }
+      }
+      
+      setSmsMessage(cutText);
+    }
+  };
+
+  // 페이지네이션 렌더링
+  const renderPagination = () => {
+    const pages = [];
+    const maxDisplayPages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxDisplayPages / 2));
+    const endPage = Math.min(totalPages, startPage + maxDisplayPages - 1);
+    
+    if (endPage - startPage + 1 < maxDisplayPages) {
+      startPage = Math.max(1, endPage - maxDisplayPages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setCurrentPage(i)}
+          className={`px-3 py-1 mx-1 rounded ${
+            currentPage === i
+              ? 'bg-green-600 text-white'
+              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+          }`}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    return (
+      <div className="flex justify-center mt-6 flex-wrap">
+        <button
+          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 border border-gray-300 rounded-l bg-white text-gray-700 disabled:opacity-50"
+        >
+          이전
+        </button>
+        {pages}
+        <button
+          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="px-3 py-1 border border-gray-300 rounded-r bg-white text-gray-700 disabled:opacity-50"
+        >
+          다음
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -313,15 +363,14 @@ export default function AdminUsersPage() {
                     
                     <textarea
                       value={smsMessage}
-                      onChange={(e) => setSmsMessage(e.target.value)}
-                      placeholder="발송할 문자 내용을 입력하세요 (최대 90자)"
+                      onChange={handleSmsMessageChange}
+                      placeholder="발송할 문자 내용을 입력하세요 (최대 19바이트)"
                       className="w-full h-40 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                      maxLength={90}
                       disabled={isSending}
                     />
                     
                     <div className="text-right text-xs text-gray-500 mt-1">
-                      {smsMessage.length}/90자
+                      {smsMessageBytes}/19바이트 (한글 1자=2바이트, 영문·숫자 1자=1바이트)
                     </div>
                     
                     {smsSendResult && (
