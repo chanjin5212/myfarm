@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import '../globals.css';
 import { Spinner } from '@/components/ui/CommonStyles';
+import Head from 'next/head';
 
 // 레이아웃 헤더를 숨길 경로 목록
 const HIDE_HEADER_PATHS = [
@@ -65,11 +66,21 @@ export default function MobileLayout({
       document.documentElement.classList.add('light');
       document.documentElement.classList.remove('dark');
       
+      // 네이버페이 스크립트 로드
+      const naverPayScript = document.createElement('script');
+      naverPayScript.src = 'https://nsp.pay.naver.com/sdk/js/naverpay.min.js';
+      naverPayScript.async = true;
+      document.head.appendChild(naverPayScript);
+      
       return () => {
         // 클린업: 모바일 클래스 제거
         document.body.classList.remove('mobile-layout');
         // body 배경색 초기화
         document.body.style.backgroundColor = '';
+        // 스크립트 제거
+        if (document.head.contains(naverPayScript)) {
+          document.head.removeChild(naverPayScript);
+        }
       };
     }
   }, []);
