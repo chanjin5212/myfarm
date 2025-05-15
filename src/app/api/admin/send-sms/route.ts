@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 메시지 포맷팅 (광고 문자인 경우)
-    const finalMessage = isAd ? formatAdMessage(message, companyName, companyPhone) : message;
+    const finalMessage = isAd ? formatAdMessage(message) : message;
 
     try {
       // 4. CoolSMS API 직접 사용하기
