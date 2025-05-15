@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import toast from 'react-hot-toast';
 import { MagnifyingGlassIcon, ChevronRightIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 
 // 날짜 포맷팅 함수
 const formatDate = (dateString: string | null) => {
@@ -35,6 +37,10 @@ export default function AdminUsersPage() {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [statusFilter, setStatusFilter] = useState('active'); // 기본값을 'active'로 변경
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [smsMessage, setSmsMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [smsSendResult, setSmsSendResult] = useState<{success: boolean, message: string} | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -150,6 +156,67 @@ export default function AdminUsersPage() {
     );
   };
 
+  // SMS 발송 함수
+  const handleSendSMS = async () => {
+    if (!smsMessage.trim()) {
+      toast.error('메시지 내용을 입력해주세요.');
+      return;
+    }
+
+    setIsSending(true);
+    setSmsSendResult(null);
+
+    try {
+      const adminToken = localStorage.getItem('adminToken');
+      
+      if (!adminToken) {
+        toast.error('관리자 권한이 없습니다');
+        router.push('/admin/login');
+        return;
+      }
+
+      const response = await fetch('/api/admin/send-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          message: smsMessage
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || '문자 발송에 실패했습니다');
+      }
+
+      setSmsSendResult({
+        success: true,
+        message: `${data.sentCount}명의 회원에게 문자 메시지가 발송되었습니다.`
+      });
+      toast.success(`${data.sentCount}명의 회원에게 문자 메시지가 발송되었습니다.`);
+      
+      // 성공 후 3초 뒤에 모달 닫기
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setSmsMessage('');
+        setSmsSendResult(null);
+      }, 3000);
+      
+    } catch (error: any) {
+      console.error('SMS 발송 오류:', error);
+      setSmsSendResult({
+        success: false,
+        message: error.message || '문자 발송에 실패했습니다'
+      });
+      toast.error(error.message || '문자 발송에 실패했습니다');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6 px-2 sm:px-4 pt-20">
       <div className="mb-6">
@@ -157,27 +224,38 @@ export default function AdminUsersPage() {
         
         {/* 검색 및 필터 */}
         <div className="flex flex-col mb-4 gap-4">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={statusFilter === 'all' ? 'primary' : 'outline'}
-              onClick={() => setStatusFilter('all')}
-              className="text-xs sm:text-sm px-2 py-1"
+          <div className="flex flex-wrap gap-2 justify-between items-center">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={statusFilter === 'all' ? 'primary' : 'outline'}
+                onClick={() => setStatusFilter('all')}
+                className="text-xs sm:text-sm px-2 py-1"
+              >
+                전체
+              </Button>
+              <Button
+                variant={statusFilter === 'active' ? 'primary' : 'outline'}
+                onClick={() => setStatusFilter('active')}
+                className="text-xs sm:text-sm px-2 py-1"
+              >
+                활성
+              </Button>
+              <Button
+                variant={statusFilter === 'deleted' ? 'primary' : 'outline'}
+                onClick={() => setStatusFilter('deleted')}
+                className="text-xs sm:text-sm px-2 py-1"
+              >
+                탈퇴
+              </Button>
+            </div>
+            
+            {/* 문자 발송 버튼 */}
+            <Button 
+              variant="secondary"
+              onClick={() => setIsModalOpen(true)}
+              className="text-sm px-3 py-1"
             >
-              전체
-            </Button>
-            <Button
-              variant={statusFilter === 'active' ? 'primary' : 'outline'}
-              onClick={() => setStatusFilter('active')}
-              className="text-xs sm:text-sm px-2 py-1"
-            >
-              활성
-            </Button>
-            <Button
-              variant={statusFilter === 'deleted' ? 'primary' : 'outline'}
-              onClick={() => setStatusFilter('deleted')}
-              className="text-xs sm:text-sm px-2 py-1"
-            >
-              탈퇴
+              마케팅 문자 발송
             </Button>
           </div>
           
@@ -193,6 +271,95 @@ export default function AdminUsersPage() {
           </form>
         </div>
       </div>
+      
+      {/* 문자 발송 모달 */}
+      <Transition appear show={isModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => !isSending && setIsModalOpen(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black/25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title 
+                    as="h3" 
+                    className="text-lg font-medium leading-6 text-gray-900 mb-4"
+                  >
+                    마케팅 문자 발송
+                  </Dialog.Title>
+                  
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500 mb-4">
+                      마케팅 수신에 동의한 회원들에게 일괄 문자 메시지를 발송합니다.
+                    </p>
+                    
+                    <textarea
+                      value={smsMessage}
+                      onChange={(e) => setSmsMessage(e.target.value)}
+                      placeholder="발송할 문자 내용을 입력하세요 (최대 90자)"
+                      className="w-full h-40 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                      maxLength={90}
+                      disabled={isSending}
+                    />
+                    
+                    <div className="text-right text-xs text-gray-500 mt-1">
+                      {smsMessage.length}/90자
+                    </div>
+                    
+                    {smsSendResult && (
+                      <div className={`mt-3 p-3 rounded-md ${smsSendResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                        {smsSendResult.message}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2"
+                      onClick={() => setIsModalOpen(false)}
+                      disabled={isSending}
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 disabled:opacity-50"
+                      onClick={handleSendSMS}
+                      disabled={isSending || !smsMessage.trim()}
+                    >
+                      {isSending ? (
+                        <>
+                          <Spinner size="sm" className="mr-2" />
+                          발송 중...
+                        </>
+                      ) : '문자 발송'}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
       
       {/* 회원 목록 */}
       {loading ? (

@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     });
 
     const userData = await userInfoResponse.json();
+    console.log("데이터확인"+JSON.stringify(userData, null, 2));
 
     if (!userInfoResponse.ok) {
       console.error('Error fetching user info:', userData);

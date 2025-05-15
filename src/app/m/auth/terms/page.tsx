@@ -92,8 +92,9 @@ export default function MobileTermsPage() {
       // 전화번호가 있다면 분리
       if (parsedInfo.phone_number) {
         const parts = parsedInfo.phone_number.split('-');
-        if (parts.length === 3) {
-          setPhoneNumberPrefix(parts[0]);
+        if (parts.length >= 3) {
+          // 첫 번째 부분(010)은 무시하고 UI에 설정된 값을 그대로 사용 
+          // setPhoneNumberPrefix는 호출하지 않음
           setPhoneNumberMiddle(parts[1]);
           setPhoneNumberSuffix(parts[2]);
         }
@@ -123,8 +124,9 @@ export default function MobileTermsPage() {
       // 네이버 전화번호 정보 로깅 (디버깅용)
       if (parsedInfo.phone_number) {
         const parts = parsedInfo.phone_number.split('-');
-        if (parts.length === 3) {
-          setPhoneNumberPrefix(parts[0]);
+        if (parts.length >= 3) {
+          // 첫 번째 부분(010)은 무시하고 UI에 설정된 값을 그대로 사용 
+          // setPhoneNumberPrefix는 호출하지 않음
           setPhoneNumberMiddle(parts[1]);
           setPhoneNumberSuffix(parts[2]);
         }
@@ -171,8 +173,9 @@ export default function MobileTermsPage() {
       // 전화번호가 있다면 분리
       if (parsedInfo.phone_number) {
         const parts = parsedInfo.phone_number.split('-');
-        if (parts.length === 3) {
-          setPhoneNumberPrefix(parts[0]);
+        if (parts.length >= 3) {
+          // 첫 번째 부분(010)은 무시하고 UI에 설정된 값을 그대로 사용 
+          // setPhoneNumberPrefix는 호출하지 않음
           setPhoneNumberMiddle(parts[1]);
           setPhoneNumberSuffix(parts[2]);
         }
