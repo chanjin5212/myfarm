@@ -119,7 +119,7 @@ export default function MobileAuthPage() {
     // Construct the OAuth URL
     const clientId = process.env.NEXT_PUBLIC_KAKAO_CLIENT_ID;
     const redirectUri = encodeURIComponent(`${window.location.origin}/m/auth/kakao/callback`);
-    const scope = encodeURIComponent('profile_nickname account_email');
+    const scope = encodeURIComponent('profile_nickname account_email phone_number');
     
     // Redirect to Kakao login
     const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}&scope=${scope}`;

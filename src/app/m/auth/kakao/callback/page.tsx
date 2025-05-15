@@ -87,7 +87,7 @@ export default function MobileKakaoCallbackPage() {
           body: JSON.stringify({
             kakao_id: data.userData.id,
             provider: 'kakao',
-            email: data.userData.email
+            email: data.userData.email,
           }),
         });
         

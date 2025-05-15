@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
       picture: userAccount.profile?.profile_image_url,
       nickname: userAccount.profile?.nickname,
       provider: 'kakao',
+      phone_number: userAccount.phone_number || null,
     };
 
     return NextResponse.json({
