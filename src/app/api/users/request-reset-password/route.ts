@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     
     // 이메일 발송
     const mailOptions = {
-      from: `"숙경팜" <${process.env.EMAIL_FROM}>`,
+      from: `"강원찐농부" <${process.env.EMAIL_FROM}>`,
       to: email,
       subject: getVerificationEmailSubject('resetPassword'),
       html: getVerificationEmailTemplate(user.name, verificationCode, 'resetPassword')

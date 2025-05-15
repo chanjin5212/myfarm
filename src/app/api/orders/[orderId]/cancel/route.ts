@@ -6,9 +6,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Toss Payments 시크릿 키
-const TOSS_SECRET_KEY = process.env.TOSS_PAYMENTS_SECRET_KEY!;
-
 // 현재 로그인한 사용자 ID 가져오기
 async function getUserId(request: NextRequest) {
   // Authorization 헤더에서 토큰 가져오기
@@ -107,7 +104,7 @@ export async function POST(
     // 주문 정보 조회
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, user_id, tid, status, total_amount')
+      .select('id, user_id, tid, status, total_amount, payment_method')
       .eq('id', orderId)
       .single();
     
@@ -132,52 +129,78 @@ export async function POST(
     if (!order.tid) {
       return NextResponse.json({ error: '결제 정보가 올바르지 않습니다' }, { status: 400 });
     }
-    
-    // Toss Payments API로 결제 취소 요청
-    const tossResponse = await fetch(`https://api.tosspayments.com/v1/payments/${order.tid}/cancel`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${Buffer.from(TOSS_SECRET_KEY + ':').toString('base64')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ cancelReason })
-    });
-    
-    // Toss API 응답 확인
-    if (!tossResponse.ok) {
-      const tossError = await tossResponse.json();
-      console.error('토스 결제 취소 오류:', tossError);
-      return NextResponse.json({ 
-        error: '결제 취소에 실패했습니다',
-        tossError
-      }, { status: tossResponse.status });
+
+    // 네이버페이 결제 취소
+    if (order.payment_method === 'naverpay') {
+      const clientId = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_ID!;
+      const clientSecret = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_SECRET!;
+      const chainId = process.env.NEXT_PUBLIC_NAVER_PAY_CHAIN_ID!;
+      const idempotencyKey = crypto.randomUUID();
+
+      const cancelAmount = order.total_amount;
+      const taxScopeAmount = order.total_amount;
+      const taxExScopeAmount = 0;
+
+      const body = new URLSearchParams({
+        paymentId: order.tid,
+        cancelAmount: String(cancelAmount),
+        cancelReason,
+        cancelRequester: '2',
+        taxScopeAmount: String(taxScopeAmount),
+        taxExScopeAmount: String(taxExScopeAmount),
+      });
+
+      const naverRes = await fetch(
+        'https://dev-pub.apis.naver.com/naverpay-partner/naverpay/payments/v1/cancel',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Naver-Client-Id': clientId,
+            'X-Naver-Client-Secret': clientSecret,
+            'X-NaverPay-Chain-Id': chainId,
+            'X-NaverPay-Idempotency-Key': idempotencyKey,
+          },
+          body,
+        }
+      );
+
+      const naverData = await naverRes.json();
+
+      if (!naverRes.ok) {
+        return NextResponse.json(
+          { error: '네이버페이 결제 취소 실패', naverData },
+          { status: naverRes.status }
+        );
+      }
+
+      // 주문 상태 업데이트
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'canceled',
+          updated_at: new Date().toISOString(),
+          cancel_reason: cancelReason,
+          cancel_date: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (updateError) {
+        console.error('주문 상태 업데이트 오류:', updateError);
+        return NextResponse.json({ 
+          error: '주문 취소는 되었으나 상태 업데이트에 실패했습니다. 관리자에게 문의하세요.',
+          naverData
+        }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        message: '주문이 성공적으로 취소되었습니다',
+        naverData
+      });
     }
-    
-    const tossResult = await tossResponse.json();
-    
-    // 주문 상태 업데이트
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({ 
-        status: 'canceled',
-        updated_at: new Date().toISOString(),
-        cancel_reason: cancelReason,
-        cancel_date: new Date().toISOString()
-      })
-      .eq('id', orderId);
-    
-    if (updateError) {
-      console.error('주문 상태 업데이트 오류:', updateError);
-      return NextResponse.json({ 
-        error: '주문 취소는 되었으나 상태 업데이트에 실패했습니다. 관리자에게 문의하세요.',
-        tossResult
-      }, { status: 500 });
-    }
-    
-    return NextResponse.json({
-      message: '주문이 성공적으로 취소되었습니다',
-      tossResult
-    });
+
+    // 네이버페이가 아닌 경우(추후 다른 결제수단 추가 가능)
+    return NextResponse.json({ error: '지원하지 않는 결제수단입니다.' }, { status: 400 });
   } catch (error) {
     console.error('주문 취소 중 오류 발생:', error);
     return NextResponse.json({ error: '주문 취소 중 오류가 발생했습니다' }, { status: 500 });

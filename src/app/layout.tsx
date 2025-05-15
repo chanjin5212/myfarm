@@ -16,8 +16,32 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "쇼핑몰",
-  description: "쇼핑몰 웹사이트",
+  title: '강원찐농부',
+  description: '강원도 농부가 직접 재배한 신선한 감자, 옥수수, 절임배추를 산지직송으로 판매하는 강원찐농부 공식 쇼핑몰입니다.',
+  openGraph: {
+    type: 'website',
+    title: '강원찐농부',
+    description: '강원도 농부가 직접 재배한 신선한 감자, 옥수수, 절임배추를 산지직송으로 판매하는 강원찐농부 공식 쇼핑몰입니다.',
+    url: 'https://gangwonnongbu.co.kr', // 실제 도메인으로 교체
+    images: [
+      {
+        url: 'https://gangwonnongbu.co.kr/images/logo.png', // 대표 이미지 경로로 교체
+        width: 1200,
+        height: 630,
+        alt: '강원찐농부 대표 이미지',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: '강원찐농부',
+    description: '강원도 농부가 직접 재배한 신선한 감자, 옥수수, 절임배추를 산지직송으로 판매하는 강원찐농부 공식 쇼핑몰입니다.',
+    images: ['https://gangwonnongbu.co.kr/images/logo.png'], // 대표 이미지 경로로 교체
+  },
+  other: {
+    'naver-site-verification': '58806f892aab82c55d33e632800042ef33f68eca',
+    'google-site-verification': 'GKQLgj2mHox9uRKsrCwv0gUCXGHlNC98gk1FpxkgJGs'
+  },
 };
 
 export default async function RootLayout({
@@ -31,6 +55,10 @@ export default async function RootLayout({
 
   return (
     <html lang="ko" className="light">
+      <head>
+        <meta name="naver-site-verification" content="58806f892aab82c55d33e632800042ef33f68eca" />
+        <meta name="google-site-verification" content="GKQLgj2mHox9uRKsrCwv0gUCXGHlNC98gk1FpxkgJGs" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         {!isAdminPath && <Header />}
         <Toaster position="top-center" />

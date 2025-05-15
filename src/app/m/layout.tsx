@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import '../globals.css';
 import { Spinner } from '@/components/ui/CommonStyles';
+import Head from 'next/head';
 
 // 레이아웃 헤더를 숨길 경로 목록
 const HIDE_HEADER_PATHS = [
@@ -65,11 +66,21 @@ export default function MobileLayout({
       document.documentElement.classList.add('light');
       document.documentElement.classList.remove('dark');
       
+      // 네이버페이 스크립트 로드
+      const naverPayScript = document.createElement('script');
+      naverPayScript.src = 'https://nsp.pay.naver.com/sdk/js/naverpay.min.js';
+      naverPayScript.async = true;
+      document.head.appendChild(naverPayScript);
+      
       return () => {
         // 클린업: 모바일 클래스 제거
         document.body.classList.remove('mobile-layout');
         // body 배경색 초기화
         document.body.style.backgroundColor = '';
+        // 스크립트 제거
+        if (document.head.contains(naverPayScript)) {
+          document.head.removeChild(naverPayScript);
+        }
       };
     }
   }, []);
@@ -96,7 +107,10 @@ export default function MobileLayout({
         <header className="bg-white shadow-sm fixed top-0 left-0 right-0 z-50 border-b border-gray-200" suppressHydrationWarning={true}>
           <div className="container mx-auto py-3 px-4">
             <div className="flex items-center justify-between">
-              <Link href="/m" className="font-bold text-xl text-[#e3c478]">숙경팜</Link>
+              <Link href="/m" className="flex items-center font-bold text-xl" style={{ color: '#171717' }}>
+                <img src="/images/logo.png" alt="강원찐농부 로고" className="h-10 w-auto mr-3" style={{maxHeight:'2.5rem'}} />
+                <span>강원찐농부</span>
+              </Link>
               <div className="flex space-x-3">
                 <Link href="/m/search" aria-label="검색" className="text-gray-700">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -136,7 +150,7 @@ export default function MobileLayout({
           <div className="container mx-auto">
             <div className="flex flex-col space-y-4">
               <div className="flex flex-col">
-                <h3 className="font-bold text-lg text-[#e3c478] mb-2">숙경팜</h3>
+                <h3 className="font-bold text-lg text-gray-500 mb-2">강원찐농부</h3>
                 <p className="text-sm text-gray-600">최고 품질의 농산물을 직배송합니다.</p>
               </div>
               
@@ -147,14 +161,14 @@ export default function MobileLayout({
               </div>
               
               <div className="text-xs text-gray-500 space-y-1">
-                <p>상호명: (주)숙경팜 | 대표: 홍길동</p>
-                <p>사업자등록번호: 123-45-67890</p>
-                <p>주소: 서울시 강남구 테헤란로 123</p>
-                <p>전화: 1588-1234 | 이메일: info@sukkyungfarm.com</p>
+                <p>상호명: 강원찐농부 | 대표: 이창덕</p>
+                <p>사업자등록번호: 302-92-02762</p>
+                <p>주소: 강원특별자치도 고성군 간성읍 어천1길11</p>
+                <p>전화: 010-5796-2201 | 이메일: oho1114@naver.com</p>
               </div>
               
               <div className="pt-2 border-t border-gray-200">
-                <p className="text-xs text-gray-400">© 2024 숙경팜 All rights reserved.</p>
+                <p className="text-xs text-gray-400">© 2025 강원찐농부 All rights reserved.</p>
               </div>
             </div>
           </div>

@@ -48,7 +48,6 @@ export class SessionChecker {
       this.checkSession();
     }, this.interval);
     
-    console.log(`세션 체크 시작됨 (${this.interval / 1000}초 간격)`);
   }
   
   /**
@@ -61,7 +60,6 @@ export class SessionChecker {
     this.timer = null;
     this.isRunning = false;
     
-    console.log('세션 체크 중단됨');
   }
   
   /**
@@ -82,7 +80,6 @@ export class SessionChecker {
           tokenData.access_token = result.renewedToken;
           tokenData.updatedAt = Date.now();
           localStorage.setItem('token', JSON.stringify(tokenData));
-          console.log('토큰이 갱신되었습니다.');
         } catch (error) {
           console.error('토큰 갱신 저장 오류:', error);
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, memo, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,20 +10,19 @@ interface Product {
   id: string;
   name: string;
   price: number;
-  discount_price?: number;
   thumbnail_url?: string;
   is_organic?: boolean;
 }
 
 // URL 파라미터를 처리하는 컴포넌트
-function ProductParamsHandler({ 
+const ProductParamsHandler = memo(({ 
   setInitialFilters 
 }: { 
   setInitialFilters: (params: { 
     sortOption: string,
     pageParam: string | null
   }) => void 
-}) {
+}) => {
   const searchParams = useSearchParams();
   
   useEffect(() => {
@@ -38,7 +37,44 @@ function ProductParamsHandler({
   }, [searchParams, setInitialFilters]);
   
   return null;
-}
+});
+
+ProductParamsHandler.displayName = 'ProductParamsHandler';
+
+// 상품 카드 컴포넌트 메모이제이션
+const ProductCard = memo(({ product }: { product: Product }) => {
+  return (
+    <Link href={`/m/products/${product.id}`} className="block w-full">
+      <div className="flex flex-col">
+        <div className="aspect-square rounded-lg overflow-hidden relative">
+          <Image
+            src={product.thumbnail_url || '/images/default-product.jpg'}
+            alt={product.name}
+            fill
+            sizes="(max-width: 768px) 33vw"
+            className="object-cover"
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+          />
+          {product.is_organic && (
+            <div className="absolute top-1 left-1 bg-green-100 text-green-800 text-xs font-semibold px-1.5 py-0.5 rounded-full">
+              유기농
+            </div>
+          )}
+        </div>
+        <div className="mt-1.5">
+          <h3 className="text-xs line-clamp-2">{product.name}</h3>
+          <div className="mt-0.5">
+            <div className="font-bold text-sm">{product.price.toLocaleString()}원</div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+});
+
+ProductCard.displayName = 'ProductCard';
 
 function MobileProductsPage() {
   const router = useRouter();
@@ -92,6 +128,9 @@ function MobileProductsPage() {
   useEffect(() => {
     if (!initialLoadDone) return;
     
+    let isMounted = true;
+    const controller = new AbortController();
+    
     const fetchProducts = async () => {
       setLoading(true);
       setError(null);
@@ -100,9 +139,11 @@ function MobileProductsPage() {
         const params = new URLSearchParams();
         if (selectedSort) params.append('sort', selectedSort);
         params.append('page', page.toString());
-        params.append('limit', '10');
+        params.append('limit', '12');
         
-        const response = await fetch(`/api/products?${params.toString()}`);
+        const response = await fetch(`/api/products?${params.toString()}`, {
+          signal: controller.signal
+        });
         
         if (!response.ok) {
           throw new Error(`상품 정보를 불러오는데 실패했습니다. (상태 코드: ${response.status})`);
@@ -110,68 +151,50 @@ function MobileProductsPage() {
         
         const data = await response.json();
         
-        if (page === 1) {
-          setProducts(data.products || []);
-        } else {
-          setProducts(prev => [...prev, ...(data.products || [])]);
+        if (isMounted) {
+          if (page === 1) {
+            setProducts(data.products || []);
+          } else {
+            setProducts(prev => [...prev, ...(data.products || [])]);
+          }
+          
+          setTotalCount(data.total || 0);
+          setHasMore(data.hasMore || false);
         }
-        
-        setTotalCount(data.total || 0);
-        setHasMore(data.hasMore || false);
       } catch (error) {
-        console.error('상품 로딩 오류:', error);
-        setError(error instanceof Error ? error.message : '상품을 불러오는 중 오류가 발생했습니다.');
+        if (error instanceof Error && error.name !== 'AbortError' && isMounted) {
+          console.error('상품 로딩 오류:', error);
+          setError(error instanceof Error ? error.message : '상품을 불러오는 중 오류가 발생했습니다.');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
     fetchProducts();
+    
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [selectedSort, page, initialLoadDone]);
   
-  // 상품 카드 컴포넌트
-  const ProductCard = ({ product }: { product: Product }) => {
-    const discount = product.discount_price 
-      ? Math.round(((product.price - product.discount_price) / product.price) * 100) 
-      : 0;
-    
-    return (
-      <Link href={`/m/products/${product.id}`} className="block w-full">
-        <div className="flex flex-col">
-          <div className="aspect-square rounded-lg overflow-hidden relative">
-            <Image
-              src={product.thumbnail_url || '/images/default-product.jpg'}
-              alt={product.name}
-              fill
-              sizes="(max-width: 768px) 33vw"
-              className="object-cover"
-            />
-            {product.is_organic && (
-              <div className="absolute top-1 left-1 bg-green-100 text-green-800 text-xs font-semibold px-1.5 py-0.5 rounded-full">
-                유기농
-              </div>
-            )}
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xs line-clamp-2">{product.name}</h3>
-            <div className="mt-0.5">
-              {product.discount_price ? (
-                <div className="space-y-0.5">
-                  <div className="flex items-center space-x-1">
-                    <span className="text-red-500 font-bold text-xs">{discount}%</span>
-                    <span className="line-through text-gray-400 text-[10px]">{product.price.toLocaleString()}원</span>
-                  </div>
-                  <div className="font-bold text-sm">{product.discount_price.toLocaleString()}원</div>
-                </div>
-              ) : (
-                <div className="font-bold text-sm">{product.price.toLocaleString()}원</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </Link>
-    );
-  };
+  // 더보기 버튼 클릭 핸들러
+  const handleLoadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      setPage(prev => prev + 1);
+    }
+  }, [loading, hasMore]);
+  
+  // 정렬 옵션 메모이제이션
+  const sortOptions = useMemo(() => [
+    { value: 'newest', label: '최신순' },
+    { value: 'price_low', label: '가격 낮은순' },
+    { value: 'price_high', label: '가격 높은순' },
+    { value: 'popular', label: '인기순' }
+  ], []);
   
   return (
     <div className="pb-6">
@@ -179,7 +202,7 @@ function MobileProductsPage() {
       <ProductParamsHandler setInitialFilters={setInitialFilters} />
       
       {/* 헤더 */}
-      <div className="sticky top-12 z-10 bg-white shadow-sm">
+      <div className="sticky top-16 z-10 bg-white shadow-sm">
         <div className="flex items-center p-2 border-b">
           {/* 정렬 드롭다운 */}
           <select 
@@ -187,10 +210,11 @@ function MobileProductsPage() {
             onChange={(e) => handleSortChange(e.target.value)}
             className="bg-transparent text-sm border-none text-gray-700 px-2 py-1 focus:outline-none"
           >
-            <option value="newest">최신순</option>
-            <option value="price_low">가격 낮은순</option>
-            <option value="price_high">가격 높은순</option>
-            <option value="popular">인기순</option>
+            {sortOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -218,8 +242,8 @@ function MobileProductsPage() {
         
         {/* 로딩 상태 */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-10">
-            <Spinner size="md" className="mb-3" />
+          <div className="flex flex-col items-center justify-center py-8">
+            <Spinner size="md" className="mb-2" />
             <p className="text-sm text-gray-500">상품 정보를 불러오고 있습니다</p>
           </div>
         )}
@@ -228,7 +252,7 @@ function MobileProductsPage() {
         {!loading && hasMore && products.length > 0 && (
           <div className="text-center py-6">
             <button
-              onClick={() => setPage(prev => prev + 1)}
+              onClick={handleLoadMore}
               className="bg-white border border-gray-300 rounded-md px-4 py-2 text-sm hover:bg-gray-50"
             >
               더 보기
@@ -250,7 +274,7 @@ function MobileProductsPage() {
   );
 }
 
-export default function Products() {
+export default memo(function Products() {
   return (
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -261,4 +285,4 @@ export default function Products() {
       <MobileProductsPage />
     </Suspense>
   );
-} 
+}); 

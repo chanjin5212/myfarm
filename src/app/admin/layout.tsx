@@ -276,7 +276,7 @@ export default function AdminLayout({
                     />
                   </svg>
                 </button>
-                <h1 className="text-lg font-bold">숙경팜 관리자</h1>
+                <h1 className="text-lg font-bold">강원찐농부 관리자</h1>
               </div>
               <div className="flex items-center">
                 <span className="text-gray-500 mr-2">{pageTitle}</span>

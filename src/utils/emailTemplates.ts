@@ -39,7 +39,7 @@ export function getVerificationEmailTemplate(name: string, code: string, purpose
       <p style="font-size: 13px; color: #666;">인증 코드는 10분 후에 만료됩니다.</p>
       <p style="font-size: 13px; color: #666;">만약 ${title}을(를) 요청하지 않으셨다면, 이 이메일을 무시하셔도 됩니다.</p>
       <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
-        &copy; ${new Date().getFullYear()} 숙경팜. All rights reserved.
+        &copy; ${new Date().getFullYear()} 강원찐농부. All rights reserved.
       </div>
     </div>
   `;
@@ -51,5 +51,5 @@ export function getVerificationEmailTemplate(name: string, code: string, purpose
  * @returns {string} 이메일 제목
  */
 export function getVerificationEmailSubject(purpose: 'findId' | 'resetPassword' | 'register'): string {
-  return '[숙경팜] 인증번호 안내';
+  return '[강원찐농부] 인증번호 안내';
 } 

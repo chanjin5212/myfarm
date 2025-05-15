@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import toast from 'react-hot-toast';
-import Image from 'next/image';
 import { gql } from "graphql-request";
 import { DeliveryTrackerGraphQLClient } from "@/lib/DeliveryTrackerGraphQLClient";
 import { formatDistanceToNow } from 'date-fns';
@@ -325,10 +323,7 @@ export default function AdminOrderDetailPage() {
         toast.error('관리자 권한이 없습니다');
         router.push('/admin/login');
         return;
-      }
-
-      console.log(`[송장 정보 추가] 시작 - 택배사: ${carrier}, 송장번호: ${trackingNumber}`);
-      
+      }      
       // 택배사 이름 가져오기
       const carrierName = carrierOptions.find(option => option.value === carrier)?.label || carrier;
       
@@ -348,7 +343,6 @@ export default function AdminOrderDetailPage() {
       });
 
       const data = await response.json();
-      console.log('[송장 정보 추가] API 응답:', data);
       
       if (!response.ok) {
         throw new Error(data.error || '송장 정보 처리에 실패했습니다');
@@ -357,7 +351,6 @@ export default function AdminOrderDetailPage() {
       toast.success(data.message);
       
       // 주문 상태는 API에서 자동으로 설정됨
-      console.log(`[송장 정보 추가] 완료 - 배송 상태 코드: ${data.delivery_status?.code}, 주문 상태: ${data.delivery_status?.order_status}`);
       
       setCarrier('');
       setTrackingNumber('');

@@ -6,12 +6,23 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button, Textarea, Radio, Checkbox, Card, Spinner } from '@/components/ui/CommonStyles';
 import ShippingAddressModal from './ShippingAddressModal';
-import PaymentModal from './PaymentModal';
 import { getAuthHeader, checkToken } from '@/utils/auth';
-import { loadTossPayments, ANONYMOUS } from "@tosspayments/tosspayments-sdk";
 import { Noto_Sans_Lao_Looped } from 'next/font/google';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
+
+// 네이버페이 타입 선언
+declare global {
+  interface Window {
+    Naver?: {
+      Pay: {
+        create: (options: any) => {
+          open: (paymentOptions: any) => void;
+        };
+      };
+    };
+  }
+}
 
 interface User {
   id: string;
@@ -76,9 +87,6 @@ export default function MobileCheckoutPage() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [paymentAttempts, setPaymentAttempts] = useState(0);
   const [orderRequests, setOrderRequests] = useState<string>('');
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -100,8 +108,6 @@ export default function MobileCheckoutPage() {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   
-  // 결제 UI 컨테이너 참조 제거
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +122,7 @@ export default function MobileCheckoutPage() {
     is_default: false
   });
 
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // 결제 관련 상태
   const [orderIdForPayment, setOrderIdForPayment] = useState('');
   const [orderNameForPayment, setOrderNameForPayment] = useState('');
 
@@ -223,7 +229,6 @@ export default function MobileCheckoutPage() {
         const buyNowItem = JSON.parse(buyNowData);
         const basePrice = parseInt(buyNowItem.product.price) || 0;
         
-        console.log('buyNowItem 데이터:', buyNowItem); // 디버깅용 로그 추가
         
         // 모든 옵션 정보가 있을 경우 (새 형식)
         if (buyNowItem.allOptions && buyNowItem.allOptions.length > 0) {
@@ -281,8 +286,6 @@ export default function MobileCheckoutPage() {
           }];
         }
         
-        // 디버깅용 로그 추가
-        console.log('체크아웃용 아이템:', directItems);
         
         // 상품 여러 개를 즉시 구매할 수 있도록 아이템 설정
         setCartItems(directItems);
@@ -399,8 +402,85 @@ export default function MobileCheckoutPage() {
     return total;
   };
 
-  // 주문 검증 및 모달 오픈
-  const handleOpenPaymentModal = async (e: React.FormEvent) => {
+  // 페이지 초기화
+  useEffect(() => {
+    const initializePage = async () => {
+      try {
+        setLoading(true);
+        const isLoggedIn = await checkLoginStatus();
+        
+        if (!isLoggedIn) {
+          return; // 로그인 실패 시 더 이상 진행하지 않음
+        }
+        
+        // 로그인에 성공한 경우에만 실행
+        await Promise.all([
+          loadDirectCheckoutItems(),
+          loadShippingAddresses()
+        ]);
+      } catch (error) {
+        setErrorMessage('페이지 로딩 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializePage();
+  }, []);
+  
+  // 네이버페이 결제 처리 함수
+  const handleNaverPayment = () => {
+    if (typeof window === 'undefined' || !window.Naver || !window.Naver.Pay) {
+      toast.error('네이버페이를 초기화할 수 없습니다.');
+      return;
+    }
+    
+    // 환경 변수를 사용하여 설정
+    // 환경 변수가 작동하지 않는 경우 여기에 직접 값을 입력하세요
+    const clientId = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_ID || '여기에_클라이언트ID_입력';
+    const chainId = process.env.NEXT_PUBLIC_NAVER_PAY_CHAIN_ID || '여기에_체인ID_입력';
+    
+    if (!clientId) {
+      console.error('네이버페이 클라이언트 ID가 설정되지 않았습니다.');
+      toast.error('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.');
+      return;
+    }
+    
+    // 주문명 확인 및 생성
+    let productName = orderNameForPayment;
+    if (!productName || productName.trim() === '') {
+      // orderNameForPayment가 비어있는 경우 다시 생성
+      productName = cartItems.length > 0 
+        ? cartItems.length > 1 
+          ? `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`
+          : cartItems[0].product.name
+        : '상품 주문';
+    }
+    
+    // 고유한 주문 ID 생성
+    const merchantPayKey = orderIdForPayment || uuidv4();
+    
+    // 네이버페이 객체 생성
+    const oPay = window.Naver.Pay.create({
+      "mode": "development", // 샌드박스 환경 설정
+      "clientId": clientId,
+      "chainId": chainId // chainId가 없을 경우 빈 문자열
+    });
+    
+    // 네이버페이 결제창 열기
+    oPay.open({
+      "merchantUserKey": user?.id || 'guest',
+      "merchantPayKey": merchantPayKey,
+      "productName": productName, // 재생성한 상품명 사용
+      "totalPayAmount": finalPrice,
+      "taxScopeAmount": finalPrice,
+      "taxExScopeAmount": 0,
+      "returnUrl": `${window.location.origin}/m/checkout/success?orderId=${merchantPayKey}`
+    });
+  };
+  
+  // 네이버페이 결제 버튼 클릭 핸들러
+  const handleOpenNaverPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!agreeToTerms) {
@@ -446,7 +526,7 @@ export default function MobileCheckoutPage() {
       // 주문명 생성
       const orderName = cartItems.length > 1 
         ? `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`
-        : cartItems[0].product.name;
+        : cartItems[0].product.name || '상품 주문';
       
       // UUID 형식의 주문 ID 생성
       const tempOrderId = uuidv4();
@@ -454,51 +534,17 @@ export default function MobileCheckoutPage() {
       // 임시 주문 ID와 주문명 저장
       setOrderIdForPayment(tempOrderId);
       setOrderNameForPayment(orderName);
-      setShowPaymentModal(true);
-      setOrderProcessing(false);
+      
+      // 상태 업데이트 후에 네이버페이 결제창 호출을 위해 약간의 지연 추가
+      setTimeout(() => {
+        handleNaverPayment();
+        setOrderProcessing(false);
+      }, 100);
     } catch (error) {
       setOrderError(error instanceof Error ? error.message : '주문 처리 중 오류가 발생했습니다.');
       setOrderProcessing(false);
     }
   };
-
-  // 결제 성공 처리
-  const handlePaymentSuccess = async () => {
-    // 이 단계는 실제로는 successUrl에서 처리됨
-    setOrderProcessing(false);
-  };
-
-  // 결제 실패 처리
-  const handlePaymentFail = (error: any) => {
-    setOrderError(error.message || '결제 처리에 실패했습니다.');
-    setOrderProcessing(false);
-  };
-
-  // 페이지 초기화
-  useEffect(() => {
-    const initializePage = async () => {
-      try {
-        setLoading(true);
-        const isLoggedIn = await checkLoginStatus();
-        
-        if (!isLoggedIn) {
-          return; // 로그인 실패 시 더 이상 진행하지 않음
-        }
-        
-        // 로그인에 성공한 경우에만 실행
-        await Promise.all([
-          loadDirectCheckoutItems(),
-          loadShippingAddresses()
-        ]);
-      } catch (error) {
-        setErrorMessage('페이지 로딩 중 오류가 발생했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializePage();
-  }, []);
 
   // 사용자 정보가 변경되면 배송지 목록 로드
   useEffect(() => {
@@ -522,6 +568,29 @@ export default function MobileCheckoutPage() {
       }
     }
   }, [shippingInfo, addresses, selectedAddressId]);
+
+  // 네이버페이 스크립트 로드 확인
+  useEffect(() => {
+    const checkNaverPayScript = () => {
+      if (typeof window !== 'undefined') {
+        if (window.Naver && window.Naver.Pay) {
+          console.log('네이버페이 SDK가 로드되었습니다.');
+        } else {
+          // 수동으로 스크립트 로드 시도
+          const script = document.createElement('script');
+          script.src = 'https://nsp.pay.naver.com/sdk/js/naverpay.min.js';
+          script.async = true;
+          script.onload = () => console.log('네이버페이 SDK가 수동으로 로드되었습니다.');
+          script.onerror = () => console.error('네이버페이 SDK 로드 실패');
+          document.head.appendChild(script);
+        }
+      }
+    };
+    
+    // 페이지 로드 후 약간의 지연시간을 두고 확인
+    const timer = setTimeout(checkNaverPayScript, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // 로딩 중일 때 표시할 스피너
   if (loading) {
@@ -707,11 +776,12 @@ export default function MobileCheckoutPage() {
           />
           
           <Button
-            onClick={handleOpenPaymentModal}
+            onClick={handleOpenNaverPayment}
             disabled={!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || !agreeToTerms || orderProcessing}
             className={`w-full py-3 mt-4 ${
-              orderProcessing ? 'bg-gray-400' : 'bg-green-600'
-            } text-white`}
+              orderProcessing ? 'bg-gray-400' : 'bg-[#03C75A]'
+            } text-white flex justify-center items-center`}
+            id="naverPayBtn"
           >
             {orderProcessing ? (
               <div className="flex items-center justify-center">
@@ -719,7 +789,10 @@ export default function MobileCheckoutPage() {
                 처리 중...
               </div>
             ) : (
-              '결제하기'
+              <>
+                <span className="font-bold mr-1.5 text-lg">N</span>
+                <span>네이버페이 결제하기</span>
+              </>
             )}
           </Button>
           
@@ -747,19 +820,6 @@ export default function MobileCheckoutPage() {
         userId={user?.id || ''}
         onAddressSelect={handleAddressChange}
         currentAddresses={addresses}
-      />
-
-      {/* 결제 모달 */}
-      <PaymentModal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        orderId={orderIdForPayment}
-        orderName={orderNameForPayment}
-        customerName={shippingInfo.name}
-        customerEmail={user?.email || ''}
-        amount={finalPrice}
-        onPaymentSuccess={handlePaymentSuccess}
-        onPaymentFail={handlePaymentFail}
       />
     </div>
   );

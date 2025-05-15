@@ -56,7 +56,6 @@ export default function AdminInquiriesPage() {
       setAdminToken(token);
       
       if (!token) {
-        console.log('인증 토큰이 없습니다. 로그인 페이지로 이동합니다.');
         toast.error('로그인이 필요합니다.');
         router.push('/admin/login');
       }
@@ -78,7 +77,6 @@ export default function AdminInquiriesPage() {
 
   const handleAuthError = (status: number) => {
     if (status === 401 || status === 403) {
-      console.log('인증이 만료되었거나 권한이 없습니다. 로그인 페이지로 이동합니다.');
       localStorage.removeItem('adminToken');
       setAdminToken(null);
       toast.error('인증이 만료되었습니다. 다시 로그인해주세요.');

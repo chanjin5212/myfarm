@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Spinner } from '@/components/ui/CommonStyles';
 import { getAuthHeader, checkToken } from '@/utils/auth';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function CheckoutSuccessPage() {
   const router = useRouter();
@@ -16,30 +17,23 @@ export default function CheckoutSuccessPage() {
   const isProcessing = useRef(false);
   
   useEffect(() => {
-    const paymentKey = searchParams?.get('paymentKey');
+    const resultCode = searchParams?.get('resultCode');
+    const paymentId = searchParams?.get('paymentId');
     const orderId = searchParams?.get('orderId');
-    const amount = searchParams?.get('amount');
-    
-    const processPayment = async () => {
-      // 이미 처리 중이면 중복 실행 방지
-      if (isProcessing.current) {
-        console.log('이미 결제 처리 중입니다.');
-        return;
-      }
 
-      if (!paymentKey || !orderId || !amount) {
+    const processNaverPay = async () => {
+      if (isProcessing.current) return;
+
+      if (resultCode !== 'Success' || !paymentId || !orderId) {
         setError('결제 정보가 올바르지 않습니다.');
         setLoading(false);
         return;
       }
 
       try {
-        // 처리 중 플래그 설정
         isProcessing.current = true;
-        
-        setOrderId(orderId);
-        
-        // 로그인 체크
+
+        // 1. 주문 생성
         const { user, isLoggedIn } = checkToken();
         if (!isLoggedIn || !user) {
           setError('로그인이 필요합니다.');
@@ -50,17 +44,17 @@ export default function CheckoutSuccessPage() {
         const userId = user.id;
         const authHeader = getAuthHeader();
 
-        // 로컬 스토리지에서 주문 정보 가져오기
         const checkoutItems = JSON.parse(localStorage.getItem('checkoutItems') || '[]');
         const shippingInfo = JSON.parse(localStorage.getItem('checkoutShippingInfo') || '{}');
+        // 결제 금액 계산 (checkoutItems의 합산)
+        const totalAmount = checkoutItems.reduce((sum: number, item: any) => {
+          const price = Number(item.price) || 0;
+          const additionalPrice = item.option ? Number(item.option.additionalPrice) || 0 : 0;
+          return sum + (price + additionalPrice) * (item.quantity || 1);
+        }, 0);
 
-        // 안전한 문자열 처리 함수
-        const safeString = (str: string) => {
-          if (!str) return '';
-          return str.normalize('NFC');
-        };
+        const safeString = (str: string) => (!str ? '' : str.normalize('NFC'));
 
-        // 주문 데이터 생성
         const orderData = {
           userId: user.id,
           items: checkoutItems.map((item: any) => ({
@@ -71,23 +65,26 @@ export default function CheckoutSuccessPage() {
             additionalPrice: item.option ? item.option.additionalPrice : 0,
             quantity: item.quantity,
             image: item.image,
-            selectedOptions: item.option ? {
-              name: safeString(item.option.name),
-              value: safeString(item.option.value),
-              additional_price: item.option.additionalPrice
-            } : null
+            selectedOptions: item.option
+              ? {
+                  name: safeString(item.option.name),
+                  value: safeString(item.option.value),
+                  additional_price: item.option.additionalPrice,
+                }
+              : null,
           })),
           shipping: {
             name: safeString(shippingInfo.name),
             phone: shippingInfo.phone,
             address: safeString(shippingInfo.address),
             detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
-            memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null
+            memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null,
           },
           payment: {
-            method: 'toss',
-            total_amount: parseInt(amount)
-          }
+            method: 'naverpay',
+            naverpay_payment_id: paymentId,
+            total_amount: totalAmount,
+          },
         };
 
         // 주문 생성 API 호출
@@ -95,12 +92,12 @@ export default function CheckoutSuccessPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeader
+            ...authHeader,
           },
           body: JSON.stringify({
-            orderId,
-            orderData
-          })
+            orderId: orderId,
+            orderData,
+          }),
         });
 
         if (!createOrderResponse.ok) {
@@ -109,58 +106,39 @@ export default function CheckoutSuccessPage() {
         }
 
         const createOrderResult = await createOrderResponse.json();
-        console.log('주문 생성 성공:', createOrderResult);
-
-        // 주문 번호 저장
         setOrderNumber(createOrderResult.order_number || orderId);
 
-        // 토스페이먼츠 결제 승인 API 호출
-        console.log('토스페이먼츠 결제 승인 요청:', { paymentKey, orderId, amount });
-
-        const paymentResponse = await fetch('/api/payments/toss', {
+        // 2. 네이버페이 결제 승인
+        const approveRes = await fetch('/api/payments/naverpay', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeader
-          },
-          body: JSON.stringify({
-            paymentKey,
-            orderId,
-            amount: parseInt(amount)
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId, orderId }),
         });
 
-        if (!paymentResponse.ok) {
-          const errorData = await paymentResponse.json();
-          throw new Error(errorData.error || errorData.message || '결제 승인에 실패했습니다.');
+        if (!approveRes.ok) {
+          const err = await approveRes.text();
+          throw new Error('네이버페이 결제 승인 실패: ' + err);
         }
-
-        const paymentResult = await paymentResponse.json();
-        console.log('결제 승인 성공:', paymentResult);
 
         // 로컬 스토리지 정리
         localStorage.removeItem('checkoutItems');
         localStorage.removeItem('checkoutShippingInfo');
         localStorage.removeItem('buyNowItem');
-        
-        setOrderCompleted(true);
-        
-        // 주문 상세 페이지로 리디렉션
-        const redirectOrderId = paymentResult.orderId || orderId;
-        router.push(`/m/orders/${redirectOrderId}/detail`);
 
+        setOrderCompleted(true);
+
+        // 주문 상세 페이지로 리디렉션
+        const redirectOrderId = createOrderResult.orderId || orderId;
+        router.push(`/m/orders/${redirectOrderId}/detail`);
       } catch (error) {
-        console.error('결제 처리 오류:', error);
         setError(error instanceof Error ? error.message : '결제 처리 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
-        // 처리 완료 후 플래그 해제
         isProcessing.current = false;
       }
     };
 
-    // 결제 성공 페이지가 로드되면 바로 결제 처리 시작
-    processPayment();
+    processNaverPay();
   }, [searchParams, router]);
 
   if (loading) {
@@ -179,7 +157,7 @@ export default function CheckoutSuccessPage() {
           <h2 className="text-xl font-semibold text-red-700 mb-2">결제 처리 오류</h2>
           <p className="text-red-600">{error}</p>
         </div>
-        <Button 
+        <Button
           onClick={() => router.push('/m/cart')}
           className="bg-green-600 text-white w-full max-w-md"
         >
@@ -196,27 +174,23 @@ export default function CheckoutSuccessPage() {
         <div className="bg-green-100 p-6 rounded-lg mb-6 text-center">
           <svg
             className="w-16 h-16 text-green-600 mx-auto mb-4"
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24" 
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
             xmlns="http://www.w3.org/2000/svg"
           >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
               strokeWidth={2}
               d="M5 13l4 4L19 7"
             />
           </svg>
-          <h2 className="text-2xl font-bold text-green-800 mb-2">
-            결제가 완료되었습니다!
-          </h2>
+          <h2 className="text-2xl font-bold text-green-800 mb-2">결제가 완료되었습니다!</h2>
           <p className="text-green-700 mb-1">
             주문번호: <span className="font-medium">{orderNumber}</span>
           </p>
-          <p className="text-green-700">
-            주문 상세 페이지로 이동합니다...
-          </p>
+          <p className="text-green-700">주문 상세 페이지로 이동합니다...</p>
         </div>
       </div>
     </div>

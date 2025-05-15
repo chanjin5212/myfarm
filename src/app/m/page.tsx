@@ -1,23 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Spinner } from '@/components/ui/CommonStyles';
-import { ChevronRight, Leaf, CalendarDays, Truck, ShoppingBag } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import React, { ReactNode } from 'react';
+import Slider from 'react-slick';
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
 
-// UI 컴포넌트 직접 구현
-type ButtonProps = {
-  children: ReactNode;
-  className?: string;
-  variant?: 'default' | 'outline';
-  type?: 'button' | 'submit' | 'reset';
-  size?: 'default' | 'sm';
-  [x: string]: any;
-};
-
-const Button = ({ 
+// Button 컴포넌트 메모이제이션
+const Button = memo(({ 
   children, 
   className = "", 
   variant = "default", 
@@ -46,15 +39,22 @@ const Button = ({
       {children}
     </button>
   );
-};
+});
 
-type CardProps = {
+Button.displayName = 'Button';
+
+// 타입 정의
+type ButtonProps = {
   children: ReactNode;
   className?: string;
+  variant?: 'default' | 'outline';
+  type?: 'button' | 'submit' | 'reset';
+  size?: 'default' | 'sm';
   [x: string]: any;
 };
 
-const Card = ({ children, className = "", ...props }: CardProps) => {
+// 메모이제이션된 컴포넌트로 변경
+const Card = memo(({ children, className = "", ...props }: CardProps) => {
   return (
     <div
       className={`rounded-lg border border-gray-200 bg-white shadow-sm ${className}`}
@@ -63,7 +63,25 @@ const Card = ({ children, className = "", ...props }: CardProps) => {
       {children}
     </div>
   );
+});
+
+Card.displayName = 'Card';
+
+type CardProps = {
+  children: ReactNode;
+  className?: string;
+  [x: string]: any;
 };
+
+const CardContent = memo(({ children, className = "", ...props }: CardContentProps) => {
+  return (
+    <div className={`p-4 ${className}`} {...props}>
+      {children}
+    </div>
+  );
+});
+
+CardContent.displayName = 'CardContent';
 
 type CardContentProps = {
   children: ReactNode;
@@ -71,21 +89,7 @@ type CardContentProps = {
   [x: string]: any;
 };
 
-const CardContent = ({ children, className = "", ...props }: CardContentProps) => {
-  return (
-    <div className={`p-4 ${className}`} {...props}>
-      {children}
-    </div>
-  );
-};
-
-type BadgeProps = {
-  children: ReactNode;
-  className?: string;
-  [x: string]: any;
-};
-
-const Badge = ({ children, className = "", ...props }: BadgeProps) => {
+const Badge = memo(({ children, className = "", ...props }: BadgeProps) => {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}
@@ -94,13 +98,20 @@ const Badge = ({ children, className = "", ...props }: BadgeProps) => {
       {children}
     </span>
   );
+});
+
+Badge.displayName = 'Badge';
+
+type BadgeProps = {
+  children: ReactNode;
+  className?: string;
+  [x: string]: any;
 };
 
 interface Product {
   id: string;
   name: string;
   price: number;
-  discount_price?: number;
   thumbnail_url?: string;
   is_organic?: boolean;
 }
@@ -111,119 +122,169 @@ interface Category {
   image?: string;
 }
 
+// 배너 슬라이더 컴포넌트
+const BannerSlider = memo(() => {
+  const banners = [
+    { id: 1, src: '/images/banner1.png', alt: '강원찐농부 배너 1' },
+    { id: 2, src: '/images/banner2.png', alt: '강원찐농부 배너 2' }
+  ];
+  const [current, setCurrent] = useState(0);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [isTouching, setIsTouching] = useState(false);
+
+  // 배너 바깥 스크롤 방지
+  useEffect(() => {
+    if (!isTouching) return;
+    const preventScroll = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+    const node = sliderRef.current;
+    if (node) {
+      node.addEventListener('touchmove', preventScroll, { passive: false });
+    }
+    return () => {
+      if (node) {
+        node.removeEventListener('touchmove', preventScroll);
+      }
+    };
+  }, [isTouching]);
+
+  const settings = {
+    infinite: true,
+    speed: 500,
+    slidesToShow: 1,
+    slidesToScroll: 1,
+    autoplay: true,
+    autoplaySpeed: 10000,
+    dots: true,
+    arrows: false,
+    beforeChange: (_old: number, next: number) => setCurrent(next),
+    appendDots: (dots: React.ReactNode) => (
+      <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0 }}>
+        <ul className="flex justify-center gap-1.5">{dots}</ul>
+      </div>
+    ),
+    customPaging: (i: number) => (
+      <button className={`w-2 h-2 rounded-full ${i === current ? 'bg-white' : 'bg-white/50'}`}></button>
+    ),
+    draggable: true,
+    swipe: true,
+    touchMove: true,
+  };
+
+  return (
+    <div
+      className="relative w-full overflow-hidden"
+      ref={sliderRef}
+      style={{ touchAction: 'pan-y' }}
+      onTouchStart={() => setIsTouching(true)}
+      onTouchEnd={() => setIsTouching(false)}
+    >
+      <Slider {...settings}>
+        {banners.map((banner, i) => (
+          <div
+            key={banner.id}
+            className="w-full focus:outline-none focus-visible:outline-none ring-0 shadow-none"
+            tabIndex={-1}
+            style={{ outline: 'none', boxShadow: 'none' }}
+          >
+            <Image
+              src={banner.src}
+              alt={banner.alt}
+              width={1200}
+              height={400}
+              className="w-full h-auto focus:outline-none focus-visible:outline-none ring-0 shadow-none"
+              priority={i === 0}
+              quality={80}
+              draggable={false}
+              style={{ outline: 'none', boxShadow: 'none' }}
+            />
+          </div>
+        ))}
+      </Slider>
+      {/* 오른쪽 아래 1/2 표시 */}
+      <div className="absolute bottom-3 right-3 z-10 bg-black/60 px-2 py-1 rounded text-xs text-white font-medium">
+        {((current % banners.length) + 1)}/{banners.length}
+      </div>
+    </div>
+  );
+});
+
+BannerSlider.displayName = 'BannerSlider';
+
+// 상품 카드 컴포넌트 메모이제이션
+const ProductCard = memo(({ product }: { product: Product }) => {
+  return (
+    <Link href={`/m/products/${product.id}`} className="block">
+      <div className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
+        <div className="relative aspect-square">
+          <Image
+            src={product.thumbnail_url || '/images/default-product.jpg'}
+            alt={product.name}
+            fill
+            sizes="(max-width: 768px) 50vw, 33vw"
+            className="object-cover"
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+          />
+          {product.is_organic && (
+            <span className="absolute top-2 left-2 bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">
+              유기농
+            </span>
+          )}
+        </div>
+        <div className="p-3">
+          <h3 className="font-medium text-sm truncate">{product.name}</h3>
+          <div className="mt-1">
+            <span className="font-bold">{product.price.toLocaleString()}원</span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+});
+
+ProductCard.displayName = 'ProductCard';
+
 function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
-  const [newProducts, setNewProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    
     async function fetchHomeData() {
       try {
-        // 추천 상품
+        // 추천 상품만 먼저 로드하여 화면에 빠르게 표시
         const featuredRes = await fetch('/api/products?featured=true&limit=4');
         const featuredData = await featuredRes.json();
         
-        // 신상품
-        const newRes = await fetch('/api/products?sort=newest&limit=4');
-        const newData = await newRes.json();
-        
-        // 카테고리
-        const categoryRes = await fetch('/api/categories');
-        const categoryData = await categoryRes.json();
-        
-        setFeaturedProducts(featuredData.products || []);
-        setNewProducts(newData.products || []);
-        setCategories(categoryData.categories || []);
+        if (isMounted) {
+          setFeaturedProducts(featuredData.products || []);
+          setLoading(false);
+        }
       } catch (error) {
         console.error('홈 데이터 로딩 오류:', error);
-      } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
     
     fetchHomeData();
-  }, []);
-
-  // 상품 카드 컴포넌트
-  const ProductCard = ({ product }: { product: Product }) => {
-    const discount = product.discount_price 
-      ? Math.round(((product.price - product.discount_price) / product.price) * 100) 
-      : 0;
     
-    return (
-      <Link href={`/m/products/${product.id}`} className="block">
-        <div className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-white">
-          <div className="relative aspect-square">
-            <Image
-              src={product.thumbnail_url || '/images/default-product.jpg'}
-              alt={product.name}
-              fill
-              sizes="(max-width: 768px) 50vw, 33vw"
-              className="object-cover"
-            />
-            {product.is_organic && (
-              <span className="absolute top-2 left-2 bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">
-                유기농
-              </span>
-            )}
-          </div>
-          <div className="p-3">
-            <h3 className="font-medium text-sm truncate">{product.name}</h3>
-            <div className="mt-1">
-              {product.discount_price ? (
-                <div className="flex items-baseline space-x-1">
-                  <span className="line-through text-gray-400 text-xs">{product.price.toLocaleString()}원</span>
-                  <span className="text-red-500 font-semibold">{discount}%</span>
-                  <span className="font-bold">{product.discount_price.toLocaleString()}원</span>
-                </div>
-              ) : (
-                <span className="font-bold">{product.price.toLocaleString()}원</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </Link>
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[60vh] bg-white">
-        <Spinner size="lg" />
-      </div>
-    );
-  }
+    // 클린업 함수에서 마운트 상태 추적
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="flex flex-col pb-4">
-      {/* 히어로 섹션 */}
-      <section className="w-full py-8 bg-green-50">
-        <div className="px-5">
-          <div className="flex flex-col gap-5">
-            <div className="space-y-3">
-              <div className="inline-block rounded-md bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
-                신선 농산물
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-                제철 농산물로<br />건강한 식탁을 차려보세요
-              </h1>
-              <p className="text-base text-gray-700 leading-relaxed">
-                직접 재배한 신선한 농산물을 집으로 배송해 드립니다. 숙경팜의 정성이 담긴 제철 식재료로 맛있는 식사를 준비하세요.
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row mt-4">
-                <Button className="w-full sm:w-auto">
-                  <ShoppingBag className="mr-1.5 h-4 w-4" />
-                  지금 쇼핑하기
-                </Button>
-                <Button variant="outline" className="w-full sm:w-auto">
-                  제철 상품 보기
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* 배너 슬라이더로 변경 */}
+      <section className="w-full">
+        <BannerSlider />
       </section>
 
       {/* 추천 상품 */}
@@ -241,54 +302,10 @@ function HomePage() {
           ))}
         </div>
       </section>
-
-      {/* 특징 섹션 */}
-      <section className="w-full py-8 mt-6">
-        <div className="px-5">
-          <div className="flex flex-col items-center justify-center space-y-3 text-center mb-5">
-            <div className="inline-block rounded-md bg-green-100 px-3 py-1 text-sm font-medium text-green-800 mb-1">
-              숙경팜의 약속
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">신선함을 전해드립니다</h2>
-            <p className="text-base text-gray-700">
-              농장에서 식탁까지, 최고의 품질과 신선함을 약속합니다
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 py-2">
-            <div className="flex items-center space-x-4 rounded-xl border p-4 shadow-sm bg-white">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-3">
-                <Leaf className="h-7 w-7 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900">유기농 재배</h3>
-                <p className="text-sm text-gray-700">친환경 농법으로 재배된 안전한 농산물만을 엄선합니다</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4 rounded-xl border p-4 shadow-sm bg-white">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-3">
-                <CalendarDays className="h-7 w-7 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900">제철 상품</h3>
-                <p className="text-sm text-gray-700">계절마다 가장 맛있는 제철 농산물을 제공합니다</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4 rounded-xl border p-4 shadow-sm bg-white">
-              <div className="flex-shrink-0 bg-green-100 rounded-full p-3">
-                <Truck className="h-7 w-7 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900">당일 배송</h3>
-                <p className="text-sm text-gray-700">오전 주문 시 당일 배송으로 가장 신선한 상태로 받아보세요</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
 
-export default function MobilePage() {
+export default memo(function MobilePage() {
   return <HomePage />;
-} 
+}); 

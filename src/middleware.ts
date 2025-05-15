@@ -16,8 +16,15 @@ export function middleware(request: NextRequest) {
   const userAgent = request.headers.get('user-agent') || '';
   const isMobile = isMobileDevice(userAgent);
   
-  // 이미지나 정적 파일 경로는 제외
-  if (pathname.startsWith('/images/') || pathname.startsWith('/public/')) {
+  // 이미지나 정적 파일, 검색엔진 관련 파일 경로는 제외
+  if (
+    pathname.startsWith('/images/') ||
+    pathname.startsWith('/public/') ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/rss' ||
+    pathname === '/favicon.ico'
+  ) {
     return NextResponse.next();
   }
   

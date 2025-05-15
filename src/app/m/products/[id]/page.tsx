@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getAuthHeader, checkToken } from '@/utils/auth';
@@ -11,6 +11,7 @@ import { Spinner } from '@/components/ui/CommonStyles';
 import Link from 'next/link';
 import { LocalCartItem } from '@/types/cart';
 import toast, { Toaster } from 'react-hot-toast';
+import { ProductProvider } from './components/ProductContext';
 
 interface ProductDetail {
   id: string;
@@ -68,6 +69,128 @@ interface CartProduct {
   thumbnail_url: string;
 }
 
+// 이미지 썸네일 컴포넌트
+const ProductThumbnail = memo(({ 
+  image, 
+  index, 
+  isActive, 
+  onSelect 
+}: { 
+  image: ProductImage, 
+  index: number, 
+  isActive: boolean, 
+  onSelect: (index: number) => void 
+}) => {
+  return (
+    <button
+      onClick={() => onSelect(index)}
+      className={`flex-shrink-0 w-16 h-16 border-2 rounded overflow-hidden 
+        ${isActive ? 'border-green-500' : 'border-gray-200'}`}
+    >
+      <Image
+        src={image.image_url}
+        alt={`상품 이미지 ${index + 1}`}
+        width={64}
+        height={64}
+        className="object-cover w-full h-full"
+        unoptimized={image.image_url?.includes('blob:')}
+      />
+    </button>
+  );
+});
+
+ProductThumbnail.displayName = 'ProductThumbnail';
+
+// 장바구니 팝업 컴포넌트
+const CartPopup = memo(({ 
+  isOpen, 
+  onClose, 
+  onGoToCart 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onGoToCart: () => void 
+}) => {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-sm">
+        <div className="p-5">
+          <div className="flex justify-between items-start">
+            <div className="bg-green-100 rounded-full p-2 text-green-600">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <button onClick={onClose} className="text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <h3 className="mt-3 text-lg font-medium">장바구니에 담겼습니다</h3>
+          <p className="mt-1 text-sm text-gray-600">
+            장바구니로 이동하여 상품을 확인하시겠습니까?
+          </p>
+          <div className="flex space-x-2 mt-4">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2 border border-gray-300 rounded-md text-gray-700"
+            >
+              계속 쇼핑
+            </button>
+            <button
+              onClick={onGoToCart}
+              className="flex-1 py-2 bg-green-600 text-white rounded-md"
+            >
+              장바구니 가기
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+CartPopup.displayName = 'CartPopup';
+
+// 메인 이미지 컴포넌트
+const MainImage = memo(({ 
+  images, 
+  currentImage, 
+  productName, 
+  thumbnailUrl 
+}: { 
+  images: ProductImage[], 
+  currentImage: number, 
+  productName?: string, 
+  thumbnailUrl?: string 
+}) => {
+  const imageUrl = useMemo(() => {
+    if (images.length > 0) {
+      return images[currentImage]?.image_url || '/images/default-product.jpg';
+    }
+    return thumbnailUrl || '/images/default-product.jpg';
+  }, [images, currentImage, thumbnailUrl]);
+  
+  return (
+    <div className="relative w-full aspect-square bg-gray-100">
+      <Image
+        src={imageUrl}
+        alt={`${productName || '상품'} 대표 이미지`}
+        fill
+        sizes="100vw"
+        className="object-contain"
+        priority
+        unoptimized={imageUrl?.includes('blob:')}
+      />
+    </div>
+  );
+});
+
+MainImage.displayName = 'MainImage';
+
 export default function MobileProductDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -87,9 +210,14 @@ export default function MobileProductDetailPage() {
   useEffect(() => {
     const fetchProductDetails = async () => {
       setLoading(true);
+      
+      const controller = new AbortController();
+      
       try {
         const apiUrl = `/api/products/${params?.id}`;
-        const response = await fetch(apiUrl);
+        const response = await fetch(apiUrl, {
+          signal: controller.signal
+        });
         
         if (!response.ok) {
           throw new Error('상품 정보를 불러오는데 실패했습니다.');
@@ -102,11 +230,17 @@ export default function MobileProductDetailPage() {
         
         setError(null);
       } catch (err) {
-        console.error('상품 상세 로딩 오류:', err);
-        setError('상품 정보를 불러오는데 실패했습니다.');
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('상품 상세 로딩 오류:', err);
+          setError('상품 정보를 불러오는데 실패했습니다.');
+        }
       } finally {
         setLoading(false);
       }
+      
+      return () => {
+        controller.abort();
+      };
     };
 
     if (params?.id) {
@@ -115,20 +249,20 @@ export default function MobileProductDetailPage() {
   }, [params?.id]);
 
   // 선택한 썸네일에 따라 메인 이미지 변경
-  const handleThumbnailClick = (index: number) => {
+  const handleThumbnailClick = useCallback((index: number) => {
     setCurrentImage(index);
-  };
+  }, []);
 
   // 장바구니 추가 핸들러
-  const handleAddToCart = async () => {
+  const handleAddToCart = useCallback(async () => {
     // 옵션이 있는 상품인데 옵션을 선택하지 않은 경우
-    if (options.length > 0 && selectedOptions.length === 0) {
-      toast.error('옵션을 선택해주세요.');
+    if (!productDetails) {
+      toast.error('상품 정보를 찾을 수 없습니다.');
       return;
     }
     
-    if (!productDetails) {
-      toast.error('상품 정보를 찾을 수 없습니다.');
+    if (options.length > 0 && selectedOptions.length === 0) {
+      toast.error('옵션을 선택해주세요.');
       return;
     }
 
@@ -197,16 +331,6 @@ export default function MobileProductDetailPage() {
             }
             
           } else {
-            // 옵션이 없는 상품인데 재고가 부족한 경우
-            if (options.length === 0) {
-              // Check if there's a default option with stock
-              const defaultOption = options.find(opt => opt.is_default);
-              if (!defaultOption || defaultOption.stock <= 0) {
-                toast.error("상품의 재고가 부족합니다.");
-                return;
-              }
-            }
-            
             // 옵션이 없는 상품 - product_option_id를 null로 전달
             const requestBody = {
               product_id: productDetails.id,
@@ -229,7 +353,6 @@ export default function MobileProductDetailPage() {
             }
             
             const result = await response.json();
-            console.log('장바구니 추가 결과:', result);
             
             // 성공 처리
             toast.success("장바구니에 상품이 추가되었습니다.");
@@ -314,10 +437,10 @@ export default function MobileProductDetailPage() {
       // 로딩 상태 종료
       setIsAddingToCart(false);
     }
-  };
+  }, [productDetails, options.length, selectedOptions, quantity, router]);
 
   // 바로 구매 핸들러
-  const handleBuyNow = () => {
+  const handleBuyNow = useCallback(() => {
     if (!productDetails) {
       toast.error("상품 정보를 찾을 수 없습니다.");
       return;
@@ -344,7 +467,6 @@ export default function MobileProductDetailPage() {
     let buyNowData: any;
 
     if (selectedOptions.length > 0) {
-      // 여러 옵션이 선택된 경우
       // 기존 API와 호환성 유지를 위해 첫 번째 옵션만 option으로 설정
       const firstOption = {
         id: selectedOptions[0].optionId,
@@ -403,17 +525,36 @@ export default function MobileProductDetailPage() {
     // 로컬 스토리지에 즉시 구매 정보 저장
     localStorage.setItem("buyNowItem", JSON.stringify(buyNowData));
     router.push("/m/checkout?type=buy-now");
-  };
+  }, [productDetails, options, selectedOptions, quantity, router]);
 
-  // 장바구니 팝업 닫기
-  const closePopup = () => {
+  // 장바구니 팝업 관련 핸들러
+  const closePopup = useCallback(() => {
     setCartSuccessPopup(false);
-  };
+  }, []);
 
   // 장바구니로 이동
-  const goToCart = () => {
+  const goToCart = useCallback(() => {
     router.push('/m/cart');
-  };
+  }, [router]);
+
+  // 썸네일 목록 렌더링 최적화
+  const thumbnailsList = useMemo(() => {
+    if (images.length <= 1) return null;
+    
+    return (
+      <div className="flex overflow-x-auto py-3 px-4 gap-2 bg-white">
+        {images.map((image, index) => (
+          <ProductThumbnail
+            key={image.id}
+            image={image}
+            index={index}
+            isActive={currentImage === index}
+            onSelect={handleThumbnailClick}
+          />
+        ))}
+      </div>
+    );
+  }, [images, currentImage, handleThumbnailClick]);
 
   if (loading) {
     return (
@@ -444,187 +585,119 @@ export default function MobileProductDetailPage() {
   }
 
   return (
-    <div className="pb-20">
-      <Toaster position="top-center" />
-      {/* 고정 헤더 */}
-      <header className="fixed top-0 left-0 right-0 bg-white shadow-sm z-50 border-b border-gray-200">
-        <div className="container mx-auto py-3 px-4">
-          <div className="flex items-center">
-            <button onClick={() => router.back()} className="text-gray-700">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-              </svg>
-            </button>
-            <Link href="/m" className="font-bold text-xl text-[#e3c478] ml-4">숙경팜</Link>
-            <div className="flex space-x-3 ml-auto">
-              <Link href="/m/search" aria-label="검색" className="text-gray-700">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+    <ProductProvider>
+      <div className="pb-20">
+        <Toaster position="top-center" />
+        {/* 고정 헤더 */}
+        <header className="fixed top-0 left-0 right-0 bg-white shadow-sm z-50 border-b border-gray-200">
+          <div className="container mx-auto py-3 px-4">
+            <div className="flex items-center">
+              <button onClick={() => router.back()} className="text-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                 </svg>
-              </Link>
-              <Link href="/m/cart" aria-label="장바구니" className="text-gray-700">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-                </svg>
-              </Link>
-              <Link href="/m/mypage" aria-label="마이페이지" className="text-gray-700">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                </svg>
-              </Link>
+              </button>
+              <h1 className="text-xl font-bold">상품목록</h1>
+              <div className="flex space-x-3 ml-auto">
+                <Link href="/m/search" aria-label="검색" className="text-gray-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
+                </Link>
+                <Link href="/m/cart" aria-label="장바구니" className="text-gray-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                  </svg>
+                </Link>
+                <Link href="/m/mypage" aria-label="마이페이지" className="text-gray-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* 컨텐츠 영역 - 헤더 높이만큼 상단 여백 추가 */}
-      <div className="pt-1 pb-1">
-        {/* 메인 이미지 */}
-        <div className="relative w-full aspect-square bg-gray-100">
-          {images.length > 0 ? (
-            <Image
-              src={images[currentImage]?.image_url || '/images/default-product.jpg'}
-              alt={`${productDetails?.name} 대표 이미지`}
-              fill
-              sizes="100vw"
-              className="object-contain"
-              priority
-              unoptimized={images[currentImage]?.image_url?.includes('blob:')}
-            />
+        {/* 컨텐츠 영역 - 헤더 높이만큼 상단 여백 추가 */}
+        <div className="pt-1 pb-1">
+          {/* 메인 이미지 */}
+          <MainImage 
+            images={images} 
+            currentImage={currentImage} 
+            productName={productDetails.name} 
+            thumbnailUrl={productDetails.thumbnail_url} 
+          />
+          
+          {/* 이미지 썸네일 목록 */}
+          {thumbnailsList}
+          
+          {/* 상품 정보 */}
+          <MobileProductInfo product={productDetails} />
+          
+          {/* 옵션 선택 영역 */}
+          <MobileProductOptions 
+            product={productDetails}
+            options={options}
+            selectedOptions={selectedOptions}
+            setSelectedOptions={setSelectedOptions}
+            quantity={quantity}
+            setQuantity={setQuantity}
+          />
+          
+          {/* 탭 섹션 */}
+          <MobileProductTabs 
+            product={productDetails}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
+        </div>
+        
+        {/* 하단 고정 영역 - 장바구니/구매 버튼 */}
+        <div className="fixed bottom-14 left-0 right-0 bg-white border-t p-3 flex space-x-2 z-40">
+          {productDetails.status === 'active' ? (
+            <>
+              <button
+                onClick={handleAddToCart}
+                disabled={isAddingToCart || !checkToken().isLoggedIn}
+                className={`flex-1 border-2 border-green-600 bg-white py-2.5 rounded-md font-medium flex items-center justify-center ${!checkToken().isLoggedIn ? 'text-gray-400 border-gray-300 bg-gray-100 cursor-not-allowed' : 'text-green-600'}`}
+              >
+                {isAddingToCart ? (
+                  <Spinner size="sm" className="mr-2 border-t-green-600 border-b-green-600" />
+                ) : null}
+                {checkToken().isLoggedIn ? '장바구니' : '장바구니(로그인 필요)'}
+              </button>
+              <button
+                onClick={handleBuyNow}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-md font-medium"
+              >
+                바로 구매
+              </button>
+            </>
           ) : (
-            <Image
-              src={productDetails?.thumbnail_url || '/images/default-product.jpg'}
-              alt={productDetails?.name || '상품 이미지'}
-              fill
-              sizes="100vw"
-              className="object-contain"
-              priority
-              unoptimized={productDetails?.thumbnail_url?.includes('blob:')}
-            />
+            <div className="flex-1 py-3 bg-gray-100 rounded-md text-center font-medium text-gray-700">
+              {productDetails.status === 'out_of_stock' ? (
+                <>
+                  <span className="text-red-500 mr-1">품절</span> 
+                  상품입니다
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-600 mr-1">판매중지</span> 
+                  상품입니다
+                </>
+              )}
+            </div>
           )}
         </div>
         
-        {/* 이미지 썸네일 목록 */}
-        {images.length > 1 && (
-          <div className="flex overflow-x-auto py-3 px-4 gap-2 bg-white">
-            {images.map((image, index) => (
-              <button
-                key={image.id} 
-                onClick={() => handleThumbnailClick(index)}
-                className={`flex-shrink-0 w-16 h-16 border-2 rounded overflow-hidden 
-                  ${currentImage === index ? 'border-green-500' : 'border-gray-200'}`}
-              >
-                <Image
-                  src={image.image_url}
-                  alt={`${productDetails?.name} 이미지 ${index + 1}`}
-                  width={64}
-                  height={64}
-                  className="object-cover w-full h-full"
-                  unoptimized={image.image_url?.includes('blob:')}
-                />
-              </button>
-            ))}
-          </div>
-        )}
-        
-        {/* 상품 정보 */}
-        <MobileProductInfo product={productDetails} />
-        
-        {/* 옵션 선택 영역 */}
-        <MobileProductOptions 
-          product={productDetails}
-          options={options}
-          selectedOptions={selectedOptions}
-          setSelectedOptions={setSelectedOptions}
-          quantity={quantity}
-          setQuantity={setQuantity}
-        />
-        
-        {/* 탭 섹션 */}
-        <MobileProductTabs 
-          product={productDetails}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
+        {/* 장바구니 성공 팝업 */}
+        <CartPopup 
+          isOpen={cartSuccessPopup} 
+          onClose={closePopup} 
+          onGoToCart={goToCart} 
         />
       </div>
-      
-      {/* 하단 고정 영역 - 장바구니/구매 버튼 */}
-      <div className="fixed bottom-14 left-0 right-0 bg-white border-t p-3 flex space-x-2 z-40">
-        {productDetails.status === 'active' ? (
-          <>
-            <button
-              onClick={handleAddToCart}
-              disabled={isAddingToCart}
-              className="flex-1 border-2 border-green-600 bg-white text-green-600 py-2.5 rounded-md font-medium flex items-center justify-center"
-            >
-              {isAddingToCart ? (
-                <Spinner size="sm" className="mr-2 border-t-green-600 border-b-green-600" />
-              ) : null}
-              장바구니
-            </button>
-            <button
-              onClick={handleBuyNow}
-              className="flex-1 bg-green-600 text-white py-2.5 rounded-md font-medium"
-            >
-              바로 구매
-            </button>
-          </>
-        ) : (
-          <div className="flex-1 py-3 bg-gray-100 rounded-md text-center font-medium text-gray-700">
-            {productDetails.status === 'out_of_stock' ? (
-              <>
-                <span className="text-red-500 mr-1">품절</span> 
-                상품입니다
-              </>
-            ) : (
-              <>
-                <span className="text-gray-600 mr-1">판매중지</span> 
-                상품입니다
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      
-      {/* 장바구니 성공 팝업 */}
-      {cartSuccessPopup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-sm">
-            <div className="p-5">
-              <div className="flex justify-between items-start">
-                <div className="bg-green-100 rounded-full p-2 text-green-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <button onClick={closePopup} className="text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <h3 className="mt-3 text-lg font-medium">장바구니에 담겼습니다</h3>
-              <p className="mt-1 text-sm text-gray-600">
-                장바구니로 이동하여 상품을 확인하시겠습니까?
-              </p>
-              <div className="flex space-x-2 mt-4">
-                <button
-                  onClick={closePopup}
-                  className="flex-1 py-2 border border-gray-300 rounded-md text-gray-700"
-                >
-                  계속 쇼핑
-                </button>
-                <button
-                  onClick={goToCart}
-                  className="flex-1 py-2 bg-green-600 text-white rounded-md"
-                >
-                  장바구니 가기
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </ProductProvider>
   );
 } 

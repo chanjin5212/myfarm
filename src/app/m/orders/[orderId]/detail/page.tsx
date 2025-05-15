@@ -210,7 +210,6 @@ export default function MobileOrderDetailPage() {
         return;
       }
 
-      console.log('주문 상세 정보 요청 시작:', orderId);
       const response = await fetch(`/api/orders/${orderId}`, {
         headers: {
           ...authHeader
@@ -228,17 +227,14 @@ export default function MobileOrderDetailPage() {
       }
 
       const responseData = await response.json();
-      console.log('주문 상세 API 응답:', JSON.stringify(responseData, null, 2));
       
       // 주문 정보 설정
       setOrderInfo(responseData);
       
       // 응답에 items 배열이 있는 경우 처리
       if (Array.isArray(responseData.items)) {
-        console.log('API에서 주문 상품 정보 받음:', responseData.items.length, '개');
         setOrderItems(responseData.items);
       } else {
-        console.log('API 응답에 주문 상품 정보가 없음. 별도로 요청합니다.');
         // 주문 상품 정보를 별도로 요청
         try {
           const itemsResponse = await fetch(`/api/orders/${orderId}/items`, {
@@ -249,7 +245,6 @@ export default function MobileOrderDetailPage() {
 
           if (itemsResponse.ok) {
             const itemsData = await itemsResponse.json();
-            console.log('주문 상품 API 응답:', JSON.stringify(itemsData, null, 2));
             if (Array.isArray(itemsData)) {
               setOrderItems(itemsData);
             } else {
@@ -323,8 +318,6 @@ export default function MobileOrderDetailPage() {
       </div>
     );
   }
-
-  console.log('렌더링 중인 주문 정보:', JSON.stringify(orderInfo, null, 2));
 
   const orderDate = orderInfo.created_at 
     ? new Date(orderInfo.created_at).toLocaleString('ko-KR', {

@@ -12,7 +12,7 @@ export default function Home() {
             신선한 <span className="text-green-600">제철 농산물</span>을 만나보세요
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl">
-            숙경팜에서 정성껏 키운 계절 별 신선한 농산물을 집에서 편하게 받아보세요.
+            강원찐농부에서 정성껏 키운 계절 별 신선한 농산물을 집에서 편하게 받아보세요.
           </p>
           <Link
             href="/products"

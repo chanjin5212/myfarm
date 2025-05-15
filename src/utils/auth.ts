@@ -95,7 +95,6 @@ export function getAuthHeader(): { Authorization?: string } {
       // 사용자 정보가 객체이고 ID가 있는 경우
       if (parsedToken.user && typeof parsedToken.user === 'object' && parsedToken.user.id) {
         userId = parsedToken.user.id;
-        console.log('사용자 ID 추출: 사용자 객체에서', userId);
       } 
       // access_token이 있는 경우 (OAuth 로그인 등)
       else if (parsedToken.access_token) {
@@ -103,7 +102,6 @@ export function getAuthHeader(): { Authorization?: string } {
         // 이 프로젝트에서는 사용자 ID를 직접 사용하는 방식이므로
         // 로컬스토리지에 저장된 userId 사용
         userId = localStorage.getItem('userId') || '';
-        console.log('사용자 ID 추출: 로컬스토리지에서', userId);
       }
     } catch (error) {
       // JSON 파싱 실패 시 토큰 그대로 사용
@@ -115,7 +113,6 @@ export function getAuthHeader(): { Authorization?: string } {
     if (!userId) {
       // 로컬스토리지에서 userId를 직접 사용
       userId = localStorage.getItem('userId') || '';
-      console.log('사용자 ID 로컬스토리지에서 직접 가져옴:', userId);
     }
     
     if (userId) {
