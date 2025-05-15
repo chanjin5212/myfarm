@@ -51,7 +51,6 @@ export default function MobileAddressBook() {
         }
 
         const data = await response.json();
-        console.log('배송지 목록:', data.addresses);
         
         setAddresses(data.addresses || []);
       } catch (error) {

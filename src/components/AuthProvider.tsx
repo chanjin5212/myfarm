@@ -69,7 +69,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoggedIn(true);
       setUserId(newUserId);
       
-      console.log('로그인 성공:', newUserId);
     } catch (error) {
       console.error('로그인 중 오류 발생:', error);
     }
@@ -85,8 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 상태 업데이트
       setIsLoggedIn(false);
       setUserId(null);
-      
-      console.log('로그아웃 완료');
       
       // 홈으로 리다이렉트
       router.push('/');

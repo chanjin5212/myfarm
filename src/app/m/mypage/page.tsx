@@ -421,9 +421,6 @@ function MobileMyPageContent() {
         return;
       }
 
-      // 디버깅용 콘솔 출력
-      console.log('리뷰 삭제 요청 :', reviewId);
-
       const response = await fetch(`/api/reviews/${reviewId}`, {
         method: 'DELETE',
         headers: {
@@ -431,9 +428,6 @@ function MobileMyPageContent() {
           'Content-Type': 'application/json'
         }
       });
-
-      // 응답 상태 디버깅
-      console.log('리뷰 삭제 응답 상태:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();

@@ -15,7 +15,6 @@ export default function MobileNaverCallbackPage() {
     const handleCallback = async () => {
       // 이미 처리 중이면 중복 실행 방지
       if (isProcessing.current) {
-        console.log('이미 처리 중인 요청입니다.');
         return;
       }
       isProcessing.current = true;
@@ -108,9 +107,6 @@ export default function MobileNaverCallbackPage() {
             user: userData.user,
             expiresAt: Date.now() + 3600000 // 1시간 후 만료
           };
-          
-          // 토큰 정보 로깅 추가
-          console.log('네이버 로그인 토큰 정보:', token);
           
           localStorage.setItem('token', JSON.stringify(token));
           

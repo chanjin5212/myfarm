@@ -36,12 +36,6 @@ export default function CheckoutFailPage() {
           }
         });
         
-        if (!response.ok) {
-          console.error('주문 삭제 실패:', await response.text());
-        } else {
-          console.log('주문이 삭제되었습니다.');
-        }
-        
         // 로컬 스토리지 정리
         localStorage.removeItem('currentOrderId');
         

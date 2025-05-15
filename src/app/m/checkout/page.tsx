@@ -229,7 +229,6 @@ export default function MobileCheckoutPage() {
         const buyNowItem = JSON.parse(buyNowData);
         const basePrice = parseInt(buyNowItem.product.price) || 0;
         
-        console.log('buyNowItem 데이터:', buyNowItem); // 디버깅용 로그 추가
         
         // 모든 옵션 정보가 있을 경우 (새 형식)
         if (buyNowItem.allOptions && buyNowItem.allOptions.length > 0) {
@@ -287,8 +286,6 @@ export default function MobileCheckoutPage() {
           }];
         }
         
-        // 디버깅용 로그 추가
-        console.log('체크아웃용 아이템:', directItems);
         
         // 상품 여러 개를 즉시 구매할 수 있도록 아이템 설정
         setCartItems(directItems);
@@ -470,15 +467,6 @@ export default function MobileCheckoutPage() {
       "chainId": chainId // chainId가 없을 경우 빈 문자열
     });
     
-    console.log('네이버페이 결제 요청 정보:', {
-      merchantUserKey: user?.id || 'guest',
-      merchantPayKey: merchantPayKey,
-      productName: productName,
-      totalPayAmount: finalPrice,
-      taxScopeAmount: finalPrice,
-      taxExScopeAmount: 0
-    });
-    
     // 네이버페이 결제창 열기
     oPay.open({
       "merchantUserKey": user?.id || 'guest',
@@ -542,7 +530,6 @@ export default function MobileCheckoutPage() {
       
       // UUID 형식의 주문 ID 생성
       const tempOrderId = uuidv4();
-      console.log('tempOrderId', tempOrderId);
       
       // 임시 주문 ID와 주문명 저장
       setOrderIdForPayment(tempOrderId);
@@ -550,7 +537,6 @@ export default function MobileCheckoutPage() {
       
       // 상태 업데이트 후에 네이버페이 결제창 호출을 위해 약간의 지연 추가
       setTimeout(() => {
-        console.log('결제 정보 설정 완료:', { orderName, tempOrderId });
         handleNaverPayment();
         setOrderProcessing(false);
       }, 100);
@@ -589,13 +575,7 @@ export default function MobileCheckoutPage() {
       if (typeof window !== 'undefined') {
         if (window.Naver && window.Naver.Pay) {
           console.log('네이버페이 SDK가 로드되었습니다.');
-          
-          // 환경 변수 확인
-          console.log('NAVER_PAY_CLIENT_ID 설정됨:', !!process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_ID);
-          console.log('NAVER_PAY_CHAIN_ID 설정됨:', !!process.env.NEXT_PUBLIC_NAVER_PAY_CHAIN_ID);
         } else {
-          console.log('네이버페이 SDK가 로드되지 않았습니다. 스크립트 확인이 필요합니다.');
-          
           // 수동으로 스크립트 로드 시도
           const script = document.createElement('script');
           script.src = 'https://nsp.pay.naver.com/sdk/js/naverpay.min.js';

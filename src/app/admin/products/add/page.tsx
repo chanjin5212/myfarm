@@ -76,7 +76,6 @@ export default function AddProductPage() {
         storage_method: formData.storage_method.trim() !== '' ? formData.storage_method : null,
       };
 
-      console.log('Submitting product data:', cleanedData);
 
       // 상품 등록 API 호출
       const response = await fetch('/api/admin/products', {
