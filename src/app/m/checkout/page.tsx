@@ -912,10 +912,6 @@ export default function MobileCheckoutPage() {
               handleOpenNaverPayment(e);
             } else if (paymentMethod === 'kakaopay') {
               handleKakaoPayment();
-            } else if (paymentMethod === 'card') {
-              toast.error('신용카드 결제는 준비 중입니다.');
-            } else if (paymentMethod === 'bank') {
-              toast.error('무통장입금은 준비 중입니다.');
             }
           }}
           disabled={!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || !agreeToTerms || orderProcessing}
