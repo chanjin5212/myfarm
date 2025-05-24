@@ -892,30 +892,6 @@ export default function MobileCheckoutPage() {
               </div>
             </div>
           </div>
-          
-          <div className="flex items-center">
-            <Radio
-              name="paymentMethod"
-              value="card"
-              checked={paymentMethod === 'card'}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="mr-3"
-              label=""
-            />
-            <span>신용카드</span>
-          </div>
-          
-          <div className="flex items-center">
-            <Radio
-              name="paymentMethod"
-              value="bank"
-              checked={paymentMethod === 'bank'}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="mr-3"
-              label=""
-            />
-            <span>무통장입금</span>
-          </div>
         </div>
       </div>
 
