@@ -199,7 +199,74 @@ export async function POST(
       });
     }
 
-    // 네이버페이가 아닌 경우(추후 다른 결제수단 추가 가능)
+    // 카카오페이 결제 취소
+    if (order.payment_method === 'kakaopay') {
+      const adminKey = process.env.KAKAO_PAY_ADMIN_KEY;
+      const cid = process.env.KAKAO_PAY_CID || 'TC0ONETIME';
+
+      if (!adminKey) {
+        return NextResponse.json({ error: '카카오페이 설정이 올바르지 않습니다.' }, { status: 500 });
+      }
+
+      try {
+        const kakaoRes = await fetch('https://open-api.kakaopay.com/online/v1/payment/cancel', {
+          method: 'POST',
+          headers: {
+            'Authorization': `SECRET_KEY ${adminKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            cid: cid,
+            tid: order.tid,
+            cancel_amount: order.total_amount,
+            cancel_tax_free_amount: 0
+          })
+        });
+
+        const kakaoData = await kakaoRes.json();
+
+        if (!kakaoRes.ok) {
+          console.error('카카오페이 결제 취소 오류:', kakaoData);
+          return NextResponse.json(
+            { error: '카카오페이 결제 취소에 실패했습니다', kakaoData },
+            { status: kakaoRes.status }
+          );
+        }
+
+        // 주문 상태 업데이트
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({ 
+            status: 'canceled',
+            updated_at: new Date().toISOString(),
+            cancel_reason: cancelReason,
+            cancel_date: new Date().toISOString()
+          })
+          .eq('id', orderId);
+
+        if (updateError) {
+          console.error('주문 상태 업데이트 오류:', updateError);
+          return NextResponse.json({ 
+            error: '주문 취소는 되었으나 상태 업데이트에 실패했습니다. 관리자에게 문의하세요.',
+            kakaoData
+          }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          message: '주문이 성공적으로 취소되었습니다',
+          kakaoData
+        });
+
+      } catch (kakaoError) {
+        console.error('카카오페이 결제 취소 중 오류 발생:', kakaoError);
+        return NextResponse.json(
+          { error: '카카오페이 결제 취소 처리 중 오류가 발생했습니다' },
+          { status: 500 }
+        );
+      }
+    }
+
+    // 네이버페이, 카카오페이가 아닌 경우(추후 다른 결제수단 추가 가능)
     return NextResponse.json({ error: '지원하지 않는 결제수단입니다.' }, { status: 400 });
   } catch (error) {
     console.error('주문 취소 중 오류 발생:', error);

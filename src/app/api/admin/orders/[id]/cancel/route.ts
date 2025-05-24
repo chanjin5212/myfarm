@@ -104,61 +104,121 @@ export async function POST(
     // 결제 취소 처리
     let paymentCancelResult = null;
 
-    // 네이버페이 결제 취소 확인
-    if (order.payment_method !== 'naverpay' || !order.tid) {
-      return NextResponse.json(
-        { error: '네이버페이 결제만 취소할 수 있습니다' },
-        { status: 400 }
-      );
-    }
-
-    try {
-      const idempotencyKey = crypto.randomUUID();
-      const cancelAmount = order.total_amount;
-      const taxScopeAmount = order.total_amount;
-      const taxExScopeAmount = 0;
-
-      const body = new URLSearchParams({
-        paymentId: order.tid,
-        cancelAmount: String(cancelAmount),
-        cancelReason: reason,
-        cancelRequester: '2',
-        taxScopeAmount: String(taxScopeAmount),
-        taxExScopeAmount: String(taxExScopeAmount),
-      });
-
-      const naverRes = await fetch(
-        'https://dev-pub.apis.naver.com/naverpay-partner/naverpay/payments/v1/cancel',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Naver-Client-Id': NAVER_PAY_CLIENT_ID,
-            'X-Naver-Client-Secret': NAVER_PAY_CLIENT_SECRET,
-            'X-NaverPay-Chain-Id': NAVER_PAY_CHAIN_ID,
-            'X-NaverPay-Idempotency-Key': idempotencyKey,
-          },
-          body,
-        }
-      );
-
-      const naverData = await naverRes.json();
-
-      if (!naverRes.ok) {
-        console.error('네이버페이 결제 취소 오류:', naverData);
+    // 네이버페이 결제 취소
+    if (order.payment_method === 'naverpay') {
+      if (!order.tid) {
         return NextResponse.json(
-          { error: '네이버페이 결제 취소에 실패했습니다', naverData },
-          { status: naverRes.status }
+          { error: '네이버페이 결제 정보가 올바르지 않습니다' },
+          { status: 400 }
         );
       }
 
-      paymentCancelResult = naverData;
-      console.log('네이버페이 결제 취소 성공:', paymentCancelResult);
-    } catch (naverError) {
-      console.error('네이버페이 결제 취소 중 오류 발생:', naverError);
+      try {
+        const idempotencyKey = crypto.randomUUID();
+        const cancelAmount = order.total_amount;
+        const taxScopeAmount = order.total_amount;
+        const taxExScopeAmount = 0;
+
+        const body = new URLSearchParams({
+          paymentId: order.tid,
+          cancelAmount: String(cancelAmount),
+          cancelReason: reason,
+          cancelRequester: '2',
+          taxScopeAmount: String(taxScopeAmount),
+          taxExScopeAmount: String(taxExScopeAmount),
+        });
+
+        const naverRes = await fetch(
+          'https://dev-pub.apis.naver.com/naverpay-partner/naverpay/payments/v1/cancel',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-Naver-Client-Id': NAVER_PAY_CLIENT_ID,
+              'X-Naver-Client-Secret': NAVER_PAY_CLIENT_SECRET,
+              'X-NaverPay-Chain-Id': NAVER_PAY_CHAIN_ID,
+              'X-NaverPay-Idempotency-Key': idempotencyKey,
+            },
+            body,
+          }
+        );
+
+        const naverData = await naverRes.json();
+
+        if (!naverRes.ok) {
+          console.error('네이버페이 결제 취소 오류:', naverData);
+          return NextResponse.json(
+            { error: '네이버페이 결제 취소에 실패했습니다', naverData },
+            { status: naverRes.status }
+          );
+        }
+
+        paymentCancelResult = naverData;
+        console.log('네이버페이 결제 취소 성공:', paymentCancelResult);
+      } catch (naverError) {
+        console.error('네이버페이 결제 취소 중 오류 발생:', naverError);
+        return NextResponse.json(
+          { error: '네이버페이 결제 취소 처리 중 오류가 발생했습니다' },
+          { status: 500 }
+        );
+      }
+    }
+    // 카카오페이 결제 취소
+    else if (order.payment_method === 'kakaopay') {
+      if (!order.tid) {
+        return NextResponse.json(
+          { error: '카카오페이 결제 정보가 올바르지 않습니다' },
+          { status: 400 }
+        );
+      }
+
+      const adminKey = process.env.KAKAO_PAY_ADMIN_KEY;
+      const cid = process.env.KAKAO_PAY_CID || 'TC0ONETIME';
+
+      if (!adminKey) {
+        return NextResponse.json({ error: '카카오페이 설정이 올바르지 않습니다.' }, { status: 500 });
+      }
+
+      try {
+        const kakaoRes = await fetch('https://open-api.kakaopay.com/online/v1/payment/cancel', {
+          method: 'POST',
+          headers: {
+            'Authorization': `SECRET_KEY ${adminKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            cid: cid,
+            tid: order.tid,
+            cancel_amount: order.total_amount,
+            cancel_tax_free_amount: 0
+          })
+        });
+
+        const kakaoData = await kakaoRes.json();
+
+        if (!kakaoRes.ok) {
+          console.error('카카오페이 결제 취소 오류:', kakaoData);
+          return NextResponse.json(
+            { error: '카카오페이 결제 취소에 실패했습니다', kakaoData },
+            { status: kakaoRes.status }
+          );
+        }
+
+        paymentCancelResult = kakaoData;
+        console.log('카카오페이 결제 취소 성공:', paymentCancelResult);
+      } catch (kakaoError) {
+        console.error('카카오페이 결제 취소 중 오류 발생:', kakaoError);
+        return NextResponse.json(
+          { error: '카카오페이 결제 취소 처리 중 오류가 발생했습니다' },
+          { status: 500 }
+        );
+      }
+    }
+    // 지원하지 않는 결제 방법
+    else {
       return NextResponse.json(
-        { error: '네이버페이 결제 취소 처리 중 오류가 발생했습니다' },
-        { status: 500 }
+        { error: '지원하지 않는 결제 방법입니다' },
+        { status: 400 }
       );
     }
 

@@ -15,6 +15,7 @@ export default function CheckoutFailPage() {
   useEffect(() => {
     // URL에서 주문 ID와 에러 메시지 가져오기
     const orderId = searchParams?.get('orderId');
+    const provider = searchParams?.get('provider');
     const errorMessage = searchParams?.get('message') || '결제에 실패했습니다.';
     
     setOrderId(orderId);
@@ -38,6 +39,12 @@ export default function CheckoutFailPage() {
         
         // 로컬 스토리지 정리
         localStorage.removeItem('currentOrderId');
+        
+        // 카카오페이 관련 정보도 정리
+        if (provider === 'kakaopay') {
+          localStorage.removeItem('kakaoPayTid');
+          localStorage.removeItem('kakaoPayOrderId');
+        }
         
         setError(errorMessage);
         setLoading(false);

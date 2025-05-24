@@ -20,20 +20,16 @@ export default function CheckoutSuccessPage() {
     const resultCode = searchParams?.get('resultCode');
     const paymentId = searchParams?.get('paymentId');
     const orderId = searchParams?.get('orderId');
+    const provider = searchParams?.get('provider');
+    const pgToken = searchParams?.get('pg_token');
 
-    const processNaverPay = async () => {
+    const processPayment = async () => {
       if (isProcessing.current) return;
-
-      if (resultCode !== 'Success' || !paymentId || !orderId) {
-        setError('결제 정보가 올바르지 않습니다.');
-        setLoading(false);
-        return;
-      }
 
       try {
         isProcessing.current = true;
 
-        // 1. 주문 생성
+        // 1. 주문 생성을 위한 공통 로직
         const { user, isLoggedIn } = checkToken();
         if (!isLoggedIn || !user) {
           setError('로그인이 필요합니다.');
@@ -43,9 +39,9 @@ export default function CheckoutSuccessPage() {
 
         const userId = user.id;
         const authHeader = getAuthHeader();
-
         const checkoutItems = JSON.parse(localStorage.getItem('checkoutItems') || '[]');
         const shippingInfo = JSON.parse(localStorage.getItem('checkoutShippingInfo') || '{}');
+        
         // 결제 금액 계산 (checkoutItems의 합산)
         const totalAmount = checkoutItems.reduce((sum: number, item: any) => {
           const price = Number(item.price) || 0;
@@ -54,6 +50,110 @@ export default function CheckoutSuccessPage() {
         }, 0);
 
         const safeString = (str: string) => (!str ? '' : str.normalize('NFC'));
+
+        // 카카오페이 처리
+        if (provider === 'kakaopay' && pgToken && orderId) {
+          const kakaoPayTid = localStorage.getItem('kakaoPayTid');
+          const kakaoPayOrderId = localStorage.getItem('kakaoPayOrderId');
+          
+          if (!kakaoPayTid || !kakaoPayOrderId) {
+            setError('카카오페이 결제 정보가 올바르지 않습니다.');
+            setLoading(false);
+            return;
+          }
+
+          const orderData = {
+            userId: user.id,
+            items: checkoutItems.map((item: any) => ({
+              productId: item.productId,
+              productOptionId: item.productOptionId,
+              name: safeString(item.name),
+              price: item.price,
+              additionalPrice: item.option ? item.option.additionalPrice : 0,
+              quantity: item.quantity,
+              image: item.image,
+              selectedOptions: item.option
+                ? {
+                    name: safeString(item.option.name),
+                    value: safeString(item.option.value),
+                    additional_price: item.option.additionalPrice,
+                  }
+                : null,
+            })),
+            shipping: {
+              name: safeString(shippingInfo.name),
+              phone: shippingInfo.phone,
+              address: safeString(shippingInfo.address),
+              detailAddress: shippingInfo.detailAddress ? safeString(shippingInfo.detailAddress) : null,
+              memo: shippingInfo.memo ? safeString(shippingInfo.memo) : null,
+            },
+            payment: {
+              method: 'kakaopay',
+              kakaopay_tid: kakaoPayTid,
+              total_amount: totalAmount,
+            },
+          };
+
+          // 주문 생성 API 호출
+          const createOrderResponse = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeader,
+            },
+            body: JSON.stringify({
+              orderId: kakaoPayOrderId,
+              orderData,
+            }),
+          });
+
+          if (!createOrderResponse.ok) {
+            const errorData = await createOrderResponse.json();
+            throw new Error(errorData.error || errorData.message || '주문 생성에 실패했습니다.');
+          }
+
+          const createOrderResult = await createOrderResponse.json();
+          setOrderNumber(createOrderResult.order_number || kakaoPayOrderId);
+
+          // 카카오페이 결제 승인
+          const approveRes = await fetch('/api/payments/kakaopay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              action: 'approve',
+              tid: kakaoPayTid,
+              orderId: kakaoPayOrderId,
+              userId: user.id,
+              pgToken: pgToken
+            }),
+          });
+
+          if (!approveRes.ok) {
+            const err = await approveRes.text();
+            throw new Error('카카오페이 결제 승인 실패: ' + err);
+          }
+
+          // 로컬 스토리지 정리
+          localStorage.removeItem('checkoutItems');
+          localStorage.removeItem('checkoutShippingInfo');
+          localStorage.removeItem('buyNowItem');
+          localStorage.removeItem('kakaoPayTid');
+          localStorage.removeItem('kakaoPayOrderId');
+
+          setOrderCompleted(true);
+
+          // 주문 상세 페이지로 리디렉션
+          const redirectOrderId = createOrderResult.orderId || kakaoPayOrderId;
+          router.push(`/m/orders/${redirectOrderId}/detail`);
+          return;
+        }
+
+        // 네이버페이 처리 (기존 로직)
+        if (resultCode !== 'Success' || !paymentId || !orderId) {
+          setError('결제 정보가 올바르지 않습니다.');
+          setLoading(false);
+          return;
+        }
 
         const orderData = {
           userId: user.id,
@@ -138,7 +238,7 @@ export default function CheckoutSuccessPage() {
       }
     };
 
-    processNaverPay();
+    processPayment();
   }, [searchParams, router]);
 
   if (loading) {

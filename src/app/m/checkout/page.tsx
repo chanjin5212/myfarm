@@ -86,7 +86,7 @@ export default function MobileCheckoutPage() {
   const [groupedItems, setGroupedItems] = useState<GroupedCartItem[]>([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<string>('naverpay');
+  const [paymentMethod, setPaymentMethod] = useState<string>('kakaopay');
   const [orderRequests, setOrderRequests] = useState<string>('');
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -125,6 +125,7 @@ export default function MobileCheckoutPage() {
   // 결제 관련 상태
   const [orderIdForPayment, setOrderIdForPayment] = useState('');
   const [orderNameForPayment, setOrderNameForPayment] = useState('');
+  const [kakaoPayTid, setKakaoPayTid] = useState(''); // 카카오페이 TID 저장
 
   // 로그인 상태 확인
   const checkLoginStatus = async () => {
@@ -546,6 +547,94 @@ export default function MobileCheckoutPage() {
     }
   };
 
+  // 카카오페이 결제 처리 함수
+  const handleKakaoPayment = async () => {
+    if (!validateShippingInfo()) {
+      return;
+    }
+
+    setOrderProcessing(true);
+
+    try {
+      // 배송 정보를 localStorage에 저장
+      localStorage.setItem('checkoutShippingInfo', JSON.stringify(shippingInfo));
+      
+      // 주문 상품 정보를 localStorage에 저장
+      const checkoutItems = cartItems.map(item => {
+        const itemPrice = parseInt(item.product.price) || 0;
+        const additionalPrice = item.product_option ? parseInt(item.product_option.additional_price) || 0 : 0;
+        
+        return {
+          productId: item.product_id,
+          productOptionId: item.product_option_id,
+          name: item.product.name,
+          price: itemPrice,
+          originalPrice: itemPrice,
+          quantity: item.quantity,
+          image: item.product.thumbnail_url || '/images/default-product.png',
+          option: item.product_option ? {
+            id: item.product_option.id,
+            name: item.product_option.option_name,
+            value: item.product_option.option_value,
+            additionalPrice: additionalPrice,
+            quantity: item.quantity
+          } : null
+        };
+      });
+      
+      localStorage.setItem('checkoutItems', JSON.stringify(checkoutItems));
+      
+      // 주문명 생성
+      const orderName = cartItems.length > 1 
+        ? `${cartItems[0].product.name} 외 ${cartItems.length - 1}건`
+        : cartItems[0].product.name || '상품 주문';
+      
+      // UUID 형식의 주문 ID 생성
+      const tempOrderId = uuidv4();
+      
+      // 카카오페이 결제 준비 API 호출
+      const kakaoPayResponse = await fetch('/api/payments/kakaopay', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'ready',
+          orderId: tempOrderId,
+          orderName: orderName,
+          totalAmount: finalPrice,
+          userId: user?.id || 'guest',
+          approvalUrl: `${window.location.origin}/m/checkout/success?provider=kakaopay&orderId=${tempOrderId}`,
+          cancelUrl: `${window.location.origin}/m/checkout/fail?provider=kakaopay&orderId=${tempOrderId}`,
+          failUrl: `${window.location.origin}/m/checkout/fail?provider=kakaopay&orderId=${tempOrderId}`
+        })
+      });
+
+      if (!kakaoPayResponse.ok) {
+        const errorData = await kakaoPayResponse.json();
+        throw new Error(errorData.error || '카카오페이 결제 준비에 실패했습니다.');
+      }
+
+      const kakaoPayData = await kakaoPayResponse.json();
+      
+      // TID 저장
+      setKakaoPayTid(kakaoPayData.tid);
+      localStorage.setItem('kakaoPayTid', kakaoPayData.tid);
+      localStorage.setItem('kakaoPayOrderId', tempOrderId);
+      
+      // 모바일 환경에 맞는 URL로 리디렉션
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const redirectUrl = isMobile ? kakaoPayData.next_redirect_mobile_url : kakaoPayData.next_redirect_pc_url;
+      
+      // 카카오페이 결제 페이지로 리디렉션
+      window.location.href = redirectUrl;
+      
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : '카카오페이 결제 처리 중 오류가 발생했습니다.');
+      setOrderProcessing(false);
+    }
+  };
+
   // 사용자 정보가 변경되면 배송지 목록 로드
   useEffect(() => {
     if (user && !selectedAddressId) {
@@ -791,6 +880,22 @@ export default function MobileCheckoutPage() {
           <div className="flex items-center">
             <Radio
               name="paymentMethod"
+              value="kakaopay"
+              checked={paymentMethod === 'kakaopay'}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="mr-3"
+              label=""
+            />
+            <div className="flex items-center">
+              <div className="bg-[#FEE500] text-black text-sm font-bold px-2 py-1 rounded mr-2">
+                카카오페이
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center">
+            <Radio
+              name="paymentMethod"
               value="card"
               checked={paymentMethod === 'card'}
               onChange={(e) => setPaymentMethod(e.target.value)}
@@ -829,6 +934,8 @@ export default function MobileCheckoutPage() {
           onClick={(e) => {
             if (paymentMethod === 'naverpay') {
               handleOpenNaverPayment(e);
+            } else if (paymentMethod === 'kakaopay') {
+              handleKakaoPayment();
             } else if (paymentMethod === 'card') {
               toast.error('신용카드 결제는 준비 중입니다.');
             } else if (paymentMethod === 'bank') {
