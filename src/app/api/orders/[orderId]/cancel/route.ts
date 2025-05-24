@@ -133,7 +133,7 @@ export async function POST(
     // 네이버페이 결제 취소
     if (order.payment_method === 'naverpay') {
       const clientId = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_ID!;
-      const clientSecret = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_SECRET!;
+      const clientSecret = process.env.NAVER_PAY_CLIENT_SECRET!;
       const chainId = process.env.NEXT_PUBLIC_NAVER_PAY_CHAIN_ID!;
       const idempotencyKey = crypto.randomUUID();
 

@@ -86,7 +86,7 @@ export default function MobileCheckoutPage() {
   const [groupedItems, setGroupedItems] = useState<GroupedCartItem[]>([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [finalPrice, setFinalPrice] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<string>('card');
+  const [paymentMethod, setPaymentMethod] = useState<string>('naverpay');
   const [orderRequests, setOrderRequests] = useState<string>('');
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -767,49 +767,102 @@ export default function MobileCheckoutPage() {
             {finalPrice.toLocaleString()}원
           </span>
         </div>
+      </div>
 
-        <div className="mt-6">
+      {/* 결제 방법 선택 */}
+      <div className="bg-white p-4 mb-4">
+        <h2 className="text-lg font-medium mb-4">결제 방법</h2>
+        <div className="space-y-3">
+          <div className="flex items-center">
+            <Radio
+              name="paymentMethod"
+              value="naverpay"
+              checked={paymentMethod === 'naverpay'}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="mr-3"
+              label=""
+            />
+            <div className="flex items-center">
+              <span className="font-bold text-[#03C75A] text-lg mr-2">N</span>
+              <span>네이버페이</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center">
+            <Radio
+              name="paymentMethod"
+              value="card"
+              checked={paymentMethod === 'card'}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="mr-3"
+              label=""
+            />
+            <span>신용카드</span>
+          </div>
+          
+          <div className="flex items-center">
+            <Radio
+              name="paymentMethod"
+              value="bank"
+              checked={paymentMethod === 'bank'}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className="mr-3"
+              label=""
+            />
+            <span>무통장입금</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 결제 진행 */}
+      <div className="bg-white p-4 mb-4">
+        <div className="mb-4">
           <Checkbox
             label="주문 정보 확인 및 결제에 동의합니다"
             checked={agreeToTerms}
             onChange={(e) => setAgreeToTerms(e.target.checked)}
           />
-          
-          <Button
-            onClick={handleOpenNaverPayment}
-            disabled={!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || !agreeToTerms || orderProcessing}
-            className={`w-full py-3 mt-4 ${
-              orderProcessing ? 'bg-gray-400' : 'bg-[#03C75A]'
-            } text-white flex justify-center items-center`}
-            id="naverPayBtn"
-          >
-            {orderProcessing ? (
-              <div className="flex items-center justify-center">
-                <Spinner size="sm" className="mr-2" />
-                처리 중...
-              </div>
-            ) : (
-              <>
-                <span className="font-bold mr-1.5 text-lg">N</span>
-                <span>네이버페이 결제하기</span>
-              </>
-            )}
-          </Button>
-          
-          {orderError && (
-            <div className="mt-4 p-3 bg-red-100 text-red-700 rounded">
-              <p className="text-sm">{orderError}</p>
+        </div>
+        
+        {/* 통일된 결제 버튼 */}
+        <Button
+          onClick={(e) => {
+            if (paymentMethod === 'naverpay') {
+              handleOpenNaverPayment(e);
+            } else if (paymentMethod === 'card') {
+              toast.error('신용카드 결제는 준비 중입니다.');
+            } else if (paymentMethod === 'bank') {
+              toast.error('무통장입금은 준비 중입니다.');
+            }
+          }}
+          disabled={!shippingInfo.name || !shippingInfo.phone || !shippingInfo.address || !agreeToTerms || orderProcessing}
+          className={`w-full py-3 mb-3 ${
+            orderProcessing ? 'bg-gray-400' : 'bg-green-600'
+          } text-white flex justify-center items-center`}
+        >
+          {orderProcessing ? (
+            <div className="flex items-center justify-center">
+              <Spinner size="sm" className="mr-2" />
+              처리 중...
             </div>
+          ) : (
+            '결제하기'
           )}
-          
-          <div className="mt-4 text-center">
-            <Button
-              variant="link"
-              onClick={() => router.push('/m/cart')}
-            >
-              장바구니로 돌아가기
-            </Button>
+        </Button>
+        
+        {orderError && (
+          <div className="mt-4 p-3 bg-red-100 text-red-700 rounded">
+            <p className="text-sm">{orderError}</p>
           </div>
+        )}
+        
+        <div className="mt-4 text-center">
+          <Button
+            variant="link"
+            onClick={() => router.push('/m/cart')}
+          >
+            장바구니로 돌아가기
+          </Button>
         </div>
       </div>
 

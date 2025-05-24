@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     // 현재 배송 상태 조회
     const client = new DeliveryTrackerGraphQLClient(
       process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID || "",
-      process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET || ""
+      process.env.DELIVERY_TRACKER_CLIENT_SECRET || ""
     );
     
     const response: any = await client.request(TRACK_QUERY, {

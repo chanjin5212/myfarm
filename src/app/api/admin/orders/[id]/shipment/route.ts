@@ -76,7 +76,7 @@ const registerWebhook = async (carrierId: string, trackingNumber: string): Promi
     console.log(`[웹훅 등록] 시작 - 택배사: ${carrierId}, 송장번호: ${trackingNumber}`);
     
     const clientId = process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID;
-    const clientSecret = process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET;
+    const clientSecret = process.env.DELIVERY_TRACKER_CLIENT_SECRET;
     const webhookUrl = process.env.DELIVERY_TRACKER_WEBHOOK_URL;
     
     if (!clientId || !clientSecret || !webhookUrl) {
@@ -117,7 +117,7 @@ const fetchDeliveryStatus = async (carrierId: string, trackingNumber: string): P
     
     const client = new DeliveryTrackerGraphQLClient(
       process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID || "",
-      process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET || ""
+      process.env.DELIVERY_TRACKER_CLIENT_SECRET || ""
     );
 
     const response: any = await client.request(TRACK_QUERY, {

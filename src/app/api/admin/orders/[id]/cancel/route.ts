@@ -12,7 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // 네이버페이 관련 환경변수
 const NAVER_PAY_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_ID!;
-const NAVER_PAY_CLIENT_SECRET = process.env.NEXT_PUBLIC_NAVER_PAY_CLIENT_SECRET!;
+const NAVER_PAY_CLIENT_SECRET = process.env.NAVER_PAY_CLIENT_SECRET!;
 const NAVER_PAY_CHAIN_ID = process.env.NEXT_PUBLIC_NAVER_PAY_CHAIN_ID!;
 
 // 관리자 토큰 검증 함수

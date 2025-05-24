@@ -155,6 +155,7 @@ const InfoTab = memo(({ product }: { product: ProductTabsProps['product'] }) => 
         <h4 className="font-medium mb-2">품질 보증 안내</h4>
         <ul className="text-sm text-gray-600 list-disc pl-5 space-y-1">
           <li>당일 수확된 신선한 농산물을 배송합니다.</li>
+          <li>배송은 보통 주문 후 2~3일 정도 소요됩니다. </li>
           <li>상품에 문제가 있을 경우 수령 후 24시간 이내에 사진과 함께 고객센터로 연락 주시면 교환/환불해 드립니다.</li>
           <li>신선식품의 특성상 단순 변심에 의한 교환/환불은 불가합니다.</li>
         </ul>

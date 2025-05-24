@@ -169,7 +169,7 @@ export default function AdminOrderDetailPage() {
       
       const client = new DeliveryTrackerGraphQLClient(
         process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_ID || "",
-        process.env.NEXT_PUBLIC_DELIVERY_TRACKER_CLIENT_SECRET || ""
+        process.env.DELIVERY_TRACKER_CLIENT_SECRET || ""
       );
       
       let allCarriers: any[] = [];
